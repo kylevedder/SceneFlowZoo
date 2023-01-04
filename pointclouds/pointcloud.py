@@ -2,9 +2,10 @@ import numpy as np
 
 from .se3 import SE3
 
+
 class PointCloud():
 
-    def __init__(self, points : np.ndarray) -> None:
+    def __init__(self, points: np.ndarray) -> None:
 
         if not isinstance(points, np.ndarray):
             raise TypeError('points must be a numpy.ndarray')
@@ -21,7 +22,16 @@ class PointCloud():
     def __getitem__(self, idx):
         return self.points[idx]
 
-    def transform(self, se3 : SE3) -> 'PointCloud':
+    def transform(self, se3: SE3) -> 'PointCloud':
         assert isinstance(se3, SE3)
         return PointCloud(se3.transform_points(self.points))
 
+    def to_array(self) -> np.ndarray:
+        return self.points
+
+    def mask(self, mask: np.ndarray) -> 'PointCloud':
+        assert isinstance(mask, np.ndarray)
+        assert mask.ndim == 1
+        assert mask.shape[0] == len(self)
+        assert mask.dtype == bool
+        return PointCloud(self.points[mask])

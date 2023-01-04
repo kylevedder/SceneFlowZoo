@@ -63,5 +63,9 @@ class SE3:
         )
         return chained_se3
 
+    def to_array(self) -> np.ndarray:
+        """Return the SE3 transformation matrix as a numpy array."""
+        return self.transform_matrix
+
     def __repr__(self) -> str:
         return "SE3 transform"

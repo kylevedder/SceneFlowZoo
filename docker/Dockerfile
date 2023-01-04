@@ -19,8 +19,9 @@ RUN apt install -y apt-utils
 
 ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
 ENV FORCE_CUDA="1"
-RUN conda install numpy python=3.9 pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch -y
-RUN pip install pyarrow pyquaternion 
+RUN conda update -y conda
+RUN conda install numpy python=3.10 pytorch==1.12 torchvision torchaudio cudatoolkit=11.3 -c pytorch -y
+RUN pip install pyarrow pyquaternion
 RUN pip install open3d
 
 ENV PYTHONPATH=/project:${PYTHONPATH}
