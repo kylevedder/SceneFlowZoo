@@ -24,6 +24,7 @@ class JointFlow(nn.Module):
                  SEQUENCE_LENGTH=5,
                  NSFP_FILTER_SIZE=64,
                  NSFP_NUM_LAYERS=4) -> None:
+        super().__init__()
         self.embedder = Embedder(voxel_size=VOXEL_SIZE,
                                  pseudo_image_dims=PSEUDO_IMAGE_DIMS,
                                  point_cloud_range=POINT_CLOUD_RANGE,
@@ -74,7 +75,7 @@ class JointFlow(nn.Module):
         loss = 0
         for i in range(self.SEQUENCE_LENGTH - delta):
             pc_t0, _, _ = sequence[i]
-            pc_t1, _ = sequence[i + delta]
+            pc_t1, _, _ = sequence[i + delta]
             pc_t0 = self._pc_to_torch(pc_t0)
             pc_t1 = self._pc_to_torch(pc_t1)
 

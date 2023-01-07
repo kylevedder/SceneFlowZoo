@@ -1,4 +1,4 @@
 from .argoverse_lidar import ArgoverseSequenceLoader, ArgoverseSequence
-from .to_torch import ToTorchDataset
+from .sequence_dataset import SequenceDataset
 
-__all__ = ['ArgoverseSequenceLoader', 'ArgoverseSequence', 'ToTorchDataset']
+__all__ = ['ArgoverseSequenceLoader', 'ArgoverseSequence', 'SequenceDataset']
