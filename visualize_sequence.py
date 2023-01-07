@@ -7,7 +7,7 @@ import numpy as np
 import tqdm
 
 sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
-sequence = sequence_loader.load_sequence(sequence_loader.get_sequence_ids()[0])
+sequence = sequence_loader.load_sequence(sequence_loader.get_sequence_ids()[29])
 
 # make open3d visualizer
 vis = o3d.visualization.Visualizer()

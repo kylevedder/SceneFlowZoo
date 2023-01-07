@@ -26,12 +26,18 @@ class PointCloud():
         assert isinstance(se3, SE3)
         return PointCloud(se3.transform_points(self.points))
 
+    def translate(self, translation: np.ndarray) -> 'PointCloud':
+        assert isinstance(translation, np.ndarray)
+        assert translation.shape == (3, )
+        return PointCloud(self.points + translation)
+
     def to_array(self) -> np.ndarray:
         return self.points
 
-    def mask(self, mask: np.ndarray) -> 'PointCloud':
+    def mask_points(self, mask: np.ndarray) -> 'PointCloud':
         assert isinstance(mask, np.ndarray)
         assert mask.ndim == 1
         assert mask.shape[0] == len(self)
         assert mask.dtype == bool
         return PointCloud(self.points[mask])
+

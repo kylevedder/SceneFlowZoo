@@ -19,16 +19,21 @@ class ArgoverseSequence():
             self.frame_paths) > 0, f'no frames found in {self.dataset_dir}'
         self.frame_infos = pd.read_feather(self.dataset_dir /
                                            'city_SE3_egovehicle.feather')
-        assert len(self.frame_paths) == len(
-            self.frame_infos
-        ), f'frame_paths {len(self.frame_paths)} and frame_infos {len(self.frame_infos)} do not match'
 
-        # Verify that the timestamps match for infos and frames
-        infos_timestamps = self.frame_infos['timestamp_ns'].values
-        frame_timestamps = np.array(
-            [int(e.name.split('.')[0]) for e in self.frame_paths])
-        assert np.all(infos_timestamps == frame_timestamps
-                      ), f'frame_paths and frame_infos do not match'
+        self.timestamp_to_file_map = {int(e.stem): e for e in self.frame_paths}
+        file_timestamps = set(self.timestamp_to_file_map.keys())
+
+        self.timestamp_to_info_idx_map = {
+            int(timestamp): idx
+            for idx, timestamp in enumerate(
+                self.frame_infos['timestamp_ns'].values)
+        }
+        info_timestamps = set(self.timestamp_to_info_idx_map.keys())
+
+        self.timestamp_list = sorted(
+            file_timestamps.intersection(info_timestamps))
+        assert len(self.timestamp_list
+                   ) > 0, f'no timestamps found in {self.dataset_dir}'
 
         self.raster_heightmap, self.global_to_raster_se2, self.global_to_raster_scale = self._load_ground_height_raster(
         )
@@ -74,9 +79,19 @@ class ArgoverseSequence():
         raster_points_xy = np.round(raster_points_xy).astype(np.int64)
 
         ground_height_values = np.full((raster_points_xy.shape[0]), np.nan)
-        ind_valid_pts = (
-            raster_points_xy[:, 1] < self.raster_heightmap.shape[0]) * (
-                raster_points_xy[:, 0] < self.raster_heightmap.shape[1])
+        # outside max X
+        outside_max_x = (raster_points_xy[:, 0] >=
+                         self.raster_heightmap.shape[1]).astype(bool)
+        # outside max Y
+        outside_max_y = (raster_points_xy[:, 1] >=
+                         self.raster_heightmap.shape[0]).astype(bool)
+        # outside min X
+        outside_min_x = (raster_points_xy[:, 0] < 0).astype(bool)
+        # outside min Y
+        outside_min_y = (raster_points_xy[:, 1] < 0).astype(bool)
+        ind_valid_pts = ~np.logical_or(
+            np.logical_or(outside_max_x, outside_max_y),
+            np.logical_or(outside_min_x, outside_min_y))
 
         ground_height_values[ind_valid_pts] = self.raster_heightmap[
             raster_points_xy[ind_valid_pts, 1], raster_points_xy[ind_valid_pts,
@@ -102,10 +117,11 @@ class ArgoverseSequence():
         return f'ArgoverseSequence with {len(self)} frames'
 
     def __len__(self):
-        return len(self.frame_paths)
+        return len(self.timestamp_list)
 
     def _load_pc(self, idx) -> PointCloud:
-        frame_path = self.frame_paths[idx]
+        timestamp = self.timestamp_list[idx]
+        frame_path = self.timestamp_to_file_map[timestamp]
         frame_content = pd.read_feather(frame_path)
         xs = frame_content['x'].values
         ys = frame_content['y'].values
@@ -114,7 +130,9 @@ class ArgoverseSequence():
         return PointCloud(points)
 
     def _load_pose(self, idx) -> SE3:
-        frame_info = self.frame_infos.iloc[idx]
+        timestamp = self.timestamp_list[idx]
+        infos_idx = self.timestamp_to_info_idx_map[timestamp]
+        frame_info = self.frame_infos.iloc[infos_idx]
         se3 = SE3.from_rot_w_x_y_z_translation_x_y_z(
             frame_info['qw'], frame_info['qx'], frame_info['qy'],
             frame_info['qz'], frame_info['tx_m'], frame_info['ty_m'],
@@ -126,11 +144,14 @@ class ArgoverseSequence():
         start_pose = self._load_pose(0)
         idx_pose = self._load_pose(idx)
         relative_pose = start_pose.inverse().compose(idx_pose)
-        global_frame_pc = pc.transform(idx_pose)
-        is_ground_points = self.is_ground_points(global_frame_pc)
-        pc = pc.mask(~is_ground_points)
-        relative_frame_pc = pc.transform(relative_pose)
-        return relative_frame_pc, relative_pose
+        absolute_global_frame_pc = pc.transform(idx_pose)
+        is_ground_points = self.is_ground_points(absolute_global_frame_pc)
+        pc = pc.mask_points(~is_ground_points)
+        relative_global_frame_pc = pc.transform(relative_pose)
+        return relative_global_frame_pc, relative_pose
+
+    def get_init_pose(self) -> SE3:
+        return self._load_pose(0)
 
     def __iter__(self):
         for idx in range(len(self)):

@@ -2,6 +2,39 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+class HardSimpleVFE(nn.Module):
+    """Simple voxel feature encoder used in SECOND.
+
+    It simply averages the values of points in a voxel.
+
+    Args:
+        num_features (int, optional): Number of features to use. Default: 4.
+    """
+
+    def __init__(self, num_features=4):
+        super(HardSimpleVFE, self).__init__()
+        self.num_features = num_features
+
+    def forward(self, features, num_points, coors):
+        """Forward function.
+
+        Args:
+            features (torch.Tensor): Point features in shape
+                (N, M, 3(4)). N is the number of voxels and M is the maximum
+                number of points inside a single voxel.
+            num_points (torch.Tensor): Number of points in each voxel,
+                 shape (N, ).
+            coors (torch.Tensor): Coordinates of voxels.
+
+        Returns:
+            torch.Tensor: Mean of points inside each voxel in shape (N, 3(4))
+        """
+        points_mean = features[:, :, :self.num_features].sum(
+            dim=1, keepdim=False) / num_points.type_as(features).view(-1, 1)
+        return points_mean.contiguous()
+
+
 class PFNLayer(nn.Module):
     """Pillar Feature Net Layer.
     The Pillar Feature Net is composed of a series of these layers, but the
@@ -51,7 +84,7 @@ class PFNLayer(nn.Module):
         x = self.linear(inputs)
         x = self.norm(x.permute(0, 2, 1).contiguous()).permute(0, 2,
                                                                1).contiguous()
-        x = F.relu(x)
+        x = F.gelu(x)
 
         if self.mode == 'max':
             if aligned_distance is not None:
@@ -60,9 +93,9 @@ class PFNLayer(nn.Module):
         elif self.mode == 'avg':
             if aligned_distance is not None:
                 x = x.mul(aligned_distance.unsqueeze(-1))
-            x_max = x.sum(
-                dim=1, keepdim=True) / num_voxels.type_as(inputs).view(
-                    -1, 1, 1)
+            x_max = x.sum(dim=1,
+                          keepdim=True) / num_voxels.type_as(inputs).view(
+                              -1, 1, 1)
 
         if self.last_vfe:
             return x_max
@@ -70,6 +103,7 @@ class PFNLayer(nn.Module):
             x_repeat = x_max.repeat(1, inputs.shape[1], 1)
             x_concatenated = torch.cat([x, x_repeat], dim=2)
             return x_concatenated
+
 
 def get_paddings_indicator(actual_num, max_num, axis=0):
     """Create boolean mask by actually number of a padded tensor.
@@ -83,8 +117,8 @@ def get_paddings_indicator(actual_num, max_num, axis=0):
     # tiled_actual_num: [N, M, 1]
     max_num_shape = [1] * len(actual_num.shape)
     max_num_shape[axis + 1] = -1
-    max_num = torch.arange(
-        max_num, dtype=torch.int, device=actual_num.device).view(max_num_shape)
+    max_num = torch.arange(max_num, dtype=torch.int,
+                           device=actual_num.device).view(max_num_shape)
     # tiled_actual_num: [[3,3,3,3,3], [4,4,4,4,4], [2,2,2,2,2]]
     # tiled_max_num: [[0,1,2,3,4], [0,1,2,3,4], [0,1,2,3,4]]
     paddings_indicator = actual_num.int() > max_num
@@ -148,11 +182,10 @@ class PillarFeatureNet(nn.Module):
             else:
                 last_layer = True
             pfn_layers.append(
-                PFNLayer(
-                    in_filters,
-                    out_filters,
-                    last_layer=last_layer,
-                    mode=mode))
+                PFNLayer(in_filters,
+                         out_filters,
+                         last_layer=last_layer,
+                         mode=mode))
         self.pfn_layers = nn.ModuleList(pfn_layers)
 
         # Need pillar (voxel) size and x/y offset in order to calculate offset
@@ -188,14 +221,11 @@ class PillarFeatureNet(nn.Module):
         if self._with_voxel_center:
             f_center = torch.zeros_like(features[:, :, :3])
             f_center[:, :, 0] = features[:, :, 0] - (
-                coors[:, 3].to(dtype).unsqueeze(1) * self.vx +
-                self.x_offset)
+                coors[:, 2].to(dtype).unsqueeze(1) * self.vx + self.x_offset)
             f_center[:, :, 1] = features[:, :, 1] - (
-                coors[:, 2].to(dtype).unsqueeze(1) * self.vy +
-                self.y_offset)
+                coors[:, 1].to(dtype).unsqueeze(1) * self.vy + self.y_offset)
             f_center[:, :, 2] = features[:, :, 2] - (
-                coors[:, 1].to(dtype).unsqueeze(1) * self.vz +
-                self.z_offset)
+                coors[:, 0].to(dtype).unsqueeze(1) * self.vz + self.z_offset)
             features_ls.append(f_center)
 
         if self._with_distance:
@@ -216,4 +246,3 @@ class PillarFeatureNet(nn.Module):
             features = pfn(features, num_points)
 
         return features.squeeze(1)
-
