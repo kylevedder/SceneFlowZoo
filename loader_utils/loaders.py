@@ -34,10 +34,11 @@ def save_pickle(filepath: Path, pkl):
     print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
 
 
-def load_json(filename: Path):
+def load_json(filename: Path, verbose: bool = True):
     filename = Path(filename)
     assert filename.exists(), f'{filename} does not exist'
-    print(f'Loading {filename} of size {_compute_size_metric(filename)}')
+    if verbose:
+        print(f'Loading {filename} of size {_compute_size_metric(filename)}')
     with open(filename) as f:
         return json.load(f)
 

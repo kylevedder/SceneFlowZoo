@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from pyquaternion import Quaternion
 
@@ -15,7 +16,10 @@ class SE3:
         self.rotation_matrix = rotation_matrix
         self.translation = translation
 
-        self.transform_matrix = np.eye(4)
+        if isinstance(self.rotation_matrix, np.ndarray):
+            self.transform_matrix = np.eye(4)
+        else:
+            self.transform_matrix = torch.eye(4)
         self.transform_matrix[:3, :3] = self.rotation_matrix
         self.transform_matrix[:3, 3] = self.translation
 
@@ -66,6 +70,14 @@ class SE3:
     def to_array(self) -> np.ndarray:
         """Return the SE3 transformation matrix as a numpy array."""
         return self.transform_matrix
+
+    @staticmethod
+    def from_array(transform_matrix: np.ndarray) -> "SE3":
+        """Initialize an SE3 instance from a numpy array."""
+        return SE3(
+            rotation_matrix=transform_matrix[:3, :3],
+            translation=transform_matrix[:3, 3],
+        )
 
     def __repr__(self) -> str:
         return "SE3 transform"

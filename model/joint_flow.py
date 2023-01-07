@@ -11,81 +11,54 @@ from typing import List, Tuple
 from pointclouds import PointCloud, SE3
 
 
-class JointFlow(nn.Module):
+def _torch_to_jagged_pc(torch_tensor: torch.Tensor) -> PointCloud:
+    assert isinstance(
+        torch_tensor,
+        torch.Tensor), f"Expected torch.Tensor, got {type(torch_tensor)}"
+    return PointCloud.from_fixed_array(torch_tensor)
+
+
+def _pc_to_torch(pc: PointCloud, device) -> torch.Tensor:
+    assert isinstance(pc, PointCloud), f"Expected PointCloud, got {type(pc)}"
+    return pc.points.float().to(device)
+
+
+class JointFlowLoss():
 
     def __init__(self,
-                 VOXEL_SIZE=(0.14, 0.14, 4),
-                 PSEUDO_IMAGE_DIMS=(512, 512),
-                 POINT_CLOUD_RANGE=(-33.28, -33.28, -3, 33.28, 33.28, 1),
-                 MAX_POINTS_PER_VOXEL=128,
-                 FEATURE_CHANNELS=16,
-                 FILTERS_PER_BLOCK=3,
-                 PYRAMID_LAYERS=1,
-                 SEQUENCE_LENGTH=5,
+                 device: str,
                  NSFP_FILTER_SIZE=64,
                  NSFP_NUM_LAYERS=4) -> None:
-        super().__init__()
-        self.embedder = Embedder(voxel_size=VOXEL_SIZE,
-                                 pseudo_image_dims=PSEUDO_IMAGE_DIMS,
-                                 point_cloud_range=POINT_CLOUD_RANGE,
-                                 max_points_per_voxel=MAX_POINTS_PER_VOXEL,
-                                 feat_channels=FEATURE_CHANNELS)
-
-        self.pyramid = FeaturePyramidNetwork(
-            pseudoimage_dims=PSEUDO_IMAGE_DIMS,
-            input_num_channels=FEATURE_CHANNELS + 2,
-            num_filters_per_block=FILTERS_PER_BLOCK,
-            num_layers_of_pyramid=PYRAMID_LAYERS)
-
+        self.device = device
         self.nsfp = NeuralSceneFlowPrior(num_hidden_units=NSFP_FILTER_SIZE,
-                                         num_hidden_layers=NSFP_NUM_LAYERS)
-        self.attention = JointConvAttention(
-            pseudoimage_dims=PSEUDO_IMAGE_DIMS,
-            sequence_length=SEQUENCE_LENGTH,
-            per_element_num_channels=(FEATURE_CHANNELS + 2) *
-            (PYRAMID_LAYERS + 1),
-            per_element_output_params=self.nsfp.param_count)
-        self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
-        self.PSEUDO_IMAGE_DIMS = PSEUDO_IMAGE_DIMS
+                                         num_hidden_layers=NSFP_NUM_LAYERS).to(self.device)
 
-    def forward(
-        self, sequence: List[Tuple[PointCloud, SE3]]
-    ) -> List[Tuple[PointCloud, SE3, torch.Tensor]]:
-        assert len(
-            sequence
-        ) == self.SEQUENCE_LENGTH, f"Expected sequence of length {self.SEQUENCE_LENGTH}, got {len(sequence)}"
-        pc_embedding_list = [self._embed_pc(pc, pose) for pc, pose in sequence]
-        pc_embedding_stack = torch.cat(pc_embedding_list, dim=1)
-        nsfp_weights_tensor = torch.squeeze(self.attention(pc_embedding_stack),
-                                            dim=0)
-        nsfp_weights_list = torch.split(nsfp_weights_tensor,
-                                        self.nsfp.param_count,
-                                        dim=0)
-        return [(pc, pose, nsfp_weights)
-                for (pc,
-                     pose), nsfp_weights in zip(sequence, nsfp_weights_list)]
-
-    def loss(self, sequence: List[Tuple[PointCloud, SE3, torch.Tensor]],
-             delta: int):
-        assert len(
-            sequence
-        ) == self.SEQUENCE_LENGTH, f"Expected sequence of length {self.SEQUENCE_LENGTH}, got {len(sequence)}"
-        assert delta > 0, f"delta must be positive, got {delta}"
-        assert delta < self.SEQUENCE_LENGTH, f"delta must be less than SEQUENCE_LENGTH, got {delta}"
+    def __call__(self,
+                 batched_sequence: List[List[Tuple[torch.Tensor, torch.Tensor,
+                                                   torch.Tensor]]],
+                 delta: int) -> torch.Tensor:
         loss = 0
-        for i in range(self.SEQUENCE_LENGTH - delta):
-            pc_t0, _, _ = sequence[i]
-            pc_t1, _, _ = sequence[i + delta]
-            pc_t0 = self._pc_to_torch(pc_t0)
-            pc_t1 = self._pc_to_torch(pc_t1)
+        for sequence in batched_sequence:
+            sequence_length = len(sequence)
+            assert delta > 0, f"delta must be positive, got {delta}"
+            assert delta < sequence_length, f"delta must be less than sequence_length, got {delta}"
+            for i in range(sequence_length - delta):
+                pc_t0, _, _ = sequence[i]
+                pc_t1, _, _ = sequence[i + delta]
+                pc_t0 = _torch_to_jagged_pc(pc_t0)
+                pc_t1 = _torch_to_jagged_pc(pc_t1)
+                pc_t0 = _pc_to_torch(pc_t0, self.device)
+                pc_t1 = _pc_to_torch(pc_t1, self.device)
 
-            pc_t0_warped_to_t1 = pc_t0
-            param_list = []
-            for j in range(delta):
-                _, _, nsfp_params = sequence[i + j]
-                pc_t0_warped_to_t1 = self.nsfp(pc_t0_warped_to_t1, nsfp_params)
-                param_list.append(nsfp_params)
-            loss += self._warped_pc_loss(pc_t0_warped_to_t1, pc_t1, param_list)
+                pc_t0_warped_to_t1 = pc_t0
+                param_list = []
+                for j in range(delta):
+                    _, _, nsfp_params = sequence[i + j]
+                    pc_t0_warped_to_t1 = self.nsfp(pc_t0_warped_to_t1,
+                                                   nsfp_params)
+                    param_list.append(nsfp_params)
+                loss += self._warped_pc_loss(pc_t0_warped_to_t1, pc_t1,
+                                             param_list)
         return loss
 
     def _warped_pc_loss(self,
@@ -132,33 +105,98 @@ class JointFlow(nn.Module):
 
         return loss
 
-    def _pc_to_torch(self, pc: PointCloud) -> torch.Tensor:
-        assert isinstance(pc,
-                          PointCloud), f"Expected PointCloud, got {type(pc)}"
-        return torch.from_numpy(pc.points).float().to(self._get_device())
+
+class JointFlow(nn.Module):
+
+    def __init__(self,
+                 batch_size: int,
+                 device: str,
+                 VOXEL_SIZE=(0.14, 0.14, 4),
+                 PSEUDO_IMAGE_DIMS=(512, 512),
+                 POINT_CLOUD_RANGE=(-33.28, -33.28, -3, 33.28, 33.28, 1),
+                 MAX_POINTS_PER_VOXEL=128,
+                 FEATURE_CHANNELS=16,
+                 FILTERS_PER_BLOCK=3,
+                 PYRAMID_LAYERS=1,
+                 SEQUENCE_LENGTH=5,
+                 NSFP_FILTER_SIZE=64,
+                 NSFP_NUM_LAYERS=4) -> None:
+        super().__init__()
+        self.batch_size = batch_size
+        self.device = device
+        self.embedder = Embedder(voxel_size=VOXEL_SIZE,
+                                 pseudo_image_dims=PSEUDO_IMAGE_DIMS,
+                                 point_cloud_range=POINT_CLOUD_RANGE,
+                                 max_points_per_voxel=MAX_POINTS_PER_VOXEL,
+                                 feat_channels=FEATURE_CHANNELS)
+
+        self.pyramid = FeaturePyramidNetwork(
+            pseudoimage_dims=PSEUDO_IMAGE_DIMS,
+            input_num_channels=FEATURE_CHANNELS + 2,
+            num_filters_per_block=FILTERS_PER_BLOCK,
+            num_layers_of_pyramid=PYRAMID_LAYERS)
+
+        self.nsfp = NeuralSceneFlowPrior(num_hidden_units=NSFP_FILTER_SIZE,
+                                         num_hidden_layers=NSFP_NUM_LAYERS)
+        self.attention = JointConvAttention(
+            pseudoimage_dims=PSEUDO_IMAGE_DIMS,
+            sequence_length=SEQUENCE_LENGTH,
+            per_element_num_channels=(FEATURE_CHANNELS + 2) *
+            (PYRAMID_LAYERS + 1),
+            per_element_output_params=self.nsfp.param_count)
+        self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
+        self.PSEUDO_IMAGE_DIMS = PSEUDO_IMAGE_DIMS
+
+    def forward(
+        self, batched_sequence: List[Tuple[PointCloud, SE3]]
+    ) -> List[Tuple[PointCloud, SE3, torch.Tensor]]:
+        assert len(
+            batched_sequence
+        ) == self.SEQUENCE_LENGTH, f"Expected sequence of length {self.SEQUENCE_LENGTH}, got {len(batched_sequence)}"
+
+        batched_results = []
+        for batch_idx in range(self.batch_size):
+            sequence = [(e['pc'][batch_idx], e['pose'][batch_idx])
+                        for e in batched_sequence]
+
+            pc_embedding_list = [
+                self._embed_pc(pc, pose) for pc, pose in sequence
+            ]
+            pc_embedding_stack = torch.cat(pc_embedding_list, dim=1)
+            nsfp_weights_tensor = torch.squeeze(
+                self.attention(pc_embedding_stack), dim=0)
+            nsfp_weights_list = torch.split(nsfp_weights_tensor,
+                                            self.nsfp.param_count,
+                                            dim=0)
+            res = [(pc, pose, nsfp_weights)
+                   for (pc,
+                        pose), nsfp_weights in zip(sequence, nsfp_weights_list)
+                   ]
+            batched_results.append(res)
+        return batched_results
 
     def _get_device(self):
-        return next(self.parameters()).device
+        return self.device
 
-    def _embed_pc(self, pc: PointCloud, pose: SE3) -> torch.Tensor:
-        assert isinstance(pc,
-                          PointCloud), f"Expected PointCloud, got {type(pc)}"
-        assert isinstance(pose, SE3), f"Expected SE3, got {type(pose)}"
+    def _embed_pc(self, pc: torch.Tensor, pose: torch.Tensor) -> torch.Tensor:
+        assert isinstance(
+            pc, torch.Tensor), f"Expected torch.Tensor, got {type(pc)}"
+        assert isinstance(
+            pose, torch.Tensor), f"Expected torch.Tensor, got {type(pose)}"
         # The pc is in a global frame relative to the initial pose of the sequence.
         # The pose is the pose of the current point cloud relative to the initial pose of the sequence.
         # In order to voxelize the point cloud, we need to translate it to the origin.
-        translated_pc = pc.translate(-pose.translation)
-
-        # Pointcloud must be converted to torch tensor before passing to voxelizer.
-        # The voxelizer expects a tensor of shape (N, 3) where N is the number of points.
-        translated_pc_torch = self._pc_to_torch(translated_pc)
+        pc_pointcloud = PointCloud.from_fixed_array(pc)
+        pose_se3 = SE3.from_array(pose)
+        translated_pc = pc_pointcloud.translate(-pose_se3.translation)
+        translated_pc_torch = _pc_to_torch(translated_pc, self._get_device())
 
         translation_x_torch = torch.ones(
             (1, 1, self.PSEUDO_IMAGE_DIMS[0], self.PSEUDO_IMAGE_DIMS[1])).to(
-                self._get_device()) * pose.translation[0]
+                self._get_device()) * pose_se3.translation[0]
         translation_y_torch = torch.ones(
             (1, 1, self.PSEUDO_IMAGE_DIMS[0], self.PSEUDO_IMAGE_DIMS[1])).to(
-                self._get_device()) * pose.translation[1]
+                self._get_device()) * pose_se3.translation[1]
 
         pseudoimage = self.embedder(translated_pc_torch)
         pseudoimage = torch.cat(

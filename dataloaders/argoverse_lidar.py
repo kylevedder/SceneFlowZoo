@@ -52,7 +52,7 @@ class ArgoverseSequence():
         transform_path = transform_paths[0]
 
         raster_heightmap = np.load(raster_height_path)
-        transform = load_json(transform_path)
+        transform = load_json(transform_path, verbose=False)
 
         transform_rotation = np.array(transform['R']).reshape(2, 2)
         transform_translation = np.array(transform['t'])

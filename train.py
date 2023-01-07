@@ -1,4 +1,13 @@
+import os
 import torch
+import torch.distributed as dist
+import torch.nn as nn
+import torch.optim as optim
+
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 from tqdm import tqdm
 from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SequenceDataset
 
@@ -8,12 +17,14 @@ from model.embedders import Embedder
 from model.backbones import FeaturePyramidNetwork
 from model.attention import JointConvAttention
 from model.heads import NeuralSceneFlowPrior
-from model import JointFlow
+from model import JointFlow, JointFlowLoss
 from pytorch3d.ops.knn import knn_points
 
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter("work_dirs/argoverse/")
+writer = SummaryWriter("work_dirs/argoverse/dist_train/", flush_secs=10)
+
+BATCH_SIZE = 1
 
 VOXEL_SIZE = (0.14, 0.14, 4)
 PSEUDO_IMAGE_DIMS = (512, 512)
@@ -23,43 +34,64 @@ FEATURE_CHANNELS = 16
 FILTERS_PER_BLOCK = 3
 PYRAMID_LAYERS = 1
 
-SEQUENCE_LENGTH = 5
+SEQUENCE_LENGTH = 6
 
 NSFP_FILTER_SIZE = 64
 NSFP_NUM_LAYERS = 4
 
-DEVICE = 'cuda'  #torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+LEARNING_RATE = 1e-4
+GRADIENT_MAGNITUDE_CLIP = 35
 
-sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
-# dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH)
-# dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True)
 
-joint_flow = JointFlow(VOXEL_SIZE, PSEUDO_IMAGE_DIMS, POINT_CLOUD_RANGE,
-                       MAX_POINTS_PER_VOXEL, FEATURE_CHANNELS,
-                       FILTERS_PER_BLOCK, PYRAMID_LAYERS, SEQUENCE_LENGTH,
-                       NSFP_FILTER_SIZE, NSFP_NUM_LAYERS).to(DEVICE)
+def main_fn():
+    dist.init_process_group("nccl")
+    rank = dist.get_rank()
+    print(f"Start running basic DDP example on rank {rank}.")
+    # create model and move it to GPU with id rank
+    DEVICE = rank % torch.cuda.device_count()
 
-optimizer = torch.optim.Adam(joint_flow.parameters(), lr=1e-4)
+    sequence_loader = ArgoverseSequenceLoader(
+        '/bigdata/argoverse_lidar/train/')
+    dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH)
+    dataloader = torch.utils.data.DataLoader(dataset,
+                                             batch_size=BATCH_SIZE,
+                                             shuffle=True)
 
-global_step = 0
-for sequence_idx, sequence_id in enumerate(sequence_loader.get_sequence_ids()):
-    sequence = sequence_loader.load_sequence(sequence_id)
+    model = JointFlow(BATCH_SIZE, DEVICE, VOXEL_SIZE, PSEUDO_IMAGE_DIMS,
+                      POINT_CLOUD_RANGE, MAX_POINTS_PER_VOXEL,
+                      FEATURE_CHANNELS, FILTERS_PER_BLOCK, PYRAMID_LAYERS,
+                      SEQUENCE_LENGTH, NSFP_FILTER_SIZE,
+                      NSFP_NUM_LAYERS).to(DEVICE)
+    model = DDP(model, device_ids=[DEVICE])
+    loss_fn = JointFlowLoss(device=DEVICE,
+                            NSFP_FILTER_SIZE=NSFP_FILTER_SIZE,
+                            NSFP_NUM_LAYERS=NSFP_NUM_LAYERS)
 
-    num_steps = len(sequence) // SEQUENCE_LENGTH
-    total_loss = 0
-    for step in tqdm(range(num_steps), desc=f"Sequence {sequence_idx}"):
-        offset = step * SEQUENCE_LENGTH
-        subsequence = [sequence[offset + i] for i in range(SEQUENCE_LENGTH)]
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(
+        optimizer,
+        base_lr=LEARNING_RATE,
+        max_lr=LEARNING_RATE * 10,
+        step_size_up=len(dataloader) // 2,
+        cycle_momentum=False)
+
+    for batch_idx, subsequence_batch in enumerate(tqdm(dataloader)):
         optimizer.zero_grad()
-        subsequence_with_flow = joint_flow(subsequence)
+        subsequence_batch_with_flow = model(subsequence_batch)
         loss = 0
-        loss += joint_flow.loss(subsequence_with_flow, 1)
-        loss += joint_flow.loss(subsequence_with_flow, 2)
-        writer.add_scalar('training_loss',
-                          loss.item(),
-                          global_step=global_step)
-        global_step += 1
+        loss += loss_fn(subsequence_batch_with_flow, 1)
+        loss += loss_fn(subsequence_batch_with_flow, 2)
+        writer.add_scalar('loss/train', loss.item(), global_step=batch_idx)
+        writer.add_scalar('lr',
+                          scheduler.get_last_lr()[0],
+                          global_step=batch_idx)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                       max_norm=GRADIENT_MAGNITUDE_CLIP,
+                                       norm_type=2)
         optimizer.step()
-        total_loss += loss.item()
-    print(f"Sequence {sequence_idx} loss: {total_loss / num_steps}")
+        scheduler.step()
+
+
+if __name__ == "__main__":
+    main_fn()

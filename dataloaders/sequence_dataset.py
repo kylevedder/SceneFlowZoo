@@ -1,18 +1,27 @@
 import torch
 import numpy as np
+from tqdm import tqdm
 
 
 class SequenceDataset(torch.utils.data.Dataset):
 
-    def __init__(self, sequence_loader, subsequence_length: int):
+    def __init__(self,
+                 sequence_loader,
+                 subsequence_length: int,
+                 max_pc_points: int = 90000):
         self.sequence_loader = sequence_loader
         assert subsequence_length > 0, f"subsequence_length must be > 0, got {subsequence_length}"
 
         self.subsequence_length = subsequence_length
+        self.max_pc_points = max_pc_points
 
         self.subsequence_id_index = []
-        for id in sequence_loader.get_sequence_ids():
-            sequence = sequence_loader.get_sequence(id)
+        sequence = sequence_loader.load_sequence(
+            sequence_loader.get_sequence_ids()[0])
+        for id in tqdm(sequence_loader.get_sequence_ids(),
+                       desc="Preprocessing sequences",
+                       leave=False):
+            # sequence = sequence_loader.load_sequence(id)
             num_subsequences = len(sequence) // subsequence_length
             assert num_subsequences > 0, f"num_subsequences must be > 0, got {num_subsequences}"
             self.subsequence_id_index.extend([
@@ -24,10 +33,14 @@ class SequenceDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         id, subsequence_index = self.subsequence_id_index[index]
-        sequence = self.sequence_loader.get_sequence(id)
+        sequence = self.sequence_loader.load_sequence(id)
 
         offset = subsequence_index * self.subsequence_length
         subsequence_lst = [
             sequence[offset + i] for i in range(self.subsequence_length)
         ]
+        subsequence_lst = [{
+            'pc': pc.to_fixed_array(self.max_pc_points),
+            'pose': pose.to_array()
+        } for pc, pose in subsequence_lst]
         return subsequence_lst
