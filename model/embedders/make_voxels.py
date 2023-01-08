@@ -19,4 +19,5 @@ class HardVoxelizer(nn.Module):
         assert isinstance(
             points,
             torch.Tensor), f"points must be a torch.Tensor, got {type(points)}"
-        return self.voxelizer(points)
+        not_nan_mask = ~torch.isnan(points).any(dim=1)
+        return self.voxelizer(points[not_nan_mask])

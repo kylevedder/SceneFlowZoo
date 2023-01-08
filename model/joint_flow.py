@@ -133,7 +133,6 @@ class JointFlowLoss():
                         nsfp_param_list: List[torch.Tensor],
                         dist_threshold=2.0,
                         param_regularizer=0):
-        loss = 0
         batched_warped_pc_t = pc_t0_warped_to_t1.unsqueeze(0)
         batched_pc_t1 = pc_t1.unsqueeze(0)
 
@@ -161,16 +160,19 @@ class JointFlowLoss():
         t1_to_warped_distances = t1_to_warped_knn.dists[0]
         # breakpoint()
 
+        loss = 0
         # Throw out distances that are too large (beyond the dist threshold).
         loss += warped_to_t1_distances[
             warped_to_t1_distances < dist_threshold].mean()
-        loss += t1_to_warped_distances[
+
+        reverse_warp_loss = t1_to_warped_distances[
             t1_to_warped_distances < dist_threshold].mean()
+        loss += reverse_warp_loss
 
         # L2 regularization on the neural scene flow prior parameters.
         if param_regularizer > 0:
             for nsfp_params in nsfp_param_list:
-                loss += torch.sum(nsfp_params**2 * param_regularizer)
+                loss = loss + torch.sum(nsfp_params**2 * param_regularizer)
 
         return loss
 
