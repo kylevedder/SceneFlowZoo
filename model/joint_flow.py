@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from pytorch3d.ops.knn import knn_points
+from pytorch3d.loss import chamfer_distance
+import numpy as np
 
 from model.embedders import Embedder
 from model.backbones import FeaturePyramidNetwork
@@ -31,12 +33,14 @@ class JointFlowLoss():
                  NSFP_NUM_LAYERS=4) -> None:
         self.device = device
         self.nsfp = NeuralSceneFlowPrior(num_hidden_units=NSFP_FILTER_SIZE,
-                                         num_hidden_layers=NSFP_NUM_LAYERS).to(self.device)
+                                         num_hidden_layers=NSFP_NUM_LAYERS).to(
+                                             self.device)
 
     def __call__(self,
                  batched_sequence: List[List[Tuple[torch.Tensor, torch.Tensor,
                                                    torch.Tensor]]],
-                 delta: int) -> torch.Tensor:
+                 delta: int,
+                 visualize=False) -> torch.Tensor:
         loss = 0
         for sequence in batched_sequence:
             sequence_length = len(sequence)
@@ -57,47 +61,103 @@ class JointFlowLoss():
                     pc_t0_warped_to_t1 = self.nsfp(pc_t0_warped_to_t1,
                                                    nsfp_params)
                     param_list.append(nsfp_params)
+
+                if visualize:
+                    self._visualize_o3d(pc_t0, pc_t1, pc_t0_warped_to_t1)
                 loss += self._warped_pc_loss(pc_t0_warped_to_t1, pc_t1,
                                              param_list)
         return loss
+
+    def _visualize_o3d(self, pc_t0, pc_t1, pc_t0_warped_to_t1):
+        import open3d as o3d
+        pc_t0_npy = pc_t0.cpu().numpy()
+        pc_t1_npy = pc_t1.cpu().numpy()
+        pc_t0_warped_to_t1_npy = pc_t0_warped_to_t1.detach().cpu().numpy()
+
+        print(f"pc_t0_npy.shape: {pc_t0_npy.shape}")
+        print(f"pc_t1_npy.shape: {pc_t1_npy.shape}")
+        print(f"pc_t0_warped_to_t1_npy.shape: {pc_t0_warped_to_t1_npy.shape}")
+
+        print(f"pc_t0_npy: {pc_t0_npy}")
+        print(f"pc_t1_npy: {pc_t1_npy}")
+        print(f"pc_t0_warped_to_t1_npy: {pc_t0_warped_to_t1_npy}")
+
+        pc_t0_color = np.zeros_like(pc_t0_npy)
+        pc_t0_color[:, 0] = 1.0
+        pc_t1_color = np.zeros_like(pc_t1_npy)
+        pc_t1_color[:, 1] = 1.0
+        pc_t0_warped_to_t1_color = np.zeros_like(pc_t0_warped_to_t1_npy)
+        pc_t0_warped_to_t1_color[:, 2] = 1.0
+
+        pc_t0_o3d = o3d.geometry.PointCloud()
+        pc_t0_o3d.points = o3d.utility.Vector3dVector(pc_t0_npy)
+        pc_t0_o3d.colors = o3d.utility.Vector3dVector(pc_t0_color)
+
+        pc_t1_o3d = o3d.geometry.PointCloud()
+        pc_t1_o3d.points = o3d.utility.Vector3dVector(pc_t1_npy)
+        pc_t1_o3d.colors = o3d.utility.Vector3dVector(pc_t1_color)
+
+        pc_t0_warped_to_t1_o3d = o3d.geometry.PointCloud()
+        pc_t0_warped_to_t1_o3d.points = o3d.utility.Vector3dVector(
+            pc_t0_warped_to_t1_npy)
+        pc_t0_warped_to_t1_o3d.colors = o3d.utility.Vector3dVector(
+            pc_t0_warped_to_t1_color)
+
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+        vis.get_render_option().point_size = 1
+        vis.get_render_option().background_color = (0, 0, 0)
+        vis.get_render_option().show_coordinate_frame = True
+        # set up vector
+        vis.get_view_control().set_up([0, 0, 1])
+        # add geometry
+        # vis.add_geometry(pc_t0_o3d)
+        vis.add_geometry(pc_t1_o3d)
+        vis.add_geometry(pc_t0_warped_to_t1_o3d)
+        # run
+        vis.run()
 
     def _warped_pc_loss(self,
                         pc_t0_warped_to_t1: torch.Tensor,
                         pc_t1: torch.Tensor,
                         nsfp_param_list: List[torch.Tensor],
                         dist_threshold=2.0,
-                        param_regularizer=10e-4):
+                        param_regularizer=0):
         loss = 0
         batched_warped_pc_t = pc_t0_warped_to_t1.unsqueeze(0)
         batched_pc_t1 = pc_t1.unsqueeze(0)
 
+        loss += chamfer_distance(batched_warped_pc_t,
+                                 batched_pc_t1,
+                                 point_reduction="mean")[0].sum()
+
         # Compute min distance between warped point cloud and point cloud at t+1.
 
-        warped_pc_t_shape_tensor = torch.LongTensor(
-            [pc_t0_warped_to_t1.shape[0]]).to(batched_warped_pc_t.device)
-        pc_t1_shape_tensor = torch.LongTensor([pc_t1.shape[0]
-                                               ]).to(batched_pc_t1.device)
-        warped_to_t1_knn = knn_points(p1=batched_warped_pc_t,
-                                      p2=batched_pc_t1,
-                                      lengths1=warped_pc_t_shape_tensor,
-                                      lengths2=pc_t1_shape_tensor,
-                                      K=1)
-        warped_to_t1_distances = warped_to_t1_knn.dists[0]
-        t1_to_warped_knn = knn_points(p1=batched_pc_t1,
-                                      p2=batched_warped_pc_t,
-                                      lengths1=pc_t1_shape_tensor,
-                                      lengths2=warped_pc_t_shape_tensor,
-                                      K=1)
-        t1_to_warped_distances = t1_to_warped_knn.dists[0]
-        # breakpoint()
+        # warped_pc_t_shape_tensor = torch.LongTensor(
+        #     [pc_t0_warped_to_t1.shape[0]]).to(batched_warped_pc_t.device)
+        # pc_t1_shape_tensor = torch.LongTensor([pc_t1.shape[0]
+        #                                        ]).to(batched_pc_t1.device)
+        # warped_to_t1_knn = knn_points(p1=batched_warped_pc_t,
+        #                               p2=batched_pc_t1,
+        #                               lengths1=warped_pc_t_shape_tensor,
+        #                               lengths2=pc_t1_shape_tensor,
+        #                               K=1)
+        # warped_to_t1_distances = warped_to_t1_knn.dists[0]
+        # t1_to_warped_knn = knn_points(p1=batched_pc_t1,
+        #                               p2=batched_warped_pc_t,
+        #                               lengths1=pc_t1_shape_tensor,
+        #                               lengths2=warped_pc_t_shape_tensor,
+        #                               K=1)
+        # t1_to_warped_distances = t1_to_warped_knn.dists[0]
+        # # breakpoint()
 
-        # Throw out distances that are too large (beyond the dist threshold).
-        # warped_to_t1_distances[warped_to_t1_distances > dist_threshold] = 0
-        # t1_to_warped_distances[t1_to_warped_distances > dist_threshold] = 0
+        # # Throw out distances that are too large (beyond the dist threshold).
+        # # warped_to_t1_distances[warped_to_t1_distances > dist_threshold] = 0
+        # # t1_to_warped_distances[t1_to_warped_distances > dist_threshold] = 0
 
-        # Add up the distances.
-        loss += torch.sum(warped_to_t1_distances) + torch.sum(
-            t1_to_warped_distances)
+        # # Add up the distances.
+        # loss += torch.sum(warped_to_t1_distances) + torch.sum(
+        #     t1_to_warped_distances)
 
         # L2 regularization on the neural scene flow prior parameters.
         for nsfp_params in nsfp_param_list:
@@ -153,9 +213,11 @@ class JointFlow(nn.Module):
         assert len(
             batched_sequence
         ) == self.SEQUENCE_LENGTH, f"Expected sequence of length {self.SEQUENCE_LENGTH}, got {len(batched_sequence)}"
-
+        sequence_info = [e['sequence_index'] for e in batched_sequence]
+        print(f"Sequence info: {sequence_info}")
         batched_results = []
         for batch_idx in range(self.batch_size):
+
             sequence = [(e['pc'][batch_idx], e['pose'][batch_idx])
                         for e in batched_sequence]
 

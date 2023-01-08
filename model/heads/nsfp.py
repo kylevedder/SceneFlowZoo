@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class NeuralSceneFlowPrior(nn.Module):
 
-    def __init__(self, num_hidden_units=64, num_hidden_layers=4):
+    def __init__(self, num_hidden_units=64, num_hidden_layers=4, nonlinearity=torch.sigmoid):
         super().__init__()
         assert num_hidden_units > 0, f"num_hidden_units must be > 0, got {num_hidden_units}"
         assert num_hidden_layers > 0, f"num_hidden_layers must be > 0, got {num_hidden_layers}"
@@ -17,6 +17,7 @@ class NeuralSceneFlowPrior(nn.Module):
         self.param_count = param_count
         self.num_hidden_layers = num_hidden_layers
         self.num_hidden_units = num_hidden_units
+        self.nonlinearity = nonlinearity
 
     def _num_params_for_linear(self, input_dim, output_dim):
         # Rectangular matrix plus bias
@@ -41,6 +42,16 @@ class NeuralSceneFlowPrior(nn.Module):
                       out_units]
         linear = linear.reshape(in_units, out_units)
         return linear, bias, idx_offset + linear_size + out_units
+
+    def _evaluate_network(self, points, linears, biases):
+        # Evaluate the MLP on the points
+        points_offsets = points
+        for idx, (linear, bias) in enumerate(zip(linears, biases)):
+            points_offsets = torch.matmul(points_offsets, linear) + bias
+            if idx < len(linears) - 1:
+                points_offsets = self.nonlinearity(points_offsets)
+        return points_offsets
+
 
     def forward(self, points: torch.Tensor,
                 params: torch.Tensor) -> torch.Tensor:
@@ -79,9 +90,5 @@ class NeuralSceneFlowPrior(nn.Module):
         biases.append(bias)
         assert idx_offset == self.param_count, f"idx_offset must be {self.param_count}, got {idx_offset}"
 
-        # Evaluate the MLP on the points
-        for idx, (linear, bias) in enumerate(zip(linears, biases)):
-            points = torch.matmul(points, linear) + bias
-            if idx < len(linears) - 1:
-                points = F.gelu(points)
-        return points
+        # Evaluate the MLP on the points to get the points offsets
+        return  points + self._evaluate_network(points, linears, biases)
