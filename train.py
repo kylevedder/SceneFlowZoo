@@ -1,10 +1,9 @@
-import os
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
 
-from torch.nn.parallel import DistributedDataParallel
+from accelerate import Accelerator
 
 from tqdm import tqdm
 from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SequenceDataset
@@ -37,34 +36,25 @@ NSFP_FILTER_SIZE = 64
 NSFP_NUM_LAYERS = 4
 
 LEARNING_RATE = 1e-4
-GRADIENT_MAGNITUDE_CLIP = 35
 
 ITERATIONS_PER_SUBSEQUENCE = 2
 
+accelerator = Accelerator(mixed_precision="fp16")
+
 
 def main_fn():
-    try:
-        dist.init_process_group("nccl")
-        rank = dist.get_rank()
-        DDP = DistributedDataParallel
-        print(f"Running on rank {rank} with batch size {BATCH_SIZE}.")
-    except ValueError:
-        rank = 0
-        DDP = lambda x, device_ids: x.to(device_ids[0])
-        print(f"Running on single GPU with batch size {BATCH_SIZE}.")
 
-    def save_checkpoint(batch_idx, model, optimizer, scheduler, loss):
+    def save_checkpoint(batch_idx, model, optimizer, loss):
         torch.save(
             {
                 'batch_idx': batch_idx,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
                 'loss': loss,
-            }, f"work_dirs/argoverse/dist_train/checkpoint_{batch_idx:09d}.pt")
+            }, f"/bigdata/offline_sceneflow_checkpoints/checkpoint_{batch_idx:09d}.pt")
 
     # create model and move it to GPU with id rank
-    DEVICE = rank % torch.cuda.device_count()
+    DEVICE = accelerator.device
 
     sequence_loader = ArgoverseSequenceLoader(
         '/bigdata/argoverse_lidar/train/')
@@ -81,37 +71,29 @@ def main_fn():
                       FEATURE_CHANNELS, FILTERS_PER_BLOCK, PYRAMID_LAYERS,
                       SEQUENCE_LENGTH, NSFP_FILTER_SIZE,
                       NSFP_NUM_LAYERS).to(DEVICE)
-    model = DDP(model, device_ids=[DEVICE])
     loss_fn = JointFlowLoss(device=DEVICE,
                             NSFP_FILTER_SIZE=NSFP_FILTER_SIZE,
                             NSFP_NUM_LAYERS=NSFP_NUM_LAYERS)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(
-        optimizer,
-        base_lr=LEARNING_RATE,
-        max_lr=LEARNING_RATE * 10,
-        step_size_up=len(dataloader) // 2,
-        cycle_momentum=False)
 
-    for batch_idx, subsequence_batch in enumerate(tqdm(dataloader)):
+    model, optimizer, dataloader = accelerator.prepare(model, optimizer,
+                                                       dataloader)
+
+    for batch_idx, subsequence_batch in enumerate(
+            tqdm(dataloader, disable=not accelerator.is_local_main_process)):
         optimizer.zero_grad()
-        subsequence_batch_with_flow = model(subsequence_batch)
+        with accelerator.autocast():
+            subsequence_batch_with_flow = model(subsequence_batch)
         loss = 0
         loss += loss_fn(subsequence_batch_with_flow, 1)
         loss += loss_fn(subsequence_batch_with_flow, 2)
-        writer.add_scalar('loss/train', loss.item(), global_step=batch_idx)
-        writer.add_scalar('lr',
-                            scheduler.get_last_lr()[0],
-                            global_step=batch_idx)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(),
-                                        max_norm=GRADIENT_MAGNITUDE_CLIP,
-                                        norm_type=2)
+        if accelerator.is_local_main_process:
+            writer.add_scalar('loss/train', loss.item(), global_step=batch_idx)
+        accelerator.backward(loss)
         optimizer.step()
-        scheduler.step()
-        if batch_idx % 100 == 0:
-            save_checkpoint(batch_idx, model, optimizer, scheduler, loss)
+        if batch_idx % 500 == 0 and accelerator.is_local_main_process:
+            save_checkpoint(batch_idx, model, optimizer, loss)
 
 
 if __name__ == "__main__":

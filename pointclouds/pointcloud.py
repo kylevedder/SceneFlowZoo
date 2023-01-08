@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 from .se3 import SE3
 
@@ -32,22 +33,21 @@ class PointCloud():
             np.random.RandomState(len(self.points)).shuffle(self.points)
             sliced_pts = self.points[:max_points]
             # add a 4th column of 1s to indicate that these points are valid
-            return np.pad(sliced_pts, ((0, 0), (0, 1)), constant_values=1)
+            return sliced_pts
         else:
             # pad existing points with 0s to indicate that these points are valid
-            padded_pts = np.pad(self.points, ((0, 0), (0, 1)),
-                                constant_values=1)
-            return np.pad(padded_pts, ((0, max_points - len(self)), (0, 0)),
-                          constant_values=0)
+            return np.pad(self.points, ((0, max_points - len(self)), (0, 0)),
+                          constant_values=np.nan)
 
     @staticmethod
     def from_fixed_array(points) -> 'PointCloud':
-        are_valid_points = (points[:, 3] == 1)
-        if isinstance(are_valid_points, np.ndarray):
+        if isinstance(points, np.ndarray):
+            are_valid_points = np.logical_not(np.isnan(points[:, 0]))
             are_valid_points = are_valid_points.astype(bool)
         else:
+            are_valid_points = torch.logical_not(torch.isnan(points[:, 0]))
             are_valid_points = are_valid_points.bool()
-        return PointCloud(points[are_valid_points, :3])
+        return PointCloud(points[are_valid_points])
 
     def to_array(self) -> np.ndarray:
         return self.points

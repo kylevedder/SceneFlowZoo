@@ -9,7 +9,7 @@ from model.backbones import FeaturePyramidNetwork
 from model.attention import JointConvAttention
 from model.heads import NeuralSceneFlowPrior
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from pointclouds import PointCloud, SE3
 
 
@@ -23,6 +23,16 @@ def _torch_to_jagged_pc(torch_tensor: torch.Tensor) -> PointCloud:
 def _pc_to_torch(pc: PointCloud, device) -> torch.Tensor:
     assert isinstance(pc, PointCloud), f"Expected PointCloud, got {type(pc)}"
     return pc.points.float().to(device)
+
+
+def _pose_to_translation(transform_matrix: torch.Tensor) -> torch.Tensor:
+    assert isinstance(
+        transform_matrix,
+        torch.Tensor), f"Expected torch.Tensor, got {type(transform_matrix)}"
+    assert transform_matrix.shape == (
+        4, 4
+    ), f"Expected transform_matrix.shape == (4, 4), got {transform_matrix.shape[1:]}"
+    return transform_matrix[:3, 3]
 
 
 class JointFlowLoss():
@@ -127,41 +137,40 @@ class JointFlowLoss():
         batched_warped_pc_t = pc_t0_warped_to_t1.unsqueeze(0)
         batched_pc_t1 = pc_t1.unsqueeze(0)
 
-        loss += chamfer_distance(batched_warped_pc_t,
-                                 batched_pc_t1,
-                                 point_reduction="mean")[0].sum()
+        # loss += chamfer_distance(batched_warped_pc_t,
+        #                          batched_pc_t1,
+        #                          point_reduction="mean")[0].sum()
 
         # Compute min distance between warped point cloud and point cloud at t+1.
 
-        # warped_pc_t_shape_tensor = torch.LongTensor(
-        #     [pc_t0_warped_to_t1.shape[0]]).to(batched_warped_pc_t.device)
-        # pc_t1_shape_tensor = torch.LongTensor([pc_t1.shape[0]
-        #                                        ]).to(batched_pc_t1.device)
-        # warped_to_t1_knn = knn_points(p1=batched_warped_pc_t,
-        #                               p2=batched_pc_t1,
-        #                               lengths1=warped_pc_t_shape_tensor,
-        #                               lengths2=pc_t1_shape_tensor,
-        #                               K=1)
-        # warped_to_t1_distances = warped_to_t1_knn.dists[0]
-        # t1_to_warped_knn = knn_points(p1=batched_pc_t1,
-        #                               p2=batched_warped_pc_t,
-        #                               lengths1=pc_t1_shape_tensor,
-        #                               lengths2=warped_pc_t_shape_tensor,
-        #                               K=1)
-        # t1_to_warped_distances = t1_to_warped_knn.dists[0]
-        # # breakpoint()
+        warped_pc_t_shape_tensor = torch.LongTensor(
+            [pc_t0_warped_to_t1.shape[0]]).to(batched_warped_pc_t.device)
+        pc_t1_shape_tensor = torch.LongTensor([pc_t1.shape[0]
+                                               ]).to(batched_pc_t1.device)
+        warped_to_t1_knn = knn_points(p1=batched_warped_pc_t,
+                                      p2=batched_pc_t1,
+                                      lengths1=warped_pc_t_shape_tensor,
+                                      lengths2=pc_t1_shape_tensor,
+                                      K=1)
+        warped_to_t1_distances = warped_to_t1_knn.dists[0]
+        t1_to_warped_knn = knn_points(p1=batched_pc_t1,
+                                      p2=batched_warped_pc_t,
+                                      lengths1=pc_t1_shape_tensor,
+                                      lengths2=warped_pc_t_shape_tensor,
+                                      K=1)
+        t1_to_warped_distances = t1_to_warped_knn.dists[0]
+        # breakpoint()
 
-        # # Throw out distances that are too large (beyond the dist threshold).
-        # # warped_to_t1_distances[warped_to_t1_distances > dist_threshold] = 0
-        # # t1_to_warped_distances[t1_to_warped_distances > dist_threshold] = 0
-
-        # # Add up the distances.
-        # loss += torch.sum(warped_to_t1_distances) + torch.sum(
-        #     t1_to_warped_distances)
+        # Throw out distances that are too large (beyond the dist threshold).
+        loss += warped_to_t1_distances[
+            warped_to_t1_distances < dist_threshold].mean()
+        loss += t1_to_warped_distances[
+            t1_to_warped_distances < dist_threshold].mean()
 
         # L2 regularization on the neural scene flow prior parameters.
-        for nsfp_params in nsfp_param_list:
-            loss += torch.sum(nsfp_params**2 * param_regularizer)
+        if param_regularizer > 0:
+            for nsfp_params in nsfp_param_list:
+                loss += torch.sum(nsfp_params**2 * param_regularizer)
 
         return loss
 
@@ -192,7 +201,7 @@ class JointFlow(nn.Module):
 
         self.pyramid = FeaturePyramidNetwork(
             pseudoimage_dims=PSEUDO_IMAGE_DIMS,
-            input_num_channels=FEATURE_CHANNELS + 2,
+            input_num_channels=FEATURE_CHANNELS + 3,
             num_filters_per_block=FILTERS_PER_BLOCK,
             num_layers_of_pyramid=PYRAMID_LAYERS)
 
@@ -201,29 +210,25 @@ class JointFlow(nn.Module):
         self.attention = JointConvAttention(
             pseudoimage_dims=PSEUDO_IMAGE_DIMS,
             sequence_length=SEQUENCE_LENGTH,
-            per_element_num_channels=(FEATURE_CHANNELS + 2) *
+            per_element_num_channels=(FEATURE_CHANNELS + 3) *
             (PYRAMID_LAYERS + 1),
             per_element_output_params=self.nsfp.param_count)
         self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
         self.PSEUDO_IMAGE_DIMS = PSEUDO_IMAGE_DIMS
 
     def forward(
-        self, batched_sequence: List[Tuple[PointCloud, SE3]]
+        self, batched_sequence: Dict[str, torch.Tensor]
     ) -> List[Tuple[PointCloud, SE3, torch.Tensor]]:
-        assert len(
-            batched_sequence
-        ) == self.SEQUENCE_LENGTH, f"Expected sequence of length {self.SEQUENCE_LENGTH}, got {len(batched_sequence)}"
-        sequence_info = [e['sequence_index'] for e in batched_sequence]
-        print(f"Sequence info: {sequence_info}")
+        # print(f"Sequence info: {sequence_info}")
         batched_results = []
         for batch_idx in range(self.batch_size):
-
-            sequence = [(e['pc'][batch_idx], e['pose'][batch_idx])
-                        for e in batched_sequence]
-
+            pc_array = batched_sequence['pc_array_stack'][batch_idx]
+            pose_array = batched_sequence['pose_array_stack'][batch_idx]
+            sequence = list(zip(pc_array, pose_array))
             pc_embedding_list = [
                 self._embed_pc(pc, pose) for pc, pose in sequence
             ]
+
             pc_embedding_stack = torch.cat(pc_embedding_list, dim=1)
             nsfp_weights_tensor = torch.squeeze(
                 self.attention(pc_embedding_stack), dim=0)
@@ -245,23 +250,30 @@ class JointFlow(nn.Module):
             pc, torch.Tensor), f"Expected torch.Tensor, got {type(pc)}"
         assert isinstance(
             pose, torch.Tensor), f"Expected torch.Tensor, got {type(pose)}"
+
+        batch_size = 1
+
         # The pc is in a global frame relative to the initial pose of the sequence.
         # The pose is the pose of the current point cloud relative to the initial pose of the sequence.
         # In order to voxelize the point cloud, we need to translate it to the origin.
-        pc_pointcloud = PointCloud.from_fixed_array(pc)
-        pose_se3 = SE3.from_array(pose)
-        translated_pc = pc_pointcloud.translate(-pose_se3.translation)
-        translated_pc_torch = _pc_to_torch(translated_pc, self._get_device())
+        translation = _pose_to_translation(pose)
+        translated_pc = (pc - translation).float()
+        pseudoimage = self.embedder(translated_pc)
 
-        translation_x_torch = torch.ones(
-            (1, 1, self.PSEUDO_IMAGE_DIMS[0], self.PSEUDO_IMAGE_DIMS[1])).to(
-                self._get_device()) * pose_se3.translation[0]
-        translation_y_torch = torch.ones(
-            (1, 1, self.PSEUDO_IMAGE_DIMS[0], self.PSEUDO_IMAGE_DIMS[1])).to(
-                self._get_device()) * pose_se3.translation[1]
-
-        pseudoimage = self.embedder(translated_pc_torch)
-        pseudoimage = torch.cat(
-            (pseudoimage, translation_x_torch, translation_y_torch), dim=1)
+        translation_x_latent = torch.ones(
+            (batch_size, 1, self.PSEUDO_IMAGE_DIMS[0],
+             self.PSEUDO_IMAGE_DIMS[1])).to(
+                 self._get_device()) * translation[0]
+        translation_y_latent = torch.ones(
+            (batch_size, 1, self.PSEUDO_IMAGE_DIMS[0],
+             self.PSEUDO_IMAGE_DIMS[1])).to(
+                 self._get_device()) * translation[1]
+        translation_z_latent = torch.ones(
+            (batch_size, 1, self.PSEUDO_IMAGE_DIMS[0],
+             self.PSEUDO_IMAGE_DIMS[1])).to(
+                 self._get_device()) * translation[2]
+        pseudoimage = torch.cat((pseudoimage, translation_x_latent,
+                                 translation_y_latent, translation_z_latent),
+                                dim=1)
         latent = self.pyramid(pseudoimage)
         return latent

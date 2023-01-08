@@ -39,9 +39,15 @@ class SequenceDataset(torch.utils.data.Dataset):
         subsequence_lst = [
             sequence[offset + i] for i in range(self.subsequence_length)
         ]
-        subsequence_lst = [{
-            'pc': pc.to_fixed_array(self.max_pc_points),
-            'pose': pose.to_array(),
-            'sequence_index': index
-        } for pc, pose in subsequence_lst]
-        return subsequence_lst
+        pc_arrays = [
+            pc.to_fixed_array(self.max_pc_points) for pc, _ in subsequence_lst
+        ]
+        pose_arrays = [pose.to_array() for _, pose in subsequence_lst]
+        pc_array_stack = np.stack(pc_arrays, axis=0)
+        pose_array_stack = np.stack(pose_arrays, axis=0)
+
+        return {
+            "pc_array_stack": pc_array_stack,
+            "pose_array_stack": pose_array_stack,
+            "data_index": index
+        }
