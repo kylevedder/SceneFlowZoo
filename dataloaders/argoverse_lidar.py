@@ -139,9 +139,9 @@ class ArgoverseSequence():
             frame_info['tz_m'])
         return se3
 
-    def __getitem__(self, idx) -> (PointCloud, SE3):
+    def load(self, idx, offset_idx) -> (PointCloud, SE3):
         pc = self._load_pc(idx)
-        start_pose = self._load_pose(0)
+        start_pose = self._load_pose(offset_idx)
         idx_pose = self._load_pose(idx)
         relative_pose = start_pose.inverse().compose(idx_pose)
         absolute_global_frame_pc = pc.transform(idx_pose)
@@ -149,9 +149,6 @@ class ArgoverseSequence():
         pc = pc.mask_points(~is_ground_points)
         relative_global_frame_pc = pc.transform(relative_pose)
         return relative_global_frame_pc, relative_pose
-
-    def get_init_pose(self) -> SE3:
-        return self._load_pose(0)
 
     def __iter__(self):
         for idx in range(len(self)):

@@ -25,27 +25,23 @@ writer = SummaryWriter("work_dirs/argoverse/dist_train/", flush_secs=10)
 
 from config_params import *
 
-accelerator = Accelerator()
-
 
 def main_fn():
 
     def save_checkpoint(batch_idx, model):
-        unwrapped_model = accelerator.unwrap_model(model)
+        unwrapped_model = model
         state_dict = unwrapped_model.state_dict()
-        latest_checkpoint = Path(SAVE_FOLDER) / f"checkpoint_{batch_idx:09d}.pt"
+        latest_checkpoint = Path(
+            SAVE_FOLDER) / f"checkpoint_{batch_idx:09d}.pt"
         latest_checkpoint.parent.mkdir(parents=True, exist_ok=True)
-        accelerator.save(
-            state_dict,
-            latest_checkpoint
-        )
+        torch.save(state_dict, latest_checkpoint)
 
     # create model and move it to GPU with id rank
-    DEVICE = accelerator.device
+    DEVICE = 'cuda'
 
     sequence_loader = ArgoverseSequenceLoader(
         '/bigdata/argoverse_lidar/train/')
-    dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH)
+    dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH, shuffle=True)
 
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
@@ -64,22 +60,47 @@ def main_fn():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    model, optimizer, dataloader = accelerator.prepare(model, optimizer,
-                                                       dataloader)
-
-    for batch_idx, subsequence_batch in enumerate(
-            tqdm(dataloader, disable=not accelerator.is_local_main_process)):
+    def train_model():
+        model.train()
         optimizer.zero_grad()
-        subsequence_batch_with_flow = model(subsequence_batch)
+        subsequence_batch_with_flow = model(
+            {k: v.to(DEVICE)
+             for k, v in subsequence_batch.items()})
         loss = 0
         loss += loss_fn(subsequence_batch_with_flow, 1)
         loss += loss_fn(subsequence_batch_with_flow, 2)
-        if accelerator.is_local_main_process:
-            writer.add_scalar('loss/train', loss.item(), global_step=batch_idx)
-        accelerator.backward(loss)
+        writer.add_scalar('loss/train', loss.item(), global_step=batch_idx)
+        loss.backward()
         optimizer.step()
-        if batch_idx % SAVE_EVERY == 0 and accelerator.is_local_main_process:
+
+    def test_model(train_batch, num_test_steps=20):
+        sequence_loader = ArgoverseSequenceLoader(
+            '/bigdata/argoverse_lidar/test/')
+        dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH, shuffle=True)
+        dataloader = torch.utils.data.DataLoader(dataset,
+                                                 batch_size=BATCH_SIZE,
+                                                 shuffle=False)
+        model.eval()
+        for batch_idx, subsequence_batch in enumerate(dataloader):
+            if batch_idx > num_test_steps:
+                break
+            subsequence_batch_with_flow = model(
+                {k: v.to(DEVICE)
+                 for k, v in subsequence_batch.items()})
+            loss = 0
+            loss += loss_fn(subsequence_batch_with_flow, 1)
+            loss += loss_fn(subsequence_batch_with_flow, 2)
+            print(f"Batch {batch_idx} loss: {loss.item()}")
+            writer.add_scalar('loss/test',
+                              loss.item(),
+                              global_step=train_batch + batch_idx)
+
+    for batch_idx, subsequence_batch in enumerate(tqdm(dataloader)):
+        train_model()
+        if batch_idx % SAVE_EVERY == 0:
+            print(f"Saving checkpoint {batch_idx}")
             save_checkpoint(batch_idx, model)
+            test_model(batch_idx)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,30 @@
+FROM kylevedder/cudagl:11.7.1-devel-ubuntu20.04
+SHELL ["/bin/bash", "-c"]
+# Set the timezone info because otherwise tzinfo blocks install 
+# flow and ignores the non-interactive frontend command 🤬🤬🤬
+RUN ln -snf /usr/share/zoneinfo/America/New_York /etc/localtime && echo "/usr/share/zoneinfo/America/New_York" > /etc/timezone
+
+# Core system packages
+RUN apt-get update --fix-missing
+RUN apt install -y software-properties-common wget curl gpg gcc git make
+
+# Install miniconda to /miniconda
+RUN curl -LO http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+RUN bash Miniconda3-latest-Linux-x86_64.sh -p /miniconda -b
+RUN rm Miniconda3-latest-Linux-x86_64.sh
+ENV PATH=/miniconda/bin:${PATH}
+RUN conda update -y conda
+
+RUN apt install -y apt-utils
+
+ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
+ENV FORCE_CUDA="1"
+RUN conda update -y conda
+RUN conda install numpy python=3.10 pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+RUN pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+RUN pip install mmcv-full==1.7.1 -f https://download.openmmlab.com/mmcv/dist/cu117/torch1.13.0/index.html
+RUN pip install pyarrow pyquaternion open3d accelerate tensorboard
+
+ENV PYTHONPATH=/project:${PYTHONPATH}
+COPY bashrc /root/.bashrc
+WORKDIR /project

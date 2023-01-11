@@ -10,7 +10,7 @@ from model.attention import JointConvAttention
 from model.heads import NeuralSceneFlowPrior
 
 from typing import List, Tuple, Dict
-from pointclouds import PointCloud, SE3
+from pointclouds import PointCloud, SE3, warped_pc_loss
 
 
 def _torch_to_jagged_pc(torch_tensor: torch.Tensor) -> PointCloud:
@@ -68,14 +68,14 @@ class JointFlowLoss():
                 param_list = []
                 for j in range(delta):
                     _, _, nsfp_params = sequence[i + j]
+                    # nsfp_params = torch.zeros_like(nsfp_params)
                     pc_t0_warped_to_t1 = self.nsfp(pc_t0_warped_to_t1,
                                                    nsfp_params)
                     param_list.append(nsfp_params)
 
                 if visualize:
                     self._visualize_o3d(pc_t0, pc_t1, pc_t0_warped_to_t1)
-                loss += self._warped_pc_loss(pc_t0_warped_to_t1, pc_t1,
-                                             param_list)
+                loss += warped_pc_loss(pc_t0_warped_to_t1, pc_t1, dist_threshold=None)
         return loss
 
     def _visualize_o3d(self, pc_t0, pc_t1, pc_t0_warped_to_t1):
@@ -83,14 +83,6 @@ class JointFlowLoss():
         pc_t0_npy = pc_t0.cpu().numpy()
         pc_t1_npy = pc_t1.cpu().numpy()
         pc_t0_warped_to_t1_npy = pc_t0_warped_to_t1.detach().cpu().numpy()
-
-        print(f"pc_t0_npy.shape: {pc_t0_npy.shape}")
-        print(f"pc_t1_npy.shape: {pc_t1_npy.shape}")
-        print(f"pc_t0_warped_to_t1_npy.shape: {pc_t0_warped_to_t1_npy.shape}")
-
-        print(f"pc_t0_npy: {pc_t0_npy}")
-        print(f"pc_t1_npy: {pc_t1_npy}")
-        print(f"pc_t0_warped_to_t1_npy: {pc_t0_warped_to_t1_npy}")
 
         pc_t0_color = np.zeros_like(pc_t0_npy)
         pc_t0_color[:, 0] = 1.0
@@ -121,60 +113,11 @@ class JointFlowLoss():
         # set up vector
         vis.get_view_control().set_up([0, 0, 1])
         # add geometry
-        # vis.add_geometry(pc_t0_o3d)
+        vis.add_geometry(pc_t0_o3d)
         vis.add_geometry(pc_t1_o3d)
         vis.add_geometry(pc_t0_warped_to_t1_o3d)
         # run
         vis.run()
-
-    def _warped_pc_loss(self,
-                        pc_t0_warped_to_t1: torch.Tensor,
-                        pc_t1: torch.Tensor,
-                        nsfp_param_list: List[torch.Tensor],
-                        dist_threshold=2.0,
-                        param_regularizer=0):
-        batched_warped_pc_t = pc_t0_warped_to_t1.unsqueeze(0)
-        batched_pc_t1 = pc_t1.unsqueeze(0)
-
-        # loss += chamfer_distance(batched_warped_pc_t,
-        #                          batched_pc_t1,
-        #                          point_reduction="mean")[0].sum()
-
-        # Compute min distance between warped point cloud and point cloud at t+1.
-
-        warped_pc_t_shape_tensor = torch.LongTensor(
-            [pc_t0_warped_to_t1.shape[0]]).to(batched_warped_pc_t.device)
-        pc_t1_shape_tensor = torch.LongTensor([pc_t1.shape[0]
-                                               ]).to(batched_pc_t1.device)
-        warped_to_t1_knn = knn_points(p1=batched_warped_pc_t,
-                                      p2=batched_pc_t1,
-                                      lengths1=warped_pc_t_shape_tensor,
-                                      lengths2=pc_t1_shape_tensor,
-                                      K=1)
-        warped_to_t1_distances = warped_to_t1_knn.dists[0]
-        t1_to_warped_knn = knn_points(p1=batched_pc_t1,
-                                      p2=batched_warped_pc_t,
-                                      lengths1=pc_t1_shape_tensor,
-                                      lengths2=warped_pc_t_shape_tensor,
-                                      K=1)
-        t1_to_warped_distances = t1_to_warped_knn.dists[0]
-        # breakpoint()
-
-        loss = 0
-        # Throw out distances that are too large (beyond the dist threshold).
-        loss += warped_to_t1_distances[
-            warped_to_t1_distances < dist_threshold].mean()
-
-        reverse_warp_loss = t1_to_warped_distances[
-            t1_to_warped_distances < dist_threshold].mean()
-        loss += reverse_warp_loss
-
-        # L2 regularization on the neural scene flow prior parameters.
-        if param_regularizer > 0:
-            for nsfp_params in nsfp_param_list:
-                loss = loss + torch.sum(nsfp_params**2 * param_regularizer)
-
-        return loss
 
 
 class JointFlow(nn.Module):

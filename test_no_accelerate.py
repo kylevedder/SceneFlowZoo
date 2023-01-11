@@ -2,6 +2,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
+from pathlib import Path
 
 from accelerate import Accelerator
 
@@ -17,38 +18,31 @@ from model.heads import NeuralSceneFlowPrior
 from model import JointFlow, JointFlowLoss
 from pytorch3d.ops.knn import knn_points
 
-from pathlib import Path
-
+from collections import OrderedDict
 from torch.utils.tensorboard import SummaryWriter
-
-writer = SummaryWriter("work_dirs/argoverse/dist_train/", flush_secs=10)
 
 from config_params import *
 
-accelerator = Accelerator()
+
+def find_latest_checkpoint() -> Path:
+    latest_checkpoint = sorted(Path(SAVE_FOLDER).glob("*.pt"))[-1]
+    print("Latest checkpoint", latest_checkpoint)
+    return latest_checkpoint
+
+
+def load_checkpoint(model):
+    latest_checkpoint = find_latest_checkpoint()
+    model.load_state_dict(torch.load(latest_checkpoint))
+    return model
 
 
 def main_fn():
-
-    def save_checkpoint(batch_idx, model):
-        unwrapped_model = accelerator.unwrap_model(model)
-        state_dict = unwrapped_model.state_dict()
-        latest_checkpoint = Path(SAVE_FOLDER) / f"checkpoint_{batch_idx:09d}.pt"
-        latest_checkpoint.parent.mkdir(parents=True, exist_ok=True)
-        accelerator.save(
-            state_dict,
-            latest_checkpoint
-        )
-
     # create model and move it to GPU with id rank
-    DEVICE = accelerator.device
+    DEVICE = 'cuda'
 
     sequence_loader = ArgoverseSequenceLoader(
         '/bigdata/argoverse_lidar/train/')
     dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH)
-
-    torch.manual_seed(1)
-    torch.cuda.manual_seed(1)
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=BATCH_SIZE,
                                              shuffle=False)
@@ -56,30 +50,23 @@ def main_fn():
     model = JointFlow(BATCH_SIZE, DEVICE, VOXEL_SIZE, PSEUDO_IMAGE_DIMS,
                       POINT_CLOUD_RANGE, MAX_POINTS_PER_VOXEL,
                       FEATURE_CHANNELS, FILTERS_PER_BLOCK, PYRAMID_LAYERS,
-                      SEQUENCE_LENGTH, NSFP_FILTER_SIZE,
-                      NSFP_NUM_LAYERS).to(DEVICE)
+                      SEQUENCE_LENGTH, NSFP_FILTER_SIZE, NSFP_NUM_LAYERS)
     loss_fn = JointFlowLoss(device=DEVICE,
                             NSFP_FILTER_SIZE=NSFP_FILTER_SIZE,
                             NSFP_NUM_LAYERS=NSFP_NUM_LAYERS)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    model = load_checkpoint(model)
+    model.to(DEVICE)
 
-    model, optimizer, dataloader = accelerator.prepare(model, optimizer,
-                                                       dataloader)
-
-    for batch_idx, subsequence_batch in enumerate(
-            tqdm(dataloader, disable=not accelerator.is_local_main_process)):
-        optimizer.zero_grad()
-        subsequence_batch_with_flow = model(subsequence_batch)
+    model.eval()
+    for batch_idx, subsequence_batch in enumerate(dataloader):
+        subsequence_batch_with_flow = model(
+            {k: v.to(DEVICE)
+             for k, v in subsequence_batch.items()})
         loss = 0
         loss += loss_fn(subsequence_batch_with_flow, 1)
         loss += loss_fn(subsequence_batch_with_flow, 2)
-        if accelerator.is_local_main_process:
-            writer.add_scalar('loss/train', loss.item(), global_step=batch_idx)
-        accelerator.backward(loss)
-        optimizer.step()
-        if batch_idx % SAVE_EVERY == 0 and accelerator.is_local_main_process:
-            save_checkpoint(batch_idx, model)
+        print(f"Batch {batch_idx} loss: {loss.item()}")
 
 
 if __name__ == "__main__":
