@@ -6,7 +6,7 @@ import torch.optim as optim
 from accelerate import Accelerator
 
 from tqdm import tqdm
-from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SequenceDataset
+from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SubsequenceDataset, OriginMode
 
 from pointclouds import PointCloud, SE3
 
@@ -45,7 +45,7 @@ def main_fn():
 
     sequence_loader = ArgoverseSequenceLoader(
         '/bigdata/argoverse_lidar/train/')
-    dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH)
+    dataset = SubsequenceDataset(sequence_loader, SEQUENCE_LENGTH, OriginMode.FIRST_ENTRY)
 
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)

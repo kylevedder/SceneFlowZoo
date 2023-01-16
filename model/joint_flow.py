@@ -3,11 +3,12 @@ import torch.nn as nn
 from pytorch3d.ops.knn import knn_points
 from pytorch3d.loss import chamfer_distance
 import numpy as np
+from tqdm import tqdm
 
 from model.embedders import Embedder
 from model.backbones import FeaturePyramidNetwork
 from model.attention import JointConvAttention
-from model.heads import NeuralSceneFlowPrior
+from model.heads import NeuralSceneFlowPrior, NeuralSceneFlowPriorOptimizable
 
 from typing import List, Tuple, Dict
 from pointclouds import PointCloud, SE3, warped_pc_loss
@@ -35,16 +36,78 @@ def _pose_to_translation(transform_matrix: torch.Tensor) -> torch.Tensor:
     return transform_matrix[:3, 3]
 
 
+class JointFlowOptimizationLoss():
+
+    def __init__(self,
+                 device: str,
+                 hidden_units=64,
+                 hidden_layers=4,
+                 max_iters=50) -> None:
+        self.device = device
+        self.num_hidden_units = hidden_units
+        self.num_hidden_layers = hidden_layers
+        self.max_iters = max_iters
+
+    def _optimize_nsfp(self, pc1, pc2, nsfp_params):
+        nsfp = NeuralSceneFlowPriorOptimizable(
+            nsfp_params,
+            num_hidden_units=self.num_hidden_units,
+            num_hidden_layers=self.num_hidden_layers).to(self.device)
+        optimizer = torch.optim.Adam(nsfp.parameters(),
+                                     lr=0.008,
+                                     weight_decay=0)
+        for _ in range(self.max_iters):
+            optimizer.zero_grad()
+            flow = nsfp(pc1)
+            warped_pc1 = pc1 + flow
+            loss = warped_pc_loss(warped_pc1, pc2, dist_threshold=None)
+            loss.backward()
+            optimizer.step()
+
+        return nsfp.decode_params()
+
+    def __call__(self,
+                 batched_sequence: List[List[Tuple[torch.Tensor, torch.Tensor,
+                                                   torch.Tensor]]],
+                 visualize=False):
+        delta = 1
+        assert delta > 0, f"delta must be positive, got {delta}"
+        loss = 0
+        for sequence in batched_sequence:
+            sequence_length = len(sequence)
+            assert delta < sequence_length, f"delta must be less than sequence_length, got {delta}"
+            for i in tqdm(range(sequence_length - delta),
+                          leave=False,
+                          desc="Optimizing NSFP weight targets"):
+                pc_t0, _, nsfp_params = sequence[i]
+                pc_t1, _, _ = sequence[i + delta]
+                pc_t0 = _torch_to_jagged_pc(pc_t0)
+                pc_t1 = _torch_to_jagged_pc(pc_t1)
+                pc_t0 = _pc_to_torch(pc_t0, self.device)
+                pc_t1 = _pc_to_torch(pc_t1, self.device)
+
+                target_params = self._optimize_nsfp(
+                    pc_t0, pc_t1,
+                    nsfp_params.clone().detach())
+                assert target_params.shape == nsfp_params.shape, f"target_params.shape == nsfp_params.shape, got {target_params.shape} != {nsfp_params.shape}"
+                loss += torch.linalg.norm(target_params - nsfp_params, ord=1)
+
+        return loss
+
+
 class JointFlowLoss():
 
     def __init__(self,
                  device: str,
                  NSFP_FILTER_SIZE=64,
-                 NSFP_NUM_LAYERS=4) -> None:
+                 NSFP_NUM_LAYERS=4,
+                 zero_prior: bool = False) -> None:
         self.device = device
         self.nsfp = NeuralSceneFlowPrior(num_hidden_units=NSFP_FILTER_SIZE,
                                          num_hidden_layers=NSFP_NUM_LAYERS).to(
                                              self.device)
+        self.zero_prior = zero_prior
+        self.warp_idx = 0
 
     def __call__(self,
                  batched_sequence: List[List[Tuple[torch.Tensor, torch.Tensor,
@@ -52,6 +115,7 @@ class JointFlowLoss():
                  delta: int,
                  visualize=False) -> torch.Tensor:
         loss = 0
+        zero_prior_loss = 0
         for sequence in batched_sequence:
             sequence_length = len(sequence)
             assert delta > 0, f"delta must be positive, got {delta}"
@@ -65,18 +129,44 @@ class JointFlowLoss():
                 pc_t1 = _pc_to_torch(pc_t1, self.device)
 
                 pc_t0_warped_to_t1 = pc_t0
-                param_list = []
                 for j in range(delta):
                     _, _, nsfp_params = sequence[i + j]
                     # nsfp_params = torch.zeros_like(nsfp_params)
                     pc_t0_warped_to_t1 = self.nsfp(pc_t0_warped_to_t1,
                                                    nsfp_params)
-                    param_list.append(nsfp_params)
 
                 if visualize:
-                    self._visualize_o3d(pc_t0, pc_t1, pc_t0_warped_to_t1)
-                loss += warped_pc_loss(pc_t0_warped_to_t1, pc_t1, dist_threshold=None)
+                    self._visualize_bev_warp(pc_t0, pc_t0_warped_to_t1)
+                    # self._visualize_o3d(pc_t0, pc_t1, pc_t0_warped_to_t1)
+                loss += warped_pc_loss(pc_t0_warped_to_t1,
+                                       pc_t1,
+                                       dist_threshold=None)
+                if self.zero_prior:
+                    zero_prior_loss += warped_pc_loss(pc_t0,
+                                                      pc_t1,
+                                                      dist_threshold=None)
+        if self.zero_prior:
+            return loss, zero_prior_loss
         return loss
+
+    def _visualize_bev_warp(self, pc_t0, pc_t0_warped_to_t1):
+        
+        pc_xy = pc_t0[:, :2].detach().cpu().numpy()
+        flow = pc_t0_warped_to_t1 - pc_t0
+        flow = flow.detach().cpu().numpy()
+        flow_xy = flow[:, :2]
+        flow_magnitudes = np.linalg.norm(flow_xy, axis=1)
+        flow_angles = np.arctan2(flow_xy[:, 1], flow_xy[:, 0])
+        flow_colors = (flow_angles + np.pi) / (2 * np.pi) * 360
+        
+
+        # Scatterplot with matplotlib, using flow colors to color the dots
+        import matplotlib.pyplot as plt
+        plt.scatter(pc_xy[:, 0], pc_xy[:, 1], c=flow_colors, cmap='hsv', vmin=0, vmax=360)
+        plt.colorbar()
+        plt.savefig(f"/efs/bev_warps/bev_warp{self.warp_idx:09d}.png")
+        self.warp_idx += 1
+        plt.clf()
 
     def _visualize_o3d(self, pc_t0, pc_t1, pc_t0_warped_to_t1):
         import open3d as o3d
@@ -107,7 +197,7 @@ class JointFlowLoss():
 
         vis = o3d.visualization.Visualizer()
         vis.create_window()
-        vis.get_render_option().point_size = 1
+        vis.get_render_option().point_size = 2
         vis.get_render_option().background_color = (0, 0, 0)
         vis.get_render_option().show_coordinate_frame = True
         # set up vector

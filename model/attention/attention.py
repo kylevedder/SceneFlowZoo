@@ -3,25 +3,18 @@ import torch.nn as nn
 import numpy as np
 
 
-class ConvWithNorms(nn.Module):
+class ConvWithNonLinearity(nn.Module):
 
     def __init__(self, in_num_channels: int, out_num_channels: int,
                  kernel_size: int, stride: int, padding: int):
         super().__init__()
         self.conv = nn.Conv2d(in_num_channels, out_num_channels, kernel_size,
                               stride, padding)
-        self.batchnorm = nn.BatchNorm2d(out_num_channels)
         self.gelu = nn.GELU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         conv_res = self.conv(x)
-        if conv_res.shape[2] == 1 and conv_res.shape[3] == 1:
-            # This is a hack to get around the fact that batchnorm doesn't support
-            # 1x1 convolutions
-            batchnorm_res = conv_res
-        else:
-            batchnorm_res = self.batchnorm(conv_res)
-        return self.gelu(batchnorm_res)
+        return self.gelu(conv_res)
 
 
 class JointConvAttention(nn.Module):
@@ -67,15 +60,18 @@ class JointConvAttention(nn.Module):
             f"Appending first conv layer of {self.total_num_channels} channels to {self.total_output_channels} channels"
         )
         self.conv_layers.append(
-            ConvWithNorms(self.total_num_channels, self.total_output_channels,
-                          3, 2, 1))
-        for _ in range(self.pseudoimage_stepdowns - 1):
+            ConvWithNonLinearity(self.total_num_channels,
+                                 self.total_output_channels, 3, 2, 1))
+        for _ in range(self.pseudoimage_stepdowns - 2):
             print(
                 f"Appending conv layer of {self.total_output_channels} channels to {self.total_output_channels} channels"
             )
             self.conv_layers.append(
-                ConvWithNorms(self.total_output_channels,
-                              self.total_output_channels, 3, 2, 1))
+                ConvWithNonLinearity(self.total_output_channels,
+                                     self.total_output_channels, 3, 2, 1))
+        self.conv_layers.append(
+            nn.Conv2d(self.total_output_channels, self.total_output_channels,
+                      3, 2, 1))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert isinstance(

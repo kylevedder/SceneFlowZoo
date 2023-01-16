@@ -1,4 +1,4 @@
-from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SequenceDataset
+from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SubsequenceDataset
 
 from nsfp_baseline import NSFPProcessor, NSFPLoss
 
@@ -12,7 +12,7 @@ BATCH_SIZE = 1
 
 def main_fn():
     sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/test/')
-    dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH)
+    dataset = SubsequenceDataset(sequence_loader, SEQUENCE_LENGTH)
 
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)

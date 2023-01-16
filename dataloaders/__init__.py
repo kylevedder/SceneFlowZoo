@@ -1,4 +1,8 @@
 from .argoverse_lidar import ArgoverseSequenceLoader, ArgoverseSequence
-from .sequence_dataset import SequenceDataset
+from .sequence_dataset import SubsequenceDataset, OriginMode
+from .pointcloud_dataset import PointCloudDataset
 
-__all__ = ['ArgoverseSequenceLoader', 'ArgoverseSequence', 'SequenceDataset']
+__all__ = [
+    'ArgoverseSequenceLoader', 'ArgoverseSequence', 'SubsequenceDataset',
+    'PointCloudDataset', 'OriginMode'
+]

@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 from pointclouds import PointCloud, SE3, SE2
 from loader_utils import load_json
+from typing import List, Tuple, Dict, Optional
 
 GROUND_HEIGHT_THRESHOLD = 0.4  # 40 centimeters
 
@@ -120,6 +121,7 @@ class ArgoverseSequence():
         return len(self.timestamp_list)
 
     def _load_pc(self, idx) -> PointCloud:
+        assert idx < len(self), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         timestamp = self.timestamp_list[idx]
         frame_path = self.timestamp_to_file_map[timestamp]
         frame_content = pd.read_feather(frame_path)
@@ -130,6 +132,7 @@ class ArgoverseSequence():
         return PointCloud(points)
 
     def _load_pose(self, idx) -> SE3:
+        assert idx < len(self), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         timestamp = self.timestamp_list[idx]
         infos_idx = self.timestamp_to_info_idx_map[timestamp]
         frame_info = self.frame_infos.iloc[infos_idx]
@@ -139,9 +142,10 @@ class ArgoverseSequence():
             frame_info['tz_m'])
         return se3
 
-    def load(self, idx, offset_idx) -> (PointCloud, SE3):
+    def load(self, idx, relative_to_idx) -> (PointCloud, SE3):
+        assert idx < len(self), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         pc = self._load_pc(idx)
-        start_pose = self._load_pose(offset_idx)
+        start_pose = self._load_pose(relative_to_idx)
         idx_pose = self._load_pose(idx)
         relative_pose = start_pose.inverse().compose(idx_pose)
         absolute_global_frame_pc = pc.transform(idx_pose)
@@ -150,9 +154,8 @@ class ArgoverseSequence():
         relative_global_frame_pc = pc.transform(relative_pose)
         return relative_global_frame_pc, relative_pose
 
-    def __iter__(self):
-        for idx in range(len(self)):
-            yield self[idx]
+    def load_frame_list(self, relative_to_idx) -> List[Tuple[PointCloud, SE3]]:
+        return [self.load(idx, relative_to_idx) for idx in range(len(self))]
 
 
 class ArgoverseSequenceLoader():

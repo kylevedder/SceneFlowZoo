@@ -1,18 +1,27 @@
 import torch
 import numpy as np
 from tqdm import tqdm
+import enum
 
 
-class SequenceDataset(torch.utils.data.Dataset):
+class OriginMode(enum.Enum):
+    FIRST_ENTRY = 0
+    LAST_ENTRY = 1
+
+
+class SubsequenceDataset(torch.utils.data.Dataset):
 
     def __init__(self,
                  sequence_loader,
                  subsequence_length: int,
-                 max_pc_points: int = 90000, shuffle=False):
+                 origin_mode: OriginMode,
+                 max_pc_points: int = 90000,
+                 shuffle=False):
         self.sequence_loader = sequence_loader
         assert subsequence_length > 0, f"subsequence_length must be > 0, got {subsequence_length}"
 
         self.subsequence_length = subsequence_length
+        self.origin_mode = origin_mode
         self.max_pc_points = max_pc_points
 
         self.subsequence_id_index = []
@@ -28,9 +37,11 @@ class SequenceDataset(torch.utils.data.Dataset):
                 (id, i) for i in range(num_subsequences)
             ])
 
-        self.subsequence_id_shuffled_index = list(range(len(self.subsequence_id_index)))
+        self.subsequence_id_shuffled_index = list(
+            range(len(self.subsequence_id_index)))
         if shuffle:
-            random_state = np.random.RandomState(len(self.subsequence_id_index))
+            random_state = np.random.RandomState(len(
+                self.subsequence_id_index))
             random_state.shuffle(self.subsequence_id_shuffled_index)
 
     def __len__(self):
@@ -42,8 +53,14 @@ class SequenceDataset(torch.utils.data.Dataset):
         sequence = self.sequence_loader.load_sequence(id)
 
         offset = subsequence_index * self.subsequence_length
+        if self.origin_mode == OriginMode.FIRST_ENTRY:
+            origin_idx = offset
+        elif self.origin_mode == OriginMode.LAST_ENTRY:
+            origin_idx = offset + self.subsequence_length - 1
+        else:
+            raise ValueError(f"Unknown origin mode {self.origin_mode}")
         subsequence_lst = [
-            sequence.load(offset + i, offset)
+            sequence.load(offset + i, origin_idx)
             for i in range(self.subsequence_length)
         ]
         pc_arrays = [

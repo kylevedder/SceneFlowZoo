@@ -7,7 +7,7 @@ from pathlib import Path
 from accelerate import Accelerator
 
 from tqdm import tqdm
-from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SequenceDataset
+from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SubsequenceDataset
 
 from pointclouds import PointCloud, SE3
 
@@ -27,8 +27,8 @@ accelerator = Accelerator()
 
 
 def find_latest_checkpoint() -> Path:
-    latest_checkpoint = sorted(
-        Path(SAVE_FOLDER).glob("*.pt"))[-1]
+    latest_checkpoint = sorted(Path(SAVE_FOLDER).glob("*.pt"))[-1]
+    latest_checkpoint = Path(SAVE_FOLDER) / "checkpoint_000012000.pt"
     print("Latest checkpoint", latest_checkpoint)
     return latest_checkpoint
 
@@ -43,8 +43,9 @@ def main_fn():
     # create model and move it to GPU with id rank
     DEVICE = accelerator.device
 
-    sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
-    dataset = SequenceDataset(sequence_loader, SEQUENCE_LENGTH)
+    sequence_loader = ArgoverseSequenceLoader(
+        '/bigdata/argoverse_lidar/train/')
+    dataset = SubsequenceDataset(sequence_loader, SEQUENCE_LENGTH)
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=BATCH_SIZE,
                                              shuffle=False)
@@ -56,7 +57,8 @@ def main_fn():
                       NSFP_NUM_LAYERS).to(DEVICE)
     loss_fn = JointFlowLoss(device=DEVICE,
                             NSFP_FILTER_SIZE=NSFP_FILTER_SIZE,
-                            NSFP_NUM_LAYERS=NSFP_NUM_LAYERS)
+                            NSFP_NUM_LAYERS=NSFP_NUM_LAYERS,
+                            zero_prior=True)
 
     model, dataloader = accelerator.prepare(model, dataloader)
 
@@ -65,10 +67,15 @@ def main_fn():
     model.eval()
     for batch_idx, subsequence_batch in enumerate(dataloader):
         subsequence_batch_with_flow = model(subsequence_batch)
-        loss = 0        
-        loss += loss_fn(subsequence_batch_with_flow, 1)
-        loss += loss_fn(subsequence_batch_with_flow, 2)
-        print(f"Batch {batch_idx} loss: {loss.item()}")
+        delta_1_loss, delta_1_loss_zero_prior = loss_fn(
+            subsequence_batch_with_flow, 1, visualize=True)
+        delta_2_loss, delta_2_loss_zero_prior = loss_fn(
+            subsequence_batch_with_flow, 2)
+        loss = delta_1_loss + delta_2_loss
+        zero_prior_loss = delta_1_loss_zero_prior + delta_2_loss_zero_prior
+        print(
+            f"Batch {batch_idx} loss - zero prior: {loss.item() - zero_prior_loss.item()}"
+        )
 
 
 if __name__ == "__main__":

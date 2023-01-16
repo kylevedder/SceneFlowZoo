@@ -7,7 +7,8 @@ import numpy as np
 import tqdm
 
 sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
-sequence = sequence_loader.load_sequence(sequence_loader.get_sequence_ids()[29])
+sequence = sequence_loader.load_sequence(
+    sequence_loader.get_sequence_ids()[29])
 
 # make open3d visualizer
 vis = o3d.visualization.Visualizer()
@@ -25,7 +26,7 @@ def sequence_idx_to_color(idx):
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
-for idx, (pc, pose) in enumerate(tqdm.tqdm(sequence)):
+for idx, (pc, pose) in enumerate(tqdm.tqdm(sequence.load_frame_list(0))):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pc.points)
     vis.add_geometry(pcd)
