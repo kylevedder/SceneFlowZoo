@@ -28,6 +28,10 @@ class PointCloud():
         assert translation.shape == (3, )
         return PointCloud(self.points + translation)
 
+    def flow(self, flow: np.ndarray) -> 'PointCloud':
+        assert flow.shape == self.points.shape, f"flow shape {flow.shape} must match point cloud shape {self.points.shape}"
+        return PointCloud(self.points + flow)
+
     def to_fixed_array(self, max_points: int) -> np.ndarray:
         if len(self) > max_points:
             np.random.RandomState(len(self.points)).shuffle(self.points)

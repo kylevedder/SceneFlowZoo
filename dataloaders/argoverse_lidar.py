@@ -41,9 +41,9 @@ class ArgoverseSequence():
 
     def _load_ground_height_raster(self):
         raster_height_paths = list(
-            (self.dataset_dir / 'map').glob("*_ground_height_surface____.npy"))
+            (self.dataset_dir / 'map').glob("*_ground_height_surface____*.npy"))
         assert len(raster_height_paths
-                   ) == 1, f'Expected 1 raster, got {len(raster_height_paths)}'
+                   ) == 1, f'Expected 1 raster, got {len(raster_height_paths)} in path {self.dataset_dir / "map"}'
         raster_height_path = raster_height_paths[0]
 
         transform_paths = list(

@@ -11,24 +11,24 @@ from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SubsequenceD
 
 from pointclouds import PointCloud, SE3
 
-from model.embedders import Embedder
-from model.backbones import FeaturePyramidNetwork
-from model.attention import JointConvAttention
-from model.heads import NeuralSceneFlowPrior
-from model import JointFlow, JointFlowLoss
+from models.embedders import HardEmbedder
+from models.backbones import FeaturePyramidNetwork
+from models.attention import JointConvAttention
+from models.heads import NeuralSceneFlowPrior
+from models import JointFlow, JointFlowLoss
 from pytorch3d.ops.knn import knn_points
 
 from collections import OrderedDict
 from torch.utils.tensorboard import SummaryWriter
 
-from config_params import *
+from configs.first_attempt.config import *
 
 accelerator = Accelerator()
 
 
 def find_latest_checkpoint() -> Path:
-    latest_checkpoint = sorted(Path(SAVE_FOLDER).glob("*.pt"))[-1]
-    latest_checkpoint = Path(SAVE_FOLDER) / "checkpoint_000012000.pt"
+    latest_checkpoint = sorted(Path(save_folder).glob("*.pt"))[-1]
+    latest_checkpoint = Path(save_folder) / "checkpoint_000012000.pt"
     print("Latest checkpoint", latest_checkpoint)
     return latest_checkpoint
 

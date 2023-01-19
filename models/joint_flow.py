@@ -5,10 +5,10 @@ from pytorch3d.loss import chamfer_distance
 import numpy as np
 from tqdm import tqdm
 
-from model.embedders import Embedder
-from model.backbones import FeaturePyramidNetwork
-from model.attention import JointConvAttention
-from model.heads import NeuralSceneFlowPrior, NeuralSceneFlowPriorOptimizable
+from models.embedders import HardEmbedder
+from models.backbones import FeaturePyramidNetwork
+from models.attention import JointConvAttention
+from models.heads import NeuralSceneFlowPrior, NeuralSceneFlowPriorOptimizable
 
 from typing import List, Tuple, Dict
 from pointclouds import PointCloud, SE3, warped_pc_loss
@@ -228,7 +228,7 @@ class JointFlow(nn.Module):
         super().__init__()
         self.batch_size = batch_size
         self.device = device
-        self.embedder = Embedder(voxel_size=VOXEL_SIZE,
+        self.embedder = HardEmbedder(voxel_size=VOXEL_SIZE,
                                  pseudo_image_dims=PSEUDO_IMAGE_DIMS,
                                  point_cloud_range=POINT_CLOUD_RANGE,
                                  max_points_per_voxel=MAX_POINTS_PER_VOXEL,

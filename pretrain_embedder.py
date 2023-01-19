@@ -1,10 +1,10 @@
 import torch
 import torch.nn.functional as F
 from dataloaders import PointCloudDataset, ArgoverseSequenceLoader
-from model import PretrainEmbedding
+from models import PretrainEmbedding
 from tqdm import tqdm
 
-from config_params import *
+from configs.first_attempt.config_params import *
 
 from accelerate import Accelerator
 
@@ -76,7 +76,7 @@ for batch_idx, point_cloud_batch in enumerate(
         writer.add_scalar('loss/train', loss.item(), global_step=batch_idx)
     accelerator.backward(loss)
     optimizer.step()
-    if batch_idx % SAVE_EVERY == 0 and accelerator.is_local_main_process:
+    if batch_idx % save_every_iter == 0 and accelerator.is_local_main_process:
         save_checkpoint(batch_idx, model)
 
 print("Save final model...")

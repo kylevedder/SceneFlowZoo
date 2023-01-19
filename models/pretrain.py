@@ -3,8 +3,8 @@ import torch.nn as nn
 import numpy as np
 from typing import Tuple
 
-from model.embedders import Embedder
-from model.backbones import FeaturePyramidNetwork
+from models.embedders import HardEmbedder
+from models.backbones import FeaturePyramidNetwork
 
 
 class ConvWithNorms(nn.Module):
@@ -72,7 +72,7 @@ class PretrainEmbedding(nn.Module):
         self.PSEUDO_IMAGE_DIMS = PSEUDO_IMAGE_DIMS
         self.batch_size = batch_size
         self.device = device
-        self.embedder = Embedder(voxel_size=VOXEL_SIZE,
+        self.embedder = HardEmbedder(voxel_size=VOXEL_SIZE,
                                  pseudo_image_dims=PSEUDO_IMAGE_DIMS,
                                  point_cloud_range=POINT_CLOUD_RANGE,
                                  max_points_per_voxel=MAX_POINTS_PER_VOXEL,
