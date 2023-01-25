@@ -32,8 +32,8 @@ class FastFlowDecoder(nn.Module):
     ) -> List[torch.Tensor]:
 
         flow_results = []
-        for before_pseudoimage, after_pseudoimage, (points,
-                                                    voxel_coords) in zip(
+        for before_pseudoimage, after_pseudoimage, (points, voxel_coords,
+                                                    _) in zip(
                                                         before_pseudoimages,
                                                         after_pseudoimages,
                                                         points_coordinates):

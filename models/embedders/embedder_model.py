@@ -63,7 +63,7 @@ class DynamicEmbedder(nn.Module):
         points_coordinates_batch_list = self.voxelizer(points)
 
         pseudoimage_lst = []
-        for points, coordinates in points_coordinates_batch_list:
+        for points, coordinates, _ in points_coordinates_batch_list:
             voxel_feats, voxel_coors = self.feature_net(points, coordinates)
             pseudoimage = self.scatter(voxel_feats, voxel_coors)
             pseudoimage_lst.append(pseudoimage)

@@ -4,6 +4,20 @@ import torch
 from .se3 import SE3
 
 
+def to_fixed_array(array: np.ndarray,
+                   max_len: int,
+                   pad_val=np.nan) -> np.ndarray:
+    if len(array) > max_len:
+        np.random.RandomState(len(array)).shuffle(array)
+        sliced_pts = array[:max_len]
+        return sliced_pts
+    else:
+        pad_tuples = [(0, max_len - len(array))]
+        for i in range(array.ndim - 1):
+            pad_tuples.append((0, 0))
+        return np.pad(array, pad_tuples, constant_values=pad_val)
+
+
 class PointCloud():
 
     def __init__(self, points: np.ndarray) -> None:
@@ -33,15 +47,7 @@ class PointCloud():
         return PointCloud(self.points + flow)
 
     def to_fixed_array(self, max_points: int) -> np.ndarray:
-        if len(self) > max_points:
-            np.random.RandomState(len(self.points)).shuffle(self.points)
-            sliced_pts = self.points[:max_points]
-            # add a 4th column of 1s to indicate that these points are valid
-            return sliced_pts
-        else:
-            # pad existing points with 0s to indicate that these points are valid
-            return np.pad(self.points, ((0, max_points - len(self)), (0, 0)),
-                          constant_values=np.nan)
+        return to_fixed_array(self.points, max_points)
 
     @staticmethod
     def from_fixed_array(points) -> 'PointCloud':
@@ -66,3 +72,7 @@ class PointCloud():
         assert mask.shape[0] == len(self)
         assert mask.dtype == bool
         return PointCloud(self.points[mask])
+
+    @property
+    def shape(self) -> tuple:
+        return self.points.shape

@@ -42,8 +42,10 @@ class DynamicVoxelizer(nn.Module):
         batch_results = []
         for batch_idx in range(points.shape[0]):
             batch_points = points[batch_idx]
+            valid_point_idxes = torch.arange(batch_points.shape[0], device=batch_points.device)
             not_nan_mask = ~torch.isnan(batch_points).any(dim=1)
             batch_non_nan_points = batch_points[not_nan_mask]
+            valid_point_idxes = valid_point_idxes[not_nan_mask]
             batch_voxel_coords = self.voxelizer(batch_non_nan_points)
             # If any of the coords are -1, then the point is not in the voxel grid and should be discarded
             batch_voxel_coords_mask = (batch_voxel_coords != -1).all(dim=1)
@@ -52,6 +54,7 @@ class DynamicVoxelizer(nn.Module):
                 batch_voxel_coords_mask]
             valid_batch_non_nan_points = batch_non_nan_points[
                 batch_voxel_coords_mask]
+            valid_point_idxes = valid_point_idxes[batch_voxel_coords_mask]
 
-            batch_results.append((valid_batch_non_nan_points, valid_batch_voxel_coords))
+            batch_results.append((valid_batch_non_nan_points, valid_batch_voxel_coords, valid_point_idxes))
         return batch_results

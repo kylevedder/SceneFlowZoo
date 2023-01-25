@@ -7,6 +7,39 @@ import numpy as np
 
 from . import ArgoverseSequence
 
+CATEGORY_MAP = {
+    0: 'ANIMAL',
+    1: 'ARTICULATED_BUS',
+    2: 'BICYCLE',
+    3: 'BICYCLIST',
+    4: 'BOLLARD',
+    5: 'BOX_TRUCK',
+    6: 'BUS',
+    7: 'CONSTRUCTION_BARREL',
+    8: 'CONSTRUCTION_CONE',
+    9: 'DOG',
+    10: 'LARGE_VEHICLE',
+    11: 'MESSAGE_BOARD_TRAILER',
+    12: 'MOBILE_PEDESTRIAN_CROSSING_SIGN',
+    13: 'MOTORCYCLE',
+    14: 'MOTORCYCLIST',
+    15: 'OFFICIAL_SIGNALER',
+    16: 'PEDESTRIAN',
+    17: 'RAILED_VEHICLE',
+    18: 'REGULAR_VEHICLE',
+    19: 'SCHOOL_BUS',
+    20: 'SIGN',
+    21: 'STOP_SIGN',
+    22: 'STROLLER',
+    23: 'TRAFFIC_LIGHT_TRAILER',
+    24: 'TRUCK',
+    25: 'TRUCK_CAB',
+    26: 'VEHICULAR_TRAILER',
+    27: 'WHEELCHAIR',
+    28: 'WHEELED_DEVICE',
+    29: 'WHEELED_RIDER'
+}
+
 
 class ArgoverseFlowSequence(ArgoverseSequence):
 
@@ -51,19 +84,21 @@ class ArgoverseFlowSequence(ArgoverseSequence):
         flow_0_1, classes_0, _, is_ground0, _, _ = self._load_flow(idx)
         start_pose = self._load_pose(relative_to_idx)
         idx_pose = self._load_pose(idx)
-        
+
         relative_pose = start_pose.inverse().compose(idx_pose)
-        
+
         absolute_global_frame_pc = raw_pc.transform(idx_pose)
         is_ground_points = self.is_ground_points(absolute_global_frame_pc)
         pc = raw_pc.mask_points(~is_ground_points)
         relative_global_frame_pc = pc.transform(relative_pose)
         if flow_0_1 is not None:
             ix_plus_one_pose = self._load_pose(idx + 1)
-            relative_pose_plus_one = start_pose.inverse().compose(ix_plus_one_pose)
+            relative_pose_plus_one = start_pose.inverse().compose(
+                ix_plus_one_pose)
             flowed_pc = raw_pc.flow(flow_0_1)
             flowed_pc = flowed_pc.mask_points(~is_ground_points)
-            relative_global_frame_flowed_pc = flowed_pc.transform(relative_pose_plus_one)
+            relative_global_frame_flowed_pc = flowed_pc.transform(
+                relative_pose_plus_one)
             classes_0 = classes_0[~is_ground_points]
             is_ground0 = is_ground0[~is_ground_points]
         else:

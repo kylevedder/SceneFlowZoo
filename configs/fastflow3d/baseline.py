@@ -1,31 +1,25 @@
-sequence_dir = "/efs/argoverse2/train/"
+train_sequence_dir = "/efs/argoverse_lidar/train/"
 
-if "argoverse2" in sequence_dir:
-    # Sensor dataset is ~150 lidar frames
-    max_sequence_length = 146
-else:
-    # Lidar dataset is ~300 lidar frames
-    max_sequence_length = 296
+test_sequence_dir = "/efs/argoverse2/val/"
+test_flow_dir = "/efs/argoverse2/val_sceneflow/"
 
+
+def get_max_sequence_length(sequence_dir):
+    if "argoverse2" in sequence_dir:
+        return 146
+    else:
+        return 296
+
+
+max_train_sequence_length = get_max_sequence_length(train_sequence_dir)
+max_test_sequence_length = get_max_sequence_length(test_sequence_dir)
 
 epochs = 20
-learning_rate = 1e-6
-SAVE_EVERY = 250
-SAVE_FOLDER = "/efs/fast_flow_3d_checkpoints/"
+learning_rate = 2e-6
+save_every = 500
+validate_every = 500
 
 SEQUENCE_LENGTH = 2
-
-loader = dict(name="ArgoverseSequenceLoader",
-              args=dict(sequence_dir=sequence_dir))
-
-dataloader = dict(args=dict(batch_size=16,
-                            num_workers=32,
-                            shuffle=True))
-
-dataset = dict(name="SubsequenceDataset",
-               args=dict(subsequence_length=SEQUENCE_LENGTH,
-                        max_sequence_length=max_sequence_length,
-                         origin_mode="FIRST_ENTRY"))
 
 model = dict(name="FastFlow3D",
              args=dict(VOXEL_SIZE=(0.2, 0.2, 4),
@@ -35,4 +29,25 @@ model = dict(name="FastFlow3D",
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
 
+loader = dict(name="ArgoverseSequenceLoader",
+              args=dict(sequence_dir=train_sequence_dir))
+
+dataloader = dict(args=dict(batch_size=16, num_workers=16, shuffle=True))
+
+dataset = dict(name="SubsequenceDataset",
+               args=dict(subsequence_length=SEQUENCE_LENGTH,
+                         max_sequence_length=max_train_sequence_length,
+                         origin_mode="FIRST_ENTRY"))
+
 loss_fn = dict(name="FastFlow3DLoss", args=dict())
+
+test_loader = dict(name="ArgoverseFlowSequenceLoader",
+                   args=dict(raw_data_path=test_sequence_dir,
+                             flow_data_path=test_flow_dir))
+
+test_dataloader = dict(args=dict(batch_size=8, num_workers=8, shuffle=False))
+
+test_dataset = dict(name="SubsequenceFlowDataset",
+                    args=dict(subsequence_length=SEQUENCE_LENGTH,
+                              max_sequence_length=max_test_sequence_length,
+                              origin_mode="FIRST_ENTRY"))

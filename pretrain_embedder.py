@@ -4,7 +4,7 @@ from dataloaders import PointCloudDataset, ArgoverseSequenceLoader
 from models import PretrainEmbedding
 from tqdm import tqdm
 
-from configs.first_attempt.config_params import *
+from configs.first_attempt.config import *
 
 from accelerate import Accelerator
 

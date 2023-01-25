@@ -1,7 +1,7 @@
 #!/bin/bash
 xhost +
 docker run --gpus=all --rm -it \
- --shm-size=12gb \
+ --shm-size=16gb \
  -v `pwd`:/project \
  -v /efs:/Datasets \
  -v /efs:/efs \
@@ -12,5 +12,7 @@ docker run --gpus=all --rm -it \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \
- offline_sceneflow_cuda117:latest
+ offline_sceneflow_cuda117lightning:latest
+#  offline_sceneflow:latest
+ #offline_sceneflow_cuda117:latest
  #offline_sceneflow:latest

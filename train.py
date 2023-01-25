@@ -50,34 +50,17 @@ def main_fn():
         latest_checkpoint.parent.mkdir(parents=True, exist_ok=True)
         accelerator.save(state_dict, latest_checkpoint)
 
-    DEVICE = accelerator.device
-
-    sequence_loader = getattr(dataloaders, cfg.loader.name)(**cfg.loader.args)
-    dataset = getattr(dataloaders,
-                      cfg.dataset.name)(sequence_loader=sequence_loader,
-                                        **cfg.dataset.args)
-    dataloader = torch.utils.data.DataLoader(dataset, **cfg.dataloader.args)
-
-    model = getattr(models, cfg.model.name)(device=DEVICE,
-                                            **cfg.model.args).to(DEVICE)
-    loss_fn = getattr(models, cfg.loss_fn.name)(device=DEVICE,
-                                                **cfg.loss_fn.args)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate)
-
-    model, optimizer, dataloader = accelerator.prepare(model, optimizer,
-                                                       dataloader)
-
-    for epoch in range(cfg.epochs):
+    def train():
+        model.train()
         for batch_idx, subsequence_batch in enumerate(
                 tqdm(dataloader,
                      disable=not accelerator.is_local_main_process,
-                     desc=f"Epoch {epoch}",
+                     desc=f"Train Epoch {epoch}",
                      leave=True)):
             optimizer.zero_grad()
             model_res = model(subsequence_batch)
             loss = 0
-            loss += loss_fn(*model_res)
+            loss += loss_fn(model_res)
             if accelerator.is_local_main_process:
                 writer.add_scalar('loss/train',
                                   loss.item(),
@@ -88,6 +71,58 @@ def main_fn():
             if batch_idx % cfg.SAVE_EVERY == 0:
                 save_checkpoint(epoch, batch_idx, model)
         save_checkpoint(epoch, None, model)
+
+    def test():
+        model.eval()
+        with torch.no_grad():
+            for batch_idx, subsequence_batch in enumerate(
+                    tqdm(test_dataloader,
+                         disable=not accelerator.is_local_main_process,
+                         desc=f"Test Epoch {epoch}",
+                         leave=True)):
+                model_res = model(subsequence_batch)
+                input_batches = accelerator.gather(subsequence_batch)
+                output_batches = accelerator.gather(model_res)
+                test_loss_fn.accumulate(batch_idx, input_batches,
+                                        output_batches)
+
+            test_loss_fn.finalize(epoch, writer)
+
+    DEVICE = accelerator.device
+
+    # Setup train infra
+    sequence_loader = getattr(dataloaders, cfg.loader.name)(**cfg.loader.args)
+    dataset = getattr(dataloaders,
+                      cfg.dataset.name)(sequence_loader=sequence_loader,
+                                        **cfg.dataset.args)
+    dataloader = torch.utils.data.DataLoader(dataset, **cfg.dataloader.args)
+
+    loss_fn = getattr(models, cfg.loss_fn.name)(device=DEVICE,
+                                                **cfg.loss_fn.args)
+
+    # Setup test infra
+    test_sequence_loader = getattr(
+        dataloaders, cfg.test_loader.name)(**cfg.test_loader.args)
+    test_dataset = getattr(dataloaders, cfg.test_dataset.name)(
+        sequence_loader=test_sequence_loader, **cfg.test_dataset.args)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset,
+                                                  **cfg.test_dataloader.args)
+    test_loss_fn = getattr(models,
+                           cfg.test_loss_fn.name)(device=DEVICE,
+                                                  **cfg.test_loss_fn.args)
+
+    # Setup model
+    model = getattr(models, cfg.model.name)(device=DEVICE,
+                                            **cfg.model.args).to(DEVICE)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate)
+
+    model, optimizer, dataloader, test_dataloader = accelerator.prepare(
+        model, optimizer, dataloader, test_dataloader)
+
+    for epoch in range(cfg.epochs):
+        train()
+        test()
 
 
 if __name__ == "__main__":
