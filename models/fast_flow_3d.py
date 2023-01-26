@@ -45,7 +45,7 @@ CATEGORY_MAP = {
 }
 
 
-class FastFlow3DLoss():
+class FastFlow3DUnsupervisedLoss():
 
     def __init__(self, device: str = None):
         super().__init__()
@@ -62,6 +62,25 @@ class FastFlow3DLoss():
             loss = warped_pc_loss(pc1_points, warped_pc1_points)
             total_loss += loss
         return total_loss
+
+class FastFlow3DSupervisedLoss():
+
+    def __init__(self, device: str = None):
+        super().__init__()
+
+    def __call__(self, model_res):
+        total_loss = 0
+        flows = model_res["flow"]
+        pc0_points_lst = model_res["pc0_points_lst"]
+        pc1_points_lst = model_res["pc1_points_lst"]
+        for flow, pc0_points, pc1_points in zip(flows, pc0_points_lst,
+                                                pc1_points_lst):
+            warped_pc1_points = pc0_points + flow
+
+            loss = warped_pc_loss(pc1_points, warped_pc1_points)
+            total_loss += loss
+        return total_loss
+
 
 
 class FastFlow3DTestLoss():

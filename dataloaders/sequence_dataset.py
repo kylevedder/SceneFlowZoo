@@ -129,4 +129,3 @@ class SubsequenceFlowDataset(SubsequenceDataset):
             "pc_class_mask_stack": pc_class_mask_stack,
             "data_index": index
         }
-

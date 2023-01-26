@@ -5,3 +5,4 @@ docker_history.txt
 work_dirs/
 model_checkpoints/
 tb_logs/
+tb_logs_old/

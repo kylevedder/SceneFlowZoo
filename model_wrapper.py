@@ -5,57 +5,68 @@ import models
 
 import pytorch_lightning as pl
 import torchmetrics
+from typing import Dict
 
 CATEGORY_NAMES = {
-    -1: (0, 'BACKGROUND'),
-    0: (1, 'ANIMAL'),
-    1: (2, 'ARTICULATED_BUS'),
-    2: (3, 'BICYCLE'),
-    3: (4, 'BICYCLIST'),
-    4: (5, 'BOLLARD'),
-    5: (6, 'BOX_TRUCK'),
-    6: (7, 'BUS'),
-    7: (8, 'CONSTRUCTION_BARREL'),
-    8: (9, 'CONSTRUCTION_CONE'),
-    9: (10, 'DOG'),
-    10: (11, 'LARGE_VEHICLE'),
-    11: (12, 'MESSAGE_BOARD_TRAILER'),
-    12: (13, 'MOBILE_PEDESTRIAN_CROSSING_SIGN'),
-    13: (14, 'MOTORCYCLE'),
-    14: (15, 'MOTORCYCLIST'),
-    15: (16, 'OFFICIAL_SIGNALER'),
-    16: (17, 'PEDESTRIAN'),
-    17: (18, 'RAILED_VEHICLE'),
-    18: (19, 'REGULAR_VEHICLE'),
-    19: (20, 'SCHOOL_BUS'),
-    20: (21, 'SIGN'),
-    21: (22, 'STOP_SIGN'),
-    22: (23, 'STROLLER'),
-    23: (24, 'TRAFFIC_LIGHT_TRAILER'),
-    24: (25, 'TRUCK'),
-    25: (26, 'TRUCK_CAB'),
-    26: (27, 'VEHICULAR_TRAILER'),
-    27: (28, 'WHEELCHAIR'),
-    28: (29, 'WHEELED_DEVICE'),
-    29: (30, 'WHEELED_RIDER')
+    -1: 'BACKGROUND',
+    0: 'ANIMAL',
+    1: 'ARTICULATED_BUS',
+    2: 'BICYCLE',
+    3: 'BICYCLIST',
+    4: 'BOLLARD',
+    5: 'BOX_TRUCK',
+    6: 'BUS',
+    7: 'CONSTRUCTION_BARREL',
+    8: 'CONSTRUCTION_CONE',
+    9: 'DOG',
+    10: 'LARGE_VEHICLE',
+    11: 'MESSAGE_BOARD_TRAILER',
+    12: 'MOBILE_PEDESTRIAN_CROSSING_SIGN',
+    13: 'MOTORCYCLE',
+    14: 'MOTORCYCLIST',
+    15: 'OFFICIAL_SIGNALER',
+    16: 'PEDESTRIAN',
+    17: 'RAILED_VEHICLE',
+    18: 'REGULAR_VEHICLE',
+    19: 'SCHOOL_BUS',
+    20: 'SIGN',
+    21: 'STOP_SIGN',
+    22: 'STROLLER',
+    23: 'TRAFFIC_LIGHT_TRAILER',
+    24: 'TRUCK',
+    25: 'TRUCK_CAB',
+    26: 'VEHICULAR_TRAILER',
+    27: 'WHEELCHAIR',
+    28: 'WHEELED_DEVICE',
+    29: 'WHEELED_RIDER'
 }
 
 
-class EndpointDistanceMetrics(torchmetrics.Metric):
+class EndpointDistanceMetricRawTorch():
 
-    def __init__(self, name="my_metric", dist_sync_on_step=False):
-        super().__init__(dist_sync_on_step=dist_sync_on_step)
-        self.add_state("per_class_total_error_sum",
-                       default=torch.zeros((len(CATEGORY_NAMES))),
-                       dist_reduce_fx="sum")
-        self.add_state("per_class_total_error_count",
-                       default=torch.zeros((len(CATEGORY_NAMES)),
-                                           dtype=torch.long),
-                       dist_reduce_fx="sum")
+    def __init__(self, class_id_to_name_map: Dict[int, str]):
+        self.class_index_to_name_map = {}
+        self.class_id_to_index_map = {}
+        for cls_index, (cls_id,
+                        cls_name) in enumerate(class_id_to_name_map.items()):
+            self.class_index_to_name_map[cls_index] = cls_name
+            self.class_id_to_index_map[cls_id] = cls_index
 
-    def update(self, endpoint_error, endpoint_count):
-        self.per_class_total_error_sum += endpoint_error
-        self.per_class_total_error_count += endpoint_count
+        self.per_class_total_error_sum = torch.zeros(
+            (len(class_id_to_name_map)), dtype=torch.float)
+        self.per_class_total_error_count = torch.zeros(
+            (len(class_id_to_name_map)), dtype=torch.long)
+
+    def to(self, device):
+        self.per_class_total_error_sum = self.per_class_total_error_sum.to(
+            device)
+        self.per_class_total_error_count = self.per_class_total_error_count.to(
+            device)
+
+    def update(self, class_id: int, endpoint_error, endpoint_count: int):
+        class_index = self.class_id_to_index_map[class_id]
+        self.per_class_total_error_sum[class_index] += endpoint_error
+        self.per_class_total_error_count[class_index] += endpoint_count
 
     def compute(self):
         return self.per_class_total_error_sum / self.per_class_total_error_count
@@ -69,7 +80,7 @@ class ModelWrapper(pl.LightningModule):
         self.loss_fn = getattr(models, cfg.loss_fn.name)(**cfg.loss_fn.args)
         self.lr = cfg.learning_rate
 
-        self.metric = EndpointDistanceMetrics()
+        self.metric = EndpointDistanceMetricRawTorch(CATEGORY_NAMES)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
@@ -83,12 +94,7 @@ class ModelWrapper(pl.LightningModule):
 
     def validation_step(self, input_batch, batch_idx):
         output_batch = self.model(input_batch)
-
-        per_class_total_error_count = torch.zeros((len(CATEGORY_NAMES)),
-                                                  dtype=torch.long,
-                                                  device=self.device)
-        per_class_total_error_sum = torch.zeros((len(CATEGORY_NAMES)),
-                                                device=self.device)
+        self.metric.to(self.device)
 
         # Decode the mini-batch.
         for pc_array, flowed_pc_array, regressed_flow, pc0_valid_point_idxes, class_info in zip(
@@ -118,35 +124,44 @@ class ModelWrapper(pl.LightningModule):
 
             # Compute average error per class.
             for cls_id in torch.unique(pc0_pc_class_info):
-                cls_mask = pc0_pc_class_info == cls_id
+                cls_mask = (pc0_pc_class_info == cls_id)
                 cls_distance_array = distance_array[cls_mask]
-                cls_avg_distance = torch.mean(cls_distance_array)
-                cls_idx, category_name = CATEGORY_NAMES[int(cls_id.item())]
-                per_class_total_error_sum[cls_idx] += torch.sum(
-                    cls_distance_array)
-                per_class_total_error_count[
-                    cls_idx] += cls_distance_array.shape[0]
-
-        self.metric(per_class_total_error_sum, per_class_total_error_count)
+                total_distance = torch.sum(cls_distance_array)
+                self.metric.update(cls_id.item(), total_distance,
+                                   cls_distance_array.shape[0])
 
     def validation_epoch_end(self, batch_parts):
-        print("Validation epoch end start.")
-        metric_result = self.metric.compute()
-        print("Validation epoch end compute() done.")
+        print("Starting gather", flush=True)
+        import time
+        before_gather = time.time()
+        world_per_class_total_error_sum = self.all_gather(
+            self.metric.per_class_total_error_sum)
+        world_per_class_total_error_count = self.all_gather(
+            self.metric.per_class_total_error_count)
+        after_gather = time.time()
 
-        reverse_category_names = {
-            cls_idx: name
-            for _, (cls_idx, name) in CATEGORY_NAMES.items()
-        }
+        print(
+            f"Rank {self.global_rank} gathers done in {after_gather - before_gather}."
+        )
+
+        if self.global_rank != 0:
+            return {}
+
+        # Sum the per-GPU metrics across the world axis.
+        per_class_total_error_sum = torch.sum(
+            world_per_class_total_error_sum, dim=0)
+        per_class_total_error_count = torch.sum(
+            world_per_class_total_error_count, dim=0)
+
+        cls_avg_errors = per_class_total_error_sum / per_class_total_error_count
 
         perf_dict = {}
-        for cls_idx, cls_avg_error in enumerate(metric_result):
-            category_name = reverse_category_names[cls_idx]
+        for cls_idx, cls_avg_error in enumerate(cls_avg_errors):
+            category_name = self.metric.class_index_to_name_map[cls_idx]
             perf_dict[category_name] = cls_avg_error.item()
             self.log(f"val/{category_name}",
                      cls_avg_error,
-                     on_epoch=True,
-                     sync_dist=False, 
+                     sync_dist=False,
                      rank_zero_only=True)
 
         print("Validation epoch end end.")
