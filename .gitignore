@@ -6,3 +6,5 @@ work_dirs/
 model_checkpoints/
 tb_logs/
 tb_logs_old/
+nsfp_split_configs/
+lightning_logs/

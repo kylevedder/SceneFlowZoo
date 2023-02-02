@@ -10,7 +10,9 @@ GROUND_HEIGHT_THRESHOLD = 0.4  # 40 centimeters
 
 class ArgoverseSequence():
 
-    def __init__(self, dataset_dir: Path):
+    def __init__(self, log_id : str, dataset_dir: Path):
+        self.log_id = log_id
+
         self.dataset_dir = Path(dataset_dir)
         assert self.dataset_dir.is_dir(
         ), f'dataset_dir {dataset_dir} does not exist'
@@ -41,9 +43,11 @@ class ArgoverseSequence():
 
     def _load_ground_height_raster(self):
         raster_height_paths = list(
-            (self.dataset_dir / 'map').glob("*_ground_height_surface____*.npy"))
-        assert len(raster_height_paths
-                   ) == 1, f'Expected 1 raster, got {len(raster_height_paths)} in path {self.dataset_dir / "map"}'
+            (self.dataset_dir /
+             'map').glob("*_ground_height_surface____*.npy"))
+        assert len(
+            raster_height_paths
+        ) == 1, f'Expected 1 raster, got {len(raster_height_paths)} in path {self.dataset_dir / "map"}'
         raster_height_path = raster_height_paths[0]
 
         transform_paths = list(
@@ -121,7 +125,9 @@ class ArgoverseSequence():
         return len(self.timestamp_list)
 
     def _load_pc(self, idx) -> PointCloud:
-        assert idx < len(self), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
+        assert idx < len(
+            self
+        ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         timestamp = self.timestamp_list[idx]
         frame_path = self.timestamp_to_file_map[timestamp]
         frame_content = pd.read_feather(frame_path)
@@ -132,7 +138,9 @@ class ArgoverseSequence():
         return PointCloud(points)
 
     def _load_pose(self, idx) -> SE3:
-        assert idx < len(self), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
+        assert idx < len(
+            self
+        ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         timestamp = self.timestamp_list[idx]
         infos_idx = self.timestamp_to_info_idx_map[timestamp]
         frame_info = self.frame_infos.iloc[infos_idx]
@@ -143,7 +151,9 @@ class ArgoverseSequence():
         return se3
 
     def load(self, idx, relative_to_idx) -> (PointCloud, SE3):
-        assert idx < len(self), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
+        assert idx < len(
+            self
+        ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         pc = self._load_pc(idx)
         start_pose = self._load_pose(relative_to_idx)
         idx_pose = self._load_pose(idx)
@@ -152,7 +162,12 @@ class ArgoverseSequence():
         is_ground_points = self.is_ground_points(absolute_global_frame_pc)
         pc = pc.mask_points(~is_ground_points)
         relative_global_frame_pc = pc.transform(relative_pose)
-        return relative_global_frame_pc, relative_pose
+        return {
+            "relative_pc": relative_global_frame_pc,
+            "relative_pose": relative_pose,
+            "log_id" : self.log_id,
+            "log_idx" : idx,
+        }
 
     def load_frame_list(self, relative_to_idx) -> List[Tuple[PointCloud, SE3]]:
         return [self.load(idx, relative_to_idx) for idx in range(len(self))]
@@ -160,11 +175,18 @@ class ArgoverseSequence():
 
 class ArgoverseSequenceLoader():
 
-    def __init__(self, sequence_dir: Path):
+    def __init__(self,
+                 sequence_dir: Path,
+                 log_subset: Optional[List[str]] = None):
         self.dataset_dir = Path(sequence_dir)
         assert self.dataset_dir.is_dir(
         ), f'dataset_dir {sequence_dir} does not exist'
         self.log_lookup = {e.name: e for e in self.dataset_dir.glob('*/')}
+        if log_subset is not None:
+            self.log_lookup = {
+                k: v
+                for k, v in self.log_lookup.items() if k in log_subset
+            }
 
     def get_sequence_ids(self):
         return sorted(self.log_lookup.keys())
@@ -173,8 +195,5 @@ class ArgoverseSequenceLoader():
         assert log_id in self.log_lookup, f'log_id {log_id} does not exist'
         log_dir = self.log_lookup[log_id]
         assert log_dir.is_dir(), f'log_id {log_id} does not exist'
-        return ArgoverseSequence(log_dir)
+        return ArgoverseSequence(log_id, log_dir)
 
-
-# def load_argoverse(dataset_dir, log_id):
-# sdb = SynchronizationDB(dataset_dir, collect_single_log_id=log_id)

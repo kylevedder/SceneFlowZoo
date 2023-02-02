@@ -83,16 +83,20 @@ class SubsequenceDataset(torch.utils.data.Dataset):
         subsequence_lst = self._get_subsequence(index)
 
         pc_arrays = [
-            pc.to_fixed_array(self.max_pc_points) for pc, _ in subsequence_lst
+            e['relative_pc'].to_fixed_array(self.max_pc_points)
+            for e in subsequence_lst
         ]
-        pose_arrays = [pose.to_array() for _, pose in subsequence_lst]
+        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
+        log_ids = [e['log_id'] for e in subsequence_lst]
+        log_idxes = [e['log_idx'] for e in subsequence_lst]
         pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
         pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
 
         return {
             "pc_array_stack": pc_array_stack,
             "pose_array_stack": pose_array_stack,
-            "data_index": index
+            "data_index": index,
+            "log_ids": log_ids
         }
 
 
@@ -102,18 +106,20 @@ class SubsequenceFlowDataset(SubsequenceDataset):
         subsequence_lst = self._get_subsequence(index)
 
         pc_arrays = [
-            pc.to_fixed_array(self.max_pc_points)
-            for pc, _, _, _, _ in subsequence_lst
+            e['relative_pc'].to_fixed_array(self.max_pc_points)
+            for e in subsequence_lst
         ]
-        pose_arrays = [pose.to_array() for _, pose, _, _, _ in subsequence_lst]
+        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
         flowed_pc_arrays = [
-            flowed_pc.to_fixed_array(self.max_pc_points)
-            for _, _, flowed_pc, _, _ in subsequence_lst
+            e['relative_flowed_pc'].to_fixed_array(self.max_pc_points)
+            for e in subsequence_lst
         ]
         pc_class_masks = [
-            to_fixed_array(class_mask, self.max_pc_points)
-            for _, _, _, class_mask, _ in subsequence_lst
+            to_fixed_array(e['pc_classes'].astype(np.float32),
+                           self.max_pc_points) for e in subsequence_lst
         ]
+        log_ids = [e['log_id'] for e in subsequence_lst]
+        log_idxes = [e['log_idx'] for e in subsequence_lst]
 
         pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
         pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
@@ -127,5 +133,7 @@ class SubsequenceFlowDataset(SubsequenceDataset):
             "pose_array_stack": pose_array_stack,
             "flowed_pc_array_stack": flowed_pc_array_stack,
             "pc_class_mask_stack": pc_class_mask_stack,
-            "data_index": index
+            "data_index": index,
+            "log_ids": log_ids,
+            "log_idxes": log_idxes
         }

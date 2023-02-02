@@ -50,22 +50,22 @@ class DynamicEmbedder(nn.Module):
             in_channels=3,
             feat_channels=(feat_channels, ),
             point_cloud_range=point_cloud_range,
-            voxel_size=voxel_size)
+            voxel_size=voxel_size,
+            mode='avg')
         self.scatter = PointPillarsScatter(in_channels=feat_channels,
                                            output_shape=pseudo_image_dims)
 
     def forward(self, points: torch.Tensor) -> torch.Tensor:
-        assert isinstance(
-            points,
-            torch.Tensor), f"points must be a torch.Tensor, got {type(points)}"
 
         # List of points and coordinates for each batch
-        points_coordinates_batch_list = self.voxelizer(points)
+        voxel_info_list = self.voxelizer(points)
 
         pseudoimage_lst = []
-        for points, coordinates, _ in points_coordinates_batch_list:
+        for voxel_info_dict in voxel_info_list:
+            points = voxel_info_dict['points']
+            coordinates = voxel_info_dict['voxel_coords']
             voxel_feats, voxel_coors = self.feature_net(points, coordinates)
             pseudoimage = self.scatter(voxel_feats, voxel_coors)
             pseudoimage_lst.append(pseudoimage)
         # Concatenate the pseudoimages along the batch dimension
-        return torch.cat(pseudoimage_lst, dim=0), points_coordinates_batch_list
+        return torch.cat(pseudoimage_lst, dim=0), voxel_info_list

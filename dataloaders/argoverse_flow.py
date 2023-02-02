@@ -43,9 +43,9 @@ CATEGORY_MAP = {
 
 class ArgoverseFlowSequence(ArgoverseSequence):
 
-    def __init__(self, dataset_dir: Path, flow_data_lst: List[Tuple[int,
-                                                                    Path]]):
-        super().__init__(dataset_dir)
+    def __init__(self, log_id: str, dataset_dir: Path,
+                 flow_data_lst: List[Tuple[int, Path]]):
+        super().__init__(log_id, dataset_dir)
 
         # Each flow contains info for the t and t+1 timestamps. This means the last pointcloud in the sequence
         # will not have a corresponding flow.
@@ -103,12 +103,23 @@ class ArgoverseFlowSequence(ArgoverseSequence):
             is_ground0 = is_ground0[~is_ground_points]
         else:
             relative_global_frame_flowed_pc = None
-        return relative_global_frame_pc, relative_pose, relative_global_frame_flowed_pc, classes_0, is_ground0
+        return {
+            "relative_pc": relative_global_frame_pc,
+            "relative_pose": relative_pose,
+            "relative_flowed_pc": relative_global_frame_flowed_pc,
+            "pc_classes": classes_0,
+            "pc_is_ground": is_ground0,
+            "log_id": self.log_id,
+            "log_idx": idx,
+        }
 
 
 class ArgoverseFlowSequenceLoader():
 
-    def __init__(self, raw_data_path: Path, flow_data_path: Path):
+    def __init__(self,
+                 raw_data_path: Path,
+                 flow_data_path: Path,
+                 log_subset: Optional[List[str]] = None):
         self.raw_data_path = Path(raw_data_path)
         self.flow_data_path = Path(flow_data_path)
         assert self.raw_data_path.is_dir(
@@ -133,11 +144,17 @@ class ArgoverseFlowSequenceLoader():
             self.sequence_id_to_raw_data[sequence_id] = sequence_folder
 
         self.sequence_id_lst = sorted(self.sequence_id_to_flow_lst.keys())
+        if log_subset is not None:
+            self.sequence_id_lst = [
+                sequence_id for sequence_id in self.sequence_id_lst
+                if sequence_id in log_subset
+            ]
 
     def get_sequence_ids(self):
         return self.sequence_id_lst
 
     def load_sequence(self, sequence_id: str) -> ArgoverseFlowSequence:
         assert sequence_id in self.sequence_id_to_flow_lst, f'sequence_id {sequence_id} does not exist'
-        return ArgoverseFlowSequence(self.sequence_id_to_raw_data[sequence_id],
+        return ArgoverseFlowSequence(sequence_id,
+                                     self.sequence_id_to_raw_data[sequence_id],
                                      self.sequence_id_to_flow_lst[sequence_id])

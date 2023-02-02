@@ -1,6 +1,6 @@
 from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SubsequenceDataset
 
-from nsfp_baseline import NSFPProcessor, NSFPLoss
+from models.nsfp_baseline import NSFPProcessor, NSFPLoss
 
 from tqdm import tqdm
 
@@ -12,7 +12,7 @@ BATCH_SIZE = 1
 
 def main_fn():
     sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/test/')
-    dataset = SubsequenceDataset(sequence_loader, SEQUENCE_LENGTH)
+    dataset = SubsequenceDataset(sequence_loader, SEQUENCE_LENGTH, 148, origin_mode="FIRST_ENTRY")
 
     torch.manual_seed(1)
     torch.cuda.manual_seed(1)
@@ -33,7 +33,7 @@ def main_fn():
             pc2 = pc2[torch.isfinite(pc2[:, 0])]
             pc1 = torch.unsqueeze(pc1, 0).cuda()
             pc2 = torch.unsqueeze(pc2, 0).cuda()
-            warped_pc, target_pc = nsfp_processor(pc1, pc2)
+            warped_pc, target_pc = nsfp_processor(pc1, pc2, pc1.device)
             loss += loss_fn(warped_pc, target_pc)
         print("Batch: ", batch_idx, " Loss: ", loss)
         if batch_idx > 3:

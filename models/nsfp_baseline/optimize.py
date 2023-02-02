@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from pytorch3d.ops.knn import knn_gather, knn_points
 from pytorch3d.structures.pointclouds import Pointclouds
+import time
 
 from pointclouds import warped_pc_loss
 
@@ -13,6 +14,7 @@ from typing import Union
 
 import torch
 import torch.nn as nn
+import tqdm
 
 
 def _validate_chamfer_reduction_inputs(batch_reduction: Union[str, None],
@@ -110,14 +112,8 @@ def my_chamfer_fn(
     """
     _validate_chamfer_reduction_inputs(batch_reduction, point_reduction)
 
-    assert torch.isfinite(x).all(), "x contains NaNs"
-    assert torch.isfinite(y).all(), "y contains NaNs"
-
     x, x_lengths = _handle_pointcloud_input(x, None)
     y, y_lengths = _handle_pointcloud_input(y, None)
-
-    if x_lengths.item() == 0:
-        breakpoint()
 
     assert x_lengths.item() > 0, f"x_lengths is {x_lengths.item()}"
     assert y_lengths.item() > 0, f"y_lengths is {y_lengths.item()}"
@@ -161,9 +157,6 @@ def my_chamfer_fn(
     cham_x = x_nn.dists[..., 0]  # (N, P1)
     cham_y = y_nn.dists[..., 0]  # (N, P2)
 
-    assert torch.isfinite(cham_x).all(), "cham_x contains NaNs"
-    assert torch.isfinite(cham_y).all(), "cham_y contains NaNs"
-
     # NOTE: truncated Chamfer distance.
     dist_thd = 2
     x_mask[cham_x >= dist_thd] = True
@@ -204,15 +197,9 @@ def my_chamfer_fn(
     cham_x = cham_x.sum(1)  # (N,)
     cham_y = cham_y.sum(1)  # (N,)
 
-    assert torch.isfinite(cham_x).all(), "cham_x contains NaNs"
-    assert torch.isfinite(cham_y).all(), "cham_y contains NaNs"
-
     if point_reduction == "mean":
         cham_x /= x_lengths
         cham_y /= y_lengths
-
-    assert torch.isfinite(cham_x).all(), "cham_x contains NaNs"
-    assert torch.isfinite(cham_y).all(), "cham_y contains NaNs"
 
     if batch_reduction is not None:
         # batch_reduction == "sum"
@@ -222,23 +209,22 @@ def my_chamfer_fn(
             cham_x /= N
             cham_y /= N
 
-    assert torch.isfinite(cham_x).all(), "cham_x contains NaNs"
-    assert torch.isfinite(cham_y).all(), "cham_y contains NaNs"
     cham_dist = cham_x + cham_y
     cham_normals = cham_norm_x + cham_norm_y if return_normals else None
 
     return cham_dist, cham_normals
 
 
-def optimize(pc1, pc2, iterations=5000, lr=0.008):
-
-    net = Neural_Prior(filter_size=128, act_fn='relu', layer_size=8).cuda()
-    early_stopping = EarlyStopping(patience=100, min_delta=0.0001)
-
-    for param in net.parameters():
-        param.requires_grad = True
+def optimize(pc1, pc2, device, iterations=5000, lr=8e-3, min_delta=0.00005):
+    net = Neural_Prior(filter_size=128, act_fn='relu', layer_size=8)
+    # if torch.__version__.split('.')[0] == '2':
+    #     net = torch.compile(net)
+    net = net.to(device)
+    net.train()
+    early_stopping = EarlyStopping(patience=100, min_delta=min_delta)
 
     net_inv = copy.deepcopy(net)
+
     params = [{
         'params': net.parameters(),
         'lr': lr,
@@ -250,27 +236,45 @@ def optimize(pc1, pc2, iterations=5000, lr=0.008):
     }]
     best_forward = {'loss': torch.inf}
     optimizer = torch.optim.Adam(params, lr=0.008, weight_decay=0)
-    for epoch in range(iterations):
+    position = 1
+    if isinstance(device, torch.device):
+        position += device.index
+
+    net1_forward_time = 0
+    net1_loss_forward_time = 0
+    net2_forward_time = 0
+    net2_loss_forward_time = 0
+
+    loss_backwards_time = 0
+    optimizer_step_time = 0
+
+    for epoch in tqdm.tqdm(range(iterations),
+                           position=position,
+                           leave=False,
+                           desc='Optimizing NSFP'):
+
         optimizer.zero_grad()
 
+        net1_forward_before = time.time()
         forward_flow = net(pc1)
+        net1_forward_after = time.time()
         pc1_warped_to_pc2 = pc1 + forward_flow
-        forward_loss, _ = my_chamfer_fn(pc1_warped_to_pc2, pc2, None, None)
-        assert torch.isfinite(
-            forward_loss).all(), f'forward_loss: {forward_loss.item()}'
 
-        print(f'epoch: {epoch}, forward_loss: {forward_loss.item()}')
-
+        net2_forward_before = time.time()
         reverse_flow = net_inv(pc1_warped_to_pc2)
+        net2_forward_after = time.time()
         est_pc2_warped_to_pc1 = pc1_warped_to_pc2 - reverse_flow
+
+        net1_loss_forward_before = time.time()
+        forward_loss, _ = my_chamfer_fn(pc1_warped_to_pc2, pc2, None, None)
+        net1_loss_forward_after = time.time()
+
+        net2_loss_forward_before = time.time()
         reversed_loss, _ = my_chamfer_fn(est_pc2_warped_to_pc1, pc1, None,
                                          None)
-        assert torch.isfinite(
-            reversed_loss).all(), f'reversed_loss: {reversed_loss.item()}'
+        net2_loss_forward_after = time.time()
 
-        loss_chamfer = forward_loss + reversed_loss
-
-        loss = loss_chamfer
+        loss = forward_loss + reversed_loss
 
         # ANCHOR: get best metrics
         if forward_loss <= best_forward['loss']:
@@ -281,8 +285,30 @@ def optimize(pc1, pc2, iterations=5000, lr=0.008):
         if early_stopping.step(loss):
             break
 
+        loss_backwards_before = time.time()
         loss.backward()
+        loss_backwards_after = time.time()
         optimizer.step()
+        optimizer_step_afterwards = time.time()
+
+        net1_forward_time += net1_forward_after - net1_forward_before
+        net1_loss_forward_time += net1_loss_forward_after - net1_loss_forward_before
+        net2_forward_time += net2_forward_after - net2_forward_before
+        net2_loss_forward_time += net2_loss_forward_after - net2_loss_forward_before
+        loss_backwards_time += loss_backwards_after - loss_backwards_before
+        optimizer_step_time += optimizer_step_afterwards - loss_backwards_after
+
+    # print(f'net1_forward_time: {net1_forward_time}')
+    # print(f'net1_loss_forward_time: {net1_loss_forward_time}')
+    # print(f'net2_forward_time: {net2_forward_time}')
+    # print(f'net2_loss_forward_time: {net2_loss_forward_time}')
+    # print(f'loss_backwards_time: {loss_backwards_time}')
+    # print(f'optimizer_step_time: {optimizer_step_time}')
+
+    # print(
+    #     f"Total time: {net1_forward_time + net1_loss_forward_time + net2_forward_time + net2_loss_forward_time + loss_backwards_time + optimizer_step_time}"
+    # )
+
     return best_forward
 
 
@@ -291,8 +317,8 @@ class NSFPProcessor(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, pc1, pc2):
-        res = optimize(pc1, pc2)
+    def forward(self, pc1, pc2, device):
+        res = optimize(pc1, pc2, device)
         return res['warped_pc'], res['target_pc']
 
 

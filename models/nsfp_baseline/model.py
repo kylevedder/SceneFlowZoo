@@ -24,10 +24,11 @@ class Neural_Prior(torch.nn.Module):
         else:
             self.nn_layers.append(torch.nn.Sequential(torch.nn.Linear(dim_x, dim_x)))
 
-    def forward(self, x):
+    def forward(self, in_x):
         """ points -> features
             [B, N, 3] -> [B, K]
         """
+        x = in_x
         for layer in self.nn_layers:
             x = layer(x)
                 

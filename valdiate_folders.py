@@ -10,4 +10,3 @@ for folder in dataset_folders:
     len_set.add(folder_len)
 
 print(len_set)
-    

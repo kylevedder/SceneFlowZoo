@@ -5,7 +5,7 @@ import torch.optim as optim
 from pathlib import Path
 import argparse
 import pytorch_lightning as pl
-from pytorch_lightning.utilities import rank_zero_info, rank_zero_only
+from pytorch_lightning.strategies import DDPStrategy
 import torchmetrics
 import warnings
 
@@ -25,6 +25,8 @@ from mmcv import Config
 # Get config file from command line
 parser = argparse.ArgumentParser()
 parser.add_argument('config', type=Path)
+parser.add_argument('--checkpoint', type=Path, default=None)
+parser.add_argument('--gpus', type=int, default=1)
 args = parser.parse_args()
 
 assert args.config.exists(), f"Config file {args.config} does not exist"
@@ -36,9 +38,19 @@ test_dataset = getattr(dataloaders, cfg.test_dataset.name)(
     sequence_loader=test_sequence_loader, **cfg.test_dataset.args)
 test_dataloader = torch.utils.data.DataLoader(test_dataset,
                                               **cfg.test_dataloader.args)
-model = ModelWrapper(cfg)
-trainer = pl.Trainer(devices=4,
+
+if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
+    model = ModelWrapper(cfg)
+else:
+    assert args.checkpoint is not None, "Must provide checkpoint for validation"
+    assert args.checkpoint.exists(
+    ), f"Checkpoint file {args.checkpoint} does not exist"
+    model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg)
+
+
+trainer = pl.Trainer(devices=args.gpus,
                      accelerator="gpu",
-                     strategy="ddp",
-                     move_metrics_to_cpu=True)
+                     strategy=DDPStrategy(find_unused_parameters=False),
+                     move_metrics_to_cpu=False, 
+                     )
 trainer.validate(model=model, dataloaders=test_dataloader)

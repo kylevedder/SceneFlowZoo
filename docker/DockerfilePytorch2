@@ -24,11 +24,14 @@ RUN conda install pytorch=2 torchvision torchaudio pytorch-cuda=11.7 -c pytorch-
 RUN conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y
 ENV N_JOBS=32
 RUN pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+RUN pip install pyarrow pyquaternion open3d
+RUN pip install tensorboard
+RUN pip install pytorch-lightning
 RUN git clone https://github.com/open-mmlab/mmcv.git /mmcv
 WORKDIR /mmcv
-RUN MMCV_WITH_OPS=1 pip install -e . -v
-RUN python .dev_scripts/check_installation.py
-RUN pip install pyarrow pyquaternion open3d tensorboard accelerate
+ENV MMCV_WITH_OPS=1
+ENV MAX_JOBS=32
+RUN pip install -e .
 
 ENV PYTHONPATH=/project:${PYTHONPATH}
 COPY bashrc /root/.bashrc
