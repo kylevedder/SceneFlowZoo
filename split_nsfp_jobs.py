@@ -53,7 +53,7 @@ test_loader = dict(args=dict(log_subset={job_sequence_names}))
 def make_srun(i):
     srun_path = configs_path / f"srun_{i:06d}.sh"
     srun_file_content = f"""#!/bin/bash
-srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container_mounts=../../datasets/:/efs/,`pwd`:project --container-image=kylevedder/offline_sceneflow:latest bash -c "python test_pl.py nsfp_split_configs/nsfp_split_{i:06d}.py; echo 'done' > nsfp_split_configs/nsfp_{i:06d}.done"
+srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container_mounts=../../datasets/:/efs/,`pwd`:project --container-image=kylevedder/offline_sceneflow:latest bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
@@ -62,7 +62,7 @@ def make_screen(i):
     screen_path = configs_path / f"screen_{i:06d}.sh"
     screen_file_content = f"""#!/bin/bash
 echo "" > {configs_path}/nsfp_{i:06d}.out;
-screen -L -Logfile {configs_path}/nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash srun_{i:06d}.sh
+screen -L -Logfile {configs_path}/nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash {configs_path}/srun_{i:06d}.sh
 """
     with open(screen_path, "w") as f:
         f.write(screen_file_content)
@@ -71,6 +71,7 @@ def make_runall():
     runall_path = configs_path / f"runall.sh"
     runall_file_content = f"""#!/bin/bash
 for i in {configs_path / "screen_*.sh"}; do
+    echo $i
     bash $i
 done
 """
