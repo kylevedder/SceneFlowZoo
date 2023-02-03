@@ -53,7 +53,7 @@ test_loader = dict(args=dict(log_subset={job_sequence_names}))
 def make_srun(i):
     srun_path = configs_path / f"srun_{i:06d}.sh"
     srun_file_content = f"""#!/bin/bash
-srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container_mounts=../../datasets/:/efs/,`pwd`:project --container-image=kylevedder/offline_sceneflow:latest bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
+srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container_mounts=../../datasets/:/efs/,`pwd`:/project --container-image=kylevedder/offline_sceneflow:latest bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
