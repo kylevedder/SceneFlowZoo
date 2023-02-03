@@ -61,7 +61,7 @@ srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container_mou
 def make_screen(i):
     screen_path = configs_path / f"screen_{i:06d}.sh"
     screen_file_content = f"""#!/bin/bash
-rm nsfp_{i:06d}.out;
+echo "" > nsfp_{i:06d}.out;
 screen -L -Logfile nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash srun_{i:06d}.sh
 """
     with open(screen_path, "w") as f:
