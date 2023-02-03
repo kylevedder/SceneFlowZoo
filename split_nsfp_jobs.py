@@ -70,7 +70,7 @@ screen -L -Logfile nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash srun_{i:06d}.sh
 def make_runall():
     runall_path = configs_path / f"runall.sh"
     runall_file_content = f"""#!/bin/bash
-for i in {{"{configs_path / "screen_*.sh"}"}}; do
+for i in {configs_path / "screen_*.sh"}; do
     bash $i
 done
 """
