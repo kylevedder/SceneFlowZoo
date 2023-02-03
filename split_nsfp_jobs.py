@@ -37,30 +37,51 @@ configs_path = Path("./nsfp_split_configs")
 if configs_path.exists():
     shutil.rmtree(configs_path)
 configs_path.mkdir(exist_ok=False)
-for i, job_sequence_names in enumerate(job_sequence_names_lst):
-    config_path = configs_path / f"nsfp_split_{i}.py"
+
+
+
+def make_config(i, job_sequence_names):
+    config_path = configs_path / f"nsfp_split_{i:06d}.py"
     config_file_content = f"""
-_base_ = '{args.base_config}'
+_base_ = '../{args.base_config}'
 test_loader = dict(args=dict(log_subset={job_sequence_names}))
 """
     with open(config_path, "w") as f:
         f.write(config_file_content)
+    
+
+def make_srun(i):
+    srun_path = configs_path / f"srun_{i:06d}.sh"
+    srun_file_content = f"""#!/bin/bash
+srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container_mounts=../../datasets/:/efs/,`pwd`:project --container-image=kylevedder/offline_sceneflow:latest bash -c "python test_pl.py nsfp_split_configs/nsfp_split_{i:06d}.py"
+"""
+    with open(srun_path, "w") as f:
+        f.write(srun_file_content)
+
+def make_screen(i):
+    screen_path = configs_path / f"screen_{i:06d}.sh"
+    screen_file_content = f"""#!/bin/bash
+rm nsfp_{i:06d}.out;
+screen -L -Logfile nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash srun_{i:06d}.sh
+"""
+    with open(screen_path, "w") as f:
+        f.write(screen_file_content)
+
+def make_runall():
+    runall_path = configs_path / f"runall.sh"
+    runall_file_content = f"""#!/bin/bash
+for i in {{"{configs_path / "screen_*.sh"}}}; do
+    bash $i
+done
+"""
+    with open(runall_path, "w") as f:
+        f.write(runall_file_content)
+
+for i, job_sequence_names in enumerate(job_sequence_names_lst):
+    make_config(i, job_sequence_names)
+    make_srun(i)
+    make_screen(i)
+
+make_runall()
 
 print(f"Config files written to {configs_path.absolute()}")
-
-# Create SBATCH script
-sbatch_path = configs_path / "run_nsfp_split.sh"
-sbatch_file_content = f"""#!/bin/bash
-#SBATCH --job-name=nsfp_split
-#SBATCH --output={configs_path}/nsfp_split_%j.out
-#SBATCH --error={configs_path}/nsfp_split_%j.err
-#SBATCH --time=3:00:00
-#SBATCH --mem=16GB
-#SBATCH --cpus-per-task=4
-#SBATCH --gpus-per-task=1
-#SBATCH --array=0-{num_jobs-1}
-
-docker run --gpus=all --rm -v `pwd`:/project -v datasets/:/efs kylevedder/offline_sceneflow:latest bash -c "echo configs/nsfp_split_configs/nsfp_split_\$SLURM_ARRAY_TASK_ID.py"
-"""
-with open(sbatch_path, "w") as f:
-    f.write(sbatch_file_content)

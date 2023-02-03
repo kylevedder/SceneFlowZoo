@@ -10,7 +10,7 @@ GROUND_HEIGHT_THRESHOLD = 0.4  # 40 centimeters
 
 class ArgoverseSequence():
 
-    def __init__(self, log_id : str, dataset_dir: Path):
+    def __init__(self, log_id: str, dataset_dir: Path):
         self.log_id = log_id
 
         self.dataset_dir = Path(dataset_dir)
@@ -165,8 +165,8 @@ class ArgoverseSequence():
         return {
             "relative_pc": relative_global_frame_pc,
             "relative_pose": relative_pose,
-            "log_id" : self.log_id,
-            "log_idx" : idx,
+            "log_id": self.log_id,
+            "log_idx": idx,
         }
 
     def load_frame_list(self, relative_to_idx) -> List[Tuple[PointCloud, SE3]]:
@@ -183,6 +183,11 @@ class ArgoverseSequenceLoader():
         ), f'dataset_dir {sequence_dir} does not exist'
         self.log_lookup = {e.name: e for e in self.dataset_dir.glob('*/')}
         if log_subset is not None:
+            log_subset = set(log_subset)
+            log_keys = set(self.log_lookup.keys())
+            assert log_subset.issubset(
+                log_keys
+            ), f'log_subset {log_subset} is not a subset of {log_keys}'
             self.log_lookup = {
                 k: v
                 for k, v in self.log_lookup.items() if k in log_subset
@@ -196,4 +201,3 @@ class ArgoverseSequenceLoader():
         log_dir = self.log_lookup[log_id]
         assert log_dir.is_dir(), f'log_id {log_id} does not exist'
         return ArgoverseSequence(log_id, log_dir)
-
