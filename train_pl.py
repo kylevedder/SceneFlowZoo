@@ -27,6 +27,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('config', type=Path)
 parser.add_argument('--gpus', type=int, default=torch.cuda.device_count())
 parser.add_argument('--resume_from_checkpoint', type=Path, default=None)
+parser.add_argument(
+    '--checkpoint_dir_name',
+    type=str,
+    default=datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p"))
 args = parser.parse_args()
 
 assert args.config.exists(), f"Config file {args.config} does not exist"
@@ -35,7 +39,9 @@ cfg = Config.fromfile(args.config)
 if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
     raise ValueError("Config file indicates this model is not trainable.")
 
-tbl = TensorBoardLogger("tb_logs", name="train")
+tbl = TensorBoardLogger("tb_logs",
+                        name=cfg.filename,
+                        version=args.checkpoint_dir_name)
 
 # Setup train infra
 train_sequence_loader = getattr(dataloaders,
@@ -65,12 +71,12 @@ def setup_checkpoint_dir(cfg):
     cfg_filename = Path(cfg.filename)
     config_name = cfg_filename.stem
     parent_name = cfg_filename.parent.name
-    time_str = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
     checkpoint_path = Path(
-        f"model_checkpoints/{parent_name}/{config_name}/{time_str}")
+        f"model_checkpoints/{parent_name}/{config_name}/{args.checkpoint_dir_name}"
+    )
     checkpoint_path.mkdir(parents=True, exist_ok=True)
     # Save config file to checkpoint directory
-    cfg.dump(checkpoint_path / "config.py")
+    cfg.dump(str(checkpoint_path / "config.py"))
     return checkpoint_path
 
 
@@ -79,6 +85,7 @@ checkpoint_callback = ModelCheckpoint(
     filename="checkpoint_{epoch:03d}_{step:010d}",
     save_top_k=-1,
     every_n_train_steps=cfg.save_every,
+    # every_n_epochs=1,
     save_on_train_epoch_end=True)
 
 trainer = pl.Trainer(devices=args.gpus,
