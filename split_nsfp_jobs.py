@@ -52,8 +52,10 @@ test_loader = dict(args=dict(log_subset={job_sequence_names}))
 
 def make_srun(i):
     srun_path = configs_path / f"srun_{i:06d}.sh"
+    docker_image_path = Path("kylevedder_offline_sceneflow_latest.sqsh")
+    assert docker_image_path.is_file(), f"Docker image {docker_image_path} squash file does not exist"
     srun_file_content = f"""#!/bin/bash
-srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image=kylevedder/offline_sceneflow:latest bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
+srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
@@ -61,7 +63,7 @@ srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --container-mou
 def make_screen(i):
     screen_path = configs_path / f"screen_{i:06d}.sh"
     screen_file_content = f"""#!/bin/bash
-echo "" > {configs_path}/nsfp_{i:06d}.out;
+rm -f {configs_path}/nsfp_{i:06d}.out;
 screen -L -Logfile {configs_path}/nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash {configs_path}/srun_{i:06d}.sh
 """
     with open(screen_path, "w") as f:
