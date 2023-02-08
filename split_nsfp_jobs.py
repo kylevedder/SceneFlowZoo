@@ -75,6 +75,7 @@ def make_runall():
 for i in {configs_path / "screen_*.sh"}; do
     echo $i
     bash $i
+    sleep 0.5
 done
 """
     with open(runall_path, "w") as f:
