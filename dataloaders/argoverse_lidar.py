@@ -4,13 +4,14 @@ from pathlib import Path
 from pointclouds import PointCloud, SE3, SE2
 from loader_utils import load_json
 from typing import List, Tuple, Dict, Optional
+import time
 
 GROUND_HEIGHT_THRESHOLD = 0.4  # 40 centimeters
 
 
 class ArgoverseSequence():
 
-    def __init__(self, log_id: str, dataset_dir: Path):
+    def __init__(self, log_id: str, dataset_dir: Path, verbose: bool = False):
         self.log_id = log_id
 
         self.dataset_dir = Path(dataset_dir)
@@ -40,6 +41,11 @@ class ArgoverseSequence():
 
         self.raster_heightmap, self.global_to_raster_se2, self.global_to_raster_scale = self._load_ground_height_raster(
         )
+
+        if verbose:
+            print(
+                f'Loaded {len(self.timestamp_list)} frames from {self.dataset_dir} at timestamp {time.time():.3f}'
+            )
 
     def _load_ground_height_raster(self):
         raster_height_paths = list(
@@ -177,8 +183,10 @@ class ArgoverseSequenceLoader():
 
     def __init__(self,
                  sequence_dir: Path,
-                 log_subset: Optional[List[str]] = None):
+                 log_subset: Optional[List[str]] = None,
+                 verbose: bool = False):
         self.dataset_dir = Path(sequence_dir)
+        self.verbose = verbose
         assert self.dataset_dir.is_dir(
         ), f'dataset_dir {sequence_dir} does not exist'
         self.log_lookup = {e.name: e for e in self.dataset_dir.glob('*/')}
@@ -193,11 +201,25 @@ class ArgoverseSequenceLoader():
                 for k, v in self.log_lookup.items() if k in log_subset
             }
 
+        if self.verbose:
+            print(f'Loaded {len(self.log_lookup)} logs')
+
+        self.last_loaded_sequence = None
+        self.last_loaded_sequence_id = None
+
     def get_sequence_ids(self):
         return sorted(self.log_lookup.keys())
 
-    def load_sequence(self, log_id: str) -> ArgoverseSequence:
+    def _raw_load_sequence(self, log_id: str) -> ArgoverseSequence:
         assert log_id in self.log_lookup, f'log_id {log_id} does not exist'
         log_dir = self.log_lookup[log_id]
         assert log_dir.is_dir(), f'log_id {log_id} does not exist'
-        return ArgoverseSequence(log_id, log_dir)
+        return ArgoverseSequence(log_id, log_dir, verbose=self.verbose)
+
+    def load_sequence(self, log_id: str) -> ArgoverseSequence:
+        # Basic caching mechanism for repeated loads of the same sequence
+        if self.last_loaded_sequence_id != log_id:
+            self.last_loaded_sequence = self._raw_load_sequence(log_id)
+            self.last_loaded_sequence_id = log_id
+
+        return self.last_loaded_sequence

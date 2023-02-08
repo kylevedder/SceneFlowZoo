@@ -32,48 +32,46 @@ class SubsequenceDataset(torch.utils.data.Dataset):
         self.origin_mode = origin_mode
         self.max_pc_points = max_pc_points
 
-        self.subsequence_id_index = []
+        self.subsequence_id_begin_index = []
         for id in tqdm(sequence_loader.get_sequence_ids(),
                        desc="Preprocessing sequences",
                        leave=False):
-            # sequence = sequence_loader.load_sequence(id)
-            num_subsequences = max_sequence_length // subsequence_length
+            num_subsequences = max_sequence_length - subsequence_length + 1
             assert num_subsequences > 0, f"num_subsequences must be > 0, got {num_subsequences}"
-            self.subsequence_id_index.extend([
+            self.subsequence_id_begin_index.extend([
                 (id, i) for i in range(num_subsequences)
             ])
 
         self.subsequence_id_shuffled_index = list(
-            range(len(self.subsequence_id_index)))
+            range(len(self.subsequence_id_begin_index)))
         if shuffle:
             random_state = np.random.RandomState(len(
-                self.subsequence_id_index))
+                self.subsequence_id_begin_index))
             random_state.shuffle(self.subsequence_id_shuffled_index)
 
     def __len__(self):
-        return len(self.subsequence_id_index)
+        return len(self.subsequence_id_begin_index)
 
     def _get_subsequence(self, index):
         shuffled_index = self.subsequence_id_shuffled_index[index]
-        id, subsequence_index = self.subsequence_id_index[shuffled_index]
+        id, subsequence_begin_index = self.subsequence_id_begin_index[shuffled_index]
         sequence = self.sequence_loader.load_sequence(id)
 
-        offset = subsequence_index * self.subsequence_length
         if self.origin_mode == OriginMode.FIRST_ENTRY:
-            origin_idx = offset
+            origin_idx = subsequence_begin_index
         elif self.origin_mode == OriginMode.LAST_ENTRY:
-            origin_idx = offset + self.subsequence_length - 1
+            origin_idx = subsequence_begin_index + self.subsequence_length - 1
         else:
             raise ValueError(f"Unknown origin mode {self.origin_mode}")
 
         assert origin_idx >= 0 and origin_idx < len(
             sequence
         ), f"origin_idx must be >= 0 and < len(sequence), got {origin_idx} and {len(sequence)}"
-        assert offset >= 0 and offset + self.subsequence_length <= len(
+        assert subsequence_begin_index >= 0 and subsequence_begin_index + self.subsequence_length <= len(
             sequence
-        ), f"offset must be >= 0 and offset + self.subsequence_length <= len(sequence), got {offset} and {len(sequence)} for max sequence len {self.max_sequence_length} and a subsequence length {self.subsequence_length}"
+        ), f"offset must be >= 0 and offset + self.subsequence_length <= len(sequence), got {subsequence_begin_index} and {len(sequence)} for max sequence len {self.max_sequence_length} and a subsequence length {self.subsequence_length}"
         subsequence_lst = [
-            sequence.load(offset + i, origin_idx)
+            sequence.load(subsequence_begin_index + i, origin_idx)
             for i in range(self.subsequence_length)
         ]
         return subsequence_lst

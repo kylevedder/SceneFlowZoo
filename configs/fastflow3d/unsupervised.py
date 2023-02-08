@@ -14,10 +14,10 @@ def get_max_sequence_length(sequence_dir):
 max_train_sequence_length = get_max_sequence_length(train_sequence_dir)
 max_test_sequence_length = get_max_sequence_length(test_sequence_dir)
 
-gradient_clip_val = 25.0
+gradient_clip_val = 0
 epochs = 10
-accumulate_grad_batches = 4
-learning_rate = 8e-6
+accumulate_grad_batches = 1
+learning_rate = 2e-6
 save_every = 500
 validate_every = 500
 
@@ -29,13 +29,13 @@ model = dict(name="FastFlow3D",
                        POINT_CLOUD_RANGE=(-51.2, -51.2, -3, 51.2, 51.2, 1),
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
-train_forward_args = dict(compute_cycle=True, compute_symmetry_x=True, compute_symmetry_y=True)
+train_forward_args = dict(compute_cycle=False, compute_symmetry_x=False, compute_symmetry_y=False)
 
 
 loader = dict(name="ArgoverseSequenceLoader",
               args=dict(sequence_dir=train_sequence_dir))
 
-dataloader = dict(args=dict(batch_size=6, num_workers=6, shuffle=True, pin_memory=False))
+dataloader = dict(args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))
 
 
 
@@ -44,7 +44,7 @@ dataset = dict(name="SubsequenceDataset",
                          max_sequence_length=max_train_sequence_length,
                          origin_mode="FIRST_ENTRY"))
 
-loss_fn = dict(name="FastFlow3DUnsupervisedLoss", args=dict(warp_upscale=1e5))
+loss_fn = dict(name="FastFlow3DUnsupervisedLoss", args=dict(warp_upscale=1))
 
 test_loader = dict(name="ArgoverseFlowSequenceLoader",
                    args=dict(raw_data_path=test_sequence_dir,

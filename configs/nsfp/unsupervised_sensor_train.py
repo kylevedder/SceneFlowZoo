@@ -31,10 +31,10 @@ model = dict(name="NSFP",
                        flow_save_folder=flow_save_folder))
 
 test_loader = dict(name="ArgoverseSequenceLoader",
-                   args=dict(sequence_dir=test_sequence_dir))
+                   args=dict(sequence_dir=test_sequence_dir, verbose=True))
 
 test_dataloader = dict(
-    args=dict(batch_size=1, num_workers=1, shuffle=False, pin_memory=True))
+    args=dict(batch_size=1, num_workers=0, shuffle=False, pin_memory=True))
 
 test_dataset = dict(name="SubsequenceDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,

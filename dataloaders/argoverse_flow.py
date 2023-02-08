@@ -150,11 +150,21 @@ class ArgoverseFlowSequenceLoader():
                 if sequence_id in log_subset
             ]
 
+        self.last_loaded_sequence = None
+        self.last_loaded_sequence_id = None
+
     def get_sequence_ids(self):
         return self.sequence_id_lst
 
-    def load_sequence(self, sequence_id: str) -> ArgoverseFlowSequence:
+    def _load_sequence_raw(self, sequence_id: str) -> ArgoverseFlowSequence:
         assert sequence_id in self.sequence_id_to_flow_lst, f'sequence_id {sequence_id} does not exist'
         return ArgoverseFlowSequence(sequence_id,
                                      self.sequence_id_to_raw_data[sequence_id],
                                      self.sequence_id_to_flow_lst[sequence_id])
+
+    def load_sequence(self, sequence_id: str) -> ArgoverseFlowSequence:
+        # Basic caching mechanism for repeated loads of the same sequence
+        if self.last_loaded_sequence_id != sequence_id:
+            self.last_loaded_sequence = self._load_sequence_raw(sequence_id)
+            self.last_loaded_sequence_id = sequence_id
+        return self.last_loaded_sequence

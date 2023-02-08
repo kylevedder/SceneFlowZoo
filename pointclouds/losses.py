@@ -13,6 +13,9 @@ def warped_pc_loss(warped_pc: torch.Tensor,
     if target_pc.ndim == 2:
         target_pc = target_pc.unsqueeze(0)
 
+    assert warped_pc.ndim == 3, f"warped_pc.ndim = {warped_pc.ndim}, not 3; shape = {warped_pc.shape}"
+    assert target_pc.ndim == 3, f"target_pc.ndim = {target_pc.ndim}, not 3; shape = {target_pc.shape}"
+
     loss = 0
 
     if dist_threshold is None:
@@ -23,22 +26,9 @@ def warped_pc_loss(warped_pc: torch.Tensor,
         return loss
 
     # Compute min distance between warped point cloud and point cloud at t+1.
-
-    warped_pc_shape_tensor = torch.LongTensor([warped_pc.shape[0]
-                                               ]).to(warped_pc.device)
-    target_pc_shape_tensor = torch.LongTensor([target_pc.shape[0]
-                                               ]).to(target_pc.device)
-    warped_to_target_knn = knn_points(p1=warped_pc,
-                                      p2=target_pc,
-                                      lengths1=warped_pc_shape_tensor,
-                                      lengths2=target_pc_shape_tensor,
-                                      K=1)
+    warped_to_target_knn = knn_points(p1=warped_pc, p2=target_pc, K=1)
     warped_to_target_distances = warped_to_target_knn.dists[0]
-    target_to_warped_knn = knn_points(p1=target_pc,
-                                      p2=warped_pc,
-                                      lengths1=target_pc_shape_tensor,
-                                      lengths2=warped_pc_shape_tensor,
-                                      K=1)
+    target_to_warped_knn = knn_points(p1=target_pc, p2=warped_pc, K=1)
     target_to_warped_distances = target_to_warped_knn.dists[0]
     # Throw out distances that are too large (beyond the dist threshold).
     loss += warped_to_target_distances[
