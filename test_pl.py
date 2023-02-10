@@ -11,7 +11,7 @@ import warnings
 
 from tqdm import tqdm
 import dataloaders
-from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SubsequenceDataset, OriginMode
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseRawSequence, SubsequenceRawDataset, OriginMode
 
 from pointclouds import PointCloud, SE3
 

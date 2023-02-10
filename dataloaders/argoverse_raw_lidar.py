@@ -9,7 +9,7 @@ import time
 GROUND_HEIGHT_THRESHOLD = 0.4  # 40 centimeters
 
 
-class ArgoverseSequence():
+class ArgoverseRawSequence():
 
     def __init__(self, log_id: str, dataset_dir: Path, verbose: bool = False):
         self.log_id = log_id
@@ -179,7 +179,7 @@ class ArgoverseSequence():
         return [self.load(idx, relative_to_idx) for idx in range(len(self))]
 
 
-class ArgoverseSequenceLoader():
+class ArgoverseRawSequenceLoader():
 
     def __init__(self,
                  sequence_dir: Path,
@@ -210,13 +210,13 @@ class ArgoverseSequenceLoader():
     def get_sequence_ids(self):
         return sorted(self.log_lookup.keys())
 
-    def _raw_load_sequence(self, log_id: str) -> ArgoverseSequence:
+    def _raw_load_sequence(self, log_id: str) -> ArgoverseRawSequence:
         assert log_id in self.log_lookup, f'log_id {log_id} does not exist'
         log_dir = self.log_lookup[log_id]
         assert log_dir.is_dir(), f'log_id {log_id} does not exist'
-        return ArgoverseSequence(log_id, log_dir, verbose=self.verbose)
+        return ArgoverseRawSequence(log_id, log_dir, verbose=self.verbose)
 
-    def load_sequence(self, log_id: str) -> ArgoverseSequence:
+    def load_sequence(self, log_id: str) -> ArgoverseRawSequence:
         # Basic caching mechanism for repeated loads of the same sequence
         if self.last_loaded_sequence_id != log_id:
             self.last_loaded_sequence = self._raw_load_sequence(log_id)

@@ -1,13 +1,13 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseSequenceLoader, ArgoverseFlowSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
 
 # sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
-sequence_loader = ArgoverseFlowSequenceLoader(
+sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
 
 sequence_id = sequence_loader.get_sequence_ids()[29]

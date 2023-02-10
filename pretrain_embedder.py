@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from dataloaders import PointCloudDataset, ArgoverseSequenceLoader
+from dataloaders import PointCloudDataset, ArgoverseRawSequenceLoader
 from models import PretrainEmbedding
 from tqdm import tqdm
 
@@ -20,7 +20,7 @@ PRETRAIN_SAVE_FOLDER = "/efs/embedding_pretrain_saves/"
 from torch.utils.tensorboard import SummaryWriter
 
 writer = SummaryWriter("work_dirs/argoverse/pretrain/", flush_secs=5)
-sequence_loader = ArgoverseSequenceLoader('/efs/argoverse_lidar/train/')
+sequence_loader = ArgoverseRawSequenceLoader('/efs/argoverse_lidar/train/')
 dataset = PointCloudDataset(sequence_loader)
 dataloader = torch.utils.data.DataLoader(dataset,
                                          batch_size=BATCH_SIZE,

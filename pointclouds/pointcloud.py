@@ -13,9 +13,18 @@ def to_fixed_array(array: np.ndarray,
         return sliced_pts
     else:
         pad_tuples = [(0, max_len - len(array))]
-        for i in range(array.ndim - 1):
+        for _ in range(array.ndim - 1):
             pad_tuples.append((0, 0))
         return np.pad(array, pad_tuples, constant_values=pad_val)
+
+def from_fixed_array(array: np.ndarray) -> np.ndarray:
+    if isinstance(array, np.ndarray):
+        are_valid_points = np.logical_not(np.isnan(array[:, 0]))
+        are_valid_points = are_valid_points.astype(bool)
+    else:
+        are_valid_points = torch.logical_not(torch.isnan(array[:, 0]))
+        are_valid_points = are_valid_points.bool()
+    return array[are_valid_points]
 
 
 class PointCloud():
@@ -51,13 +60,7 @@ class PointCloud():
 
     @staticmethod
     def from_fixed_array(points) -> 'PointCloud':
-        if isinstance(points, np.ndarray):
-            are_valid_points = np.logical_not(np.isnan(points[:, 0]))
-            are_valid_points = are_valid_points.astype(bool)
-        else:
-            are_valid_points = torch.logical_not(torch.isnan(points[:, 0]))
-            are_valid_points = are_valid_points.bool()
-        return PointCloud(points[are_valid_points])
+        return PointCloud(from_fixed_array(points))
 
     def to_array(self) -> np.ndarray:
         return self.points

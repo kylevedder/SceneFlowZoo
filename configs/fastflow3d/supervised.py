@@ -29,28 +29,28 @@ model = dict(name="FastFlow3D",
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
 
-loader = dict(name="ArgoverseFlowSequenceLoader",
+loader = dict(name="ArgoverseSupervisedFlowSequenceLoader",
               args=dict(raw_data_path=train_sequence_dir,
                         flow_data_path=train_flow_dir))
 
 dataloader = dict(
     args=dict(batch_size=16, num_workers=8, shuffle=True, pin_memory=False))
 
-dataset = dict(name="SubsequenceFlowDataset",
+dataset = dict(name="SubsequenceSupervisedFlowDataset",
                args=dict(subsequence_length=SEQUENCE_LENGTH,
                          max_sequence_length=max_train_sequence_length,
                          origin_mode="FIRST_ENTRY"))
 
 loss_fn = dict(name="FastFlow3DSupervisedLoss", args=dict())
 
-test_loader = dict(name="ArgoverseFlowSequenceLoader",
+test_loader = dict(name="ArgoverseSupervisedFlowSequenceLoader",
                    args=dict(raw_data_path=test_sequence_dir,
                              flow_data_path=test_flow_dir))
 
 test_dataloader = dict(
     args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))
 
-test_dataset = dict(name="SubsequenceFlowDataset",
+test_dataset = dict(name="SubsequenceSupervisedFlowDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
                               max_sequence_length=max_test_sequence_length,
                               origin_mode="FIRST_ENTRY"))

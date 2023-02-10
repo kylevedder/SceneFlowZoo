@@ -5,7 +5,7 @@ import pandas as pd
 from pointclouds import PointCloud, SE3, SE2
 import numpy as np
 
-from . import ArgoverseSequence
+from . import ArgoverseRawSequence
 
 CATEGORY_MAP = {
     0: 'ANIMAL',
@@ -41,7 +41,7 @@ CATEGORY_MAP = {
 }
 
 
-class ArgoverseFlowSequence(ArgoverseSequence):
+class ArgoverseSupervisedFlowSequence(ArgoverseRawSequence):
 
     def __init__(self, log_id: str, dataset_dir: Path,
                  flow_data_lst: List[Tuple[int, Path]]):
@@ -114,7 +114,7 @@ class ArgoverseFlowSequence(ArgoverseSequence):
         }
 
 
-class ArgoverseFlowSequenceLoader():
+class ArgoverseSupervisedFlowSequenceLoader():
 
     def __init__(self,
                  raw_data_path: Path,
@@ -156,13 +156,13 @@ class ArgoverseFlowSequenceLoader():
     def get_sequence_ids(self):
         return self.sequence_id_lst
 
-    def _load_sequence_raw(self, sequence_id: str) -> ArgoverseFlowSequence:
+    def _load_sequence_raw(self, sequence_id: str) -> ArgoverseSupervisedFlowSequence:
         assert sequence_id in self.sequence_id_to_flow_lst, f'sequence_id {sequence_id} does not exist'
-        return ArgoverseFlowSequence(sequence_id,
+        return ArgoverseSupervisedFlowSequence(sequence_id,
                                      self.sequence_id_to_raw_data[sequence_id],
                                      self.sequence_id_to_flow_lst[sequence_id])
 
-    def load_sequence(self, sequence_id: str) -> ArgoverseFlowSequence:
+    def load_sequence(self, sequence_id: str) -> ArgoverseSupervisedFlowSequence:
         # Basic caching mechanism for repeated loads of the same sequence
         if self.last_loaded_sequence_id != sequence_id:
             self.last_loaded_sequence = self._load_sequence_raw(sequence_id)

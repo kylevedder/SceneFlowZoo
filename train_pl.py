@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from tqdm import tqdm
 import dataloaders
-from dataloaders import ArgoverseSequenceLoader, ArgoverseSequence, SubsequenceDataset, OriginMode
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseRawSequence, SubsequenceRawDataset, OriginMode
 
 from pointclouds import PointCloud, SE3
 
@@ -31,6 +31,7 @@ parser.add_argument(
     '--checkpoint_dir_name',
     type=str,
     default=datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p"))
+parser.add_argument('--dry_run', action='store_true')
 args = parser.parse_args()
 
 assert args.config.exists(), f"Config file {args.config} does not exist"
@@ -74,9 +75,10 @@ def setup_checkpoint_dir(cfg):
     checkpoint_path = Path(
         f"model_checkpoints/{parent_name}/{config_name}/{args.checkpoint_dir_name}"
     )
-    checkpoint_path.mkdir(parents=True, exist_ok=True)
-    # Save config file to checkpoint directory
-    cfg.dump(str(checkpoint_path / "config.py"))
+    if not args.dry_run:
+        checkpoint_path.mkdir(parents=True, exist_ok=True)
+        # Save config file to checkpoint directory
+        cfg.dump(str(checkpoint_path / "config.py"))
     return checkpoint_path
 
 
@@ -95,11 +97,14 @@ trainer = pl.Trainer(devices=args.gpus,
                      move_metrics_to_cpu=False,
                      num_sanity_val_steps=2,
                      log_every_n_steps=2,
-                     val_check_interval=cfg.validate_every,
+                     #val_check_interval=cfg.validate_every,
                      max_epochs=cfg.epochs,
                      accumulate_grad_batches=cfg.accumulate_grad_batches
                      if hasattr(cfg, "accumulate_grad_batches") else 1,
                      gradient_clip_val=cfg.gradient_clip_val if hasattr(
                          cfg, "gradient_clip_val") else 0.0,
                      callbacks=[checkpoint_callback])
+if args.dry_run:
+    print("Dry run, exiting")
+    exit(0)
 trainer.fit(model, train_dataloader, val_dataloader)

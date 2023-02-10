@@ -5,13 +5,13 @@ import numpy as np
 from models.embedders import HardEmbedder, DynamicEmbedder
 from models.backbones import FastFlowUNet
 from models.heads import FastFlowDecoder, FastFlowDecoderStepDown
-from pointclouds import PointCloud, warped_pc_loss, pc0_to_pc1_distance
+from pointclouds import PointCloud, warped_pc_loss, pc0_to_pc1_distance, from_fixed_array
 
 from typing import Dict, Any, Optional
 from collections import defaultdict
 
 
-class FastFlow3DUnsupervisedLoss():
+class FastFlow3DSelfSupervisedLoss():
 
     def __init__(self, warp_upscale: float, device: str = None):
         super().__init__()
@@ -145,6 +145,30 @@ class FastFlow3DUnsupervisedLoss():
         vis.add_geometry(line_set)
 
         vis.run()
+
+
+class FastFlow3DDistillationLoss():
+
+    def __init__(self, device: str = None):
+        super().__init__()
+
+    def __call__(self, input_batch, model_res_dict):
+        model_res = model_res_dict["forward"]
+        estimated_flows = model_res["flow"]
+
+        gt_flow_array_stack = input_batch['flow_array_stack']
+
+        total_loss = 0
+        # Iterate through the batch
+        for est_flow, gt_flow_array in zip(estimated_flows,
+                                           gt_flow_array_stack):
+            gt_flow = from_fixed_array(gt_flow_array[0])
+            assert est_flow.shape == gt_flow.shape, f"estimated_flow {est_flow.shape} != ground_truth_flow {gt_flow.shape}"
+            total_loss += torch.norm(est_flow - gt_flow, dim=1, p=2).mean()
+
+        return {
+            "loss": total_loss,
+        }
 
 
 class FastFlow3DSupervisedLoss():
