@@ -97,7 +97,7 @@ trainer = pl.Trainer(devices=args.gpus,
                      move_metrics_to_cpu=False,
                      num_sanity_val_steps=2,
                      log_every_n_steps=2,
-                     #val_check_interval=cfg.validate_every,
+                     val_check_interval=cfg.validate_every,
                      max_epochs=cfg.epochs,
                      accumulate_grad_batches=cfg.accumulate_grad_batches
                      if hasattr(cfg, "accumulate_grad_batches") else 1,
