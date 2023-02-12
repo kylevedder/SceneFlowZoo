@@ -194,6 +194,11 @@ parser.add_argument('--num_neighbors',
                     type=int,
                     default=20,
                     help="Number of neighbors to use to compute height")
+parser.add_argument('--cpus',
+                    type=int,
+                    default=multiprocessing.cpu_count(),
+                    help="Number of cpus to use for parallel processing")
+
 args = parser.parse_args()
 
 argoverse_directory = Path(args.argoverse_directory)
@@ -212,11 +217,11 @@ work_queue = build_work_queue(argoverse_directory)
 
 print("Work queue size:", len(work_queue))
 
-Parallel(n_jobs=multiprocessing.cpu_count())(delayed(
-    process_sequence_folder)(sequence_folder=e,
-                             cells_per_meter=cells_per_meter,
-                             meters_beyond_poly_edge=meters_beyond_poly_edge,
-                             num_neighbors=num_neighbors) for e in tqdm(work_queue))
+Parallel(args.cpus)(delayed(process_sequence_folder)(
+    sequence_folder=e,
+    cells_per_meter=cells_per_meter,
+    meters_beyond_poly_edge=meters_beyond_poly_edge,
+    num_neighbors=num_neighbors) for e in tqdm(work_queue))
 
 # with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
 #     pool.map(
