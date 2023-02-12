@@ -165,7 +165,7 @@ def process_sequence_folder(sequence_folder: Path,
 
 def build_work_queue(root_path: Path):
     root_path = Path(root_path)
-    root_folders = [e for e in root_path.glob("*/") if e.is_dir()]
+    root_folders = [e for e in root_path.glob("*/") if e.is_dir() and e.name in ["train", "val"]]
     work_queue = []
     for rf in root_folders:
         work_queue.extend([e for e in rf.glob("*/") if e.is_dir()])
