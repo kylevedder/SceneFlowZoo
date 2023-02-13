@@ -8,6 +8,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('lidar_path', type=Path)
 parser.add_argument('sequences_per_job', type=int)
 parser.add_argument('base_config', type=Path)
+parser.add_argument('--reset_config_dir', action='store_true')
 args = parser.parse_args()
 
 assert args.lidar_path.is_dir(), f"Path {args.lidar_path} is not a directory"
@@ -34,9 +35,10 @@ assert len(sequence_names_set) == len(sequence_folders), "Some sequences are mis
 
 
 configs_path = Path("./nsfp_split_configs")
-if configs_path.exists():
-    shutil.rmtree(configs_path)
-configs_path.mkdir(exist_ok=False)
+if args.reset_config_dir:
+    if configs_path.exists():
+        shutil.rmtree(configs_path)
+    configs_path.mkdir(exist_ok=False)
 
 
 
@@ -55,7 +57,7 @@ def make_srun(i):
     docker_image_path = Path("kylevedder_offline_sceneflow_latest.sqsh").absolute()
     assert docker_image_path.is_file(), f"Docker image {docker_image_path} squash file does not exist"
     srun_file_content = f"""#!/bin/bash
-srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --job-name=nsfp{i:04d} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
+srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --exclude=kd-2080ti-2.grasp.maas --job-name=nsfp{i:04d} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
@@ -64,7 +66,7 @@ def make_screen(i):
     screen_path = configs_path / f"screen_{i:06d}.sh"
     screen_file_content = f"""#!/bin/bash
 rm -f {configs_path}/nsfp_{i:06d}.out;
-screen -L -Logfile {configs_path}/nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash {configs_path}/srun_{i:06d}.sh
+  screen -L -Logfile {configs_path}/nsfp_{i:06d}.out -dmS nsfp_{i:06d} bash {configs_path}/srun_{i:06d}.sh
 """
     with open(screen_path, "w") as f:
         f.write(screen_file_content)
@@ -73,7 +75,12 @@ def make_runall():
     runall_path = configs_path / f"runall.sh"
     runall_file_content = f"""#!/bin/bash
 for i in {configs_path / "screen_*.sh"}; do
-    echo $i
+    DONEFILE=nsfp_split_configs/nsfp_${i:26:6}.done
+    if [ -f $DONEFILE ]; then
+        echo "Skipping already completed0: $i"
+        continue
+    fi
+    echo "Launching: $i"
     bash $i
 done
 """
