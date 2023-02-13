@@ -75,7 +75,7 @@ def make_runall():
     runall_path = configs_path / f"runall.sh"
     runall_file_content = f"""#!/bin/bash
 for i in {configs_path / "screen_*.sh"}; do
-    DONEFILE=nsfp_split_configs/nsfp_${i:26:6}.done
+    DONEFILE=nsfp_split_configs/nsfp_${{i:26:6}}.done
     if [ -f $DONEFILE ]; then
         echo "Skipping already completed0: $i"
         continue
