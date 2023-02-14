@@ -25,6 +25,7 @@ def load_pickle(filepath: Path):
 
 
 def save_pickle(filepath: Path, pkl):
+    filepath = Path(filepath)
     print(f'Saving {filepath}', end='')
     if filepath.exists():
         filepath.unlink()
@@ -45,6 +46,7 @@ def load_json(filename: Path, verbose: bool = True):
 
 def save_json(filename: Path, contents):
     print(f'Saving {filename}', end='')
+    filename = Path(filename)
     if filename.exists():
         filename.unlink()
     filename.parent.mkdir(parents=True, exist_ok=True)

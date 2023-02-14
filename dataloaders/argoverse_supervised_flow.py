@@ -86,9 +86,12 @@ class ArgoverseSupervisedFlowSequence(ArgoverseRawSequence):
         idx_pose = self._load_pose(idx)
 
         relative_pose = start_pose.inverse().compose(idx_pose)
-
+        
+        # Global frame PC is needed to compute hte ground point mask.
         absolute_global_frame_pc = raw_pc.transform(idx_pose)
         is_ground_points = self.is_ground_points(absolute_global_frame_pc)
+
+        
         pc = raw_pc.mask_points(~is_ground_points)
         relative_global_frame_pc = pc.transform(relative_pose)
         if flow_0_1 is not None:

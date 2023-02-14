@@ -9,4 +9,5 @@ tb_logs_old/
 nsfp_split_configs/
 lightning_logs/
 kylevedder_offline_sceneflow_latest.sqsh
-merged_dicts.pkl
+chamfer_investigation/merged_dicts.pkl
+validation_results/

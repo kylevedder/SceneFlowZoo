@@ -7,6 +7,7 @@ import models
 import pytorch_lightning as pl
 import torchmetrics
 from typing import Dict, List, Tuple
+from loader_utils import save_pickle
 
 CATEGORY_NAMES = {
     -1: 'BACKGROUND',
@@ -43,12 +44,16 @@ CATEGORY_NAMES = {
 }
 
 SPEED_BUCKET_SPLITS_METERS_PER_SECOND = [0, 0.1, 1.0, np.inf]
+ENDPOINT_ERROR_SPLITS_METERS = [0, 0.05, 0.1, np.inf]
 
 
 class EndpointDistanceMetricRawTorch():
 
-    def __init__(self, class_id_to_name_map: Dict[int, str],
-                 speed_bucket_splits_meters_per_second: List[float]):
+    def __init__(self,
+                 class_id_to_name_map: Dict[int, str],
+                 speed_bucket_splits_meters_per_second: List[float],
+                 endpoint_error_splits_meters: List[float],
+                 per_frame_to_per_second_scale_factor: float = 10.0):
         self.class_index_to_name_map = {}
         self.class_id_to_index_map = {}
         for cls_index, (cls_id,
@@ -56,54 +61,84 @@ class EndpointDistanceMetricRawTorch():
             self.class_index_to_name_map[cls_index] = cls_name
             self.class_id_to_index_map[cls_id] = cls_index
 
-        self.per_class_total_error_sum = torch.zeros(
-            (len(class_id_to_name_map)), dtype=torch.float)
-        self.per_class_total_error_count = torch.zeros(
-            (len(class_id_to_name_map)), dtype=torch.long)
-
         self.speed_bucket_splits_meters_per_second = speed_bucket_splits_meters_per_second
+        self.endpoint_error_splits_meters = endpoint_error_splits_meters
+
         speed_bucket_bounds = self.speed_bucket_bounds()
-        self.speed_bucket_errors = torch.zeros(len(speed_bucket_bounds),
-                                               dtype=torch.float)
-        self.speed_bucket_counts = torch.zeros(len(speed_bucket_bounds),
-                                               dtype=torch.long)
+        endpoint_error_bucket_bounds = self.epe_bucket_bounds()
+
+        # Bucket by CLASS x SPEED x EPE
+
+        self.per_class_bucketed_error_sum = torch.zeros(
+            (len(class_id_to_name_map), len(speed_bucket_bounds),
+             len(endpoint_error_bucket_bounds)),
+            dtype=torch.float)
+        self.per_class_bucketed_error_count = torch.zeros(
+            (len(class_id_to_name_map), len(speed_bucket_bounds),
+             len(endpoint_error_bucket_bounds)),
+            dtype=torch.long)
+
+        self.per_frame_to_per_second_scale_factor = per_frame_to_per_second_scale_factor
 
     def to(self, device):
-        self.per_class_total_error_sum = self.per_class_total_error_sum.to(
+        self.per_class_bucketed_error_sum = self.per_class_bucketed_error_sum.to(
             device)
-        self.per_class_total_error_count = self.per_class_total_error_count.to(
+        self.per_class_bucketed_error_count = self.per_class_bucketed_error_count.to(
             device)
-        self.speed_bucket_errors = self.speed_bucket_errors.to(device)
+
+    def gather(self, gather_fn):
+        per_class_bucketed_error_sum = torch.sum(gather_fn(
+            self.per_class_bucketed_error_sum),
+                                                 dim=0)
+        per_class_bucketed_error_count = torch.sum(gather_fn(
+            self.per_class_bucketed_error_count),
+                                                   dim=0)
+        return per_class_bucketed_error_sum, per_class_bucketed_error_count
 
     def speed_bucket_bounds(self) -> List[Tuple[float, float]]:
         return list(
             zip(self.speed_bucket_splits_meters_per_second,
                 self.speed_bucket_splits_meters_per_second[1:]))
 
-    def update_class_error(self, class_id: int, endpoint_error,
-                           endpoint_count: int):
+    def epe_bucket_bounds(self) -> List[Tuple[float, float]]:
+        return list(
+            zip(self.endpoint_error_splits_meters,
+                self.endpoint_error_splits_meters[1:]))
+
+    def update_class_error(self, class_id: int, regressed_flow: torch.Tensor,
+                           gt_flow: torch.Tensor):
+
         class_index = self.class_id_to_index_map[class_id]
-        self.per_class_total_error_sum[class_index] += endpoint_error
-        self.per_class_total_error_count[class_index] += endpoint_count
-
-    def update_speed_bucket_error(self, gt_speeds: torch.Tensor,
-                                  endpoint_errors: torch.Tensor):
-        for bucket_idx, (lower_speed_bound, upper_speed_bound) in enumerate(
+        endpoint_errors = torch.norm(regressed_flow - gt_flow, dim=1, p=2)
+        gt_speeds = torch.norm(gt_flow, dim=1,
+                               p=2) * self.per_frame_to_per_second_scale_factor
+        # SPEED DISAGGREGATION
+        for speed_idx, (lower_speed_bound, upper_speed_bound) in enumerate(
                 self.speed_bucket_bounds()):
-            bucket_mask = (gt_speeds >=
-                           lower_speed_bound) & (gt_speeds < upper_speed_bound)
-            bucket_errors = endpoint_errors[bucket_mask]
-            self.speed_bucket_errors[bucket_idx] += torch.sum(bucket_errors)
-            self.speed_bucket_counts[bucket_idx] += len(bucket_errors)
+            speed_mask = (gt_speeds >= lower_speed_bound) & (gt_speeds <
+                                                             upper_speed_bound)
 
-    # def compute(self):
-    #     return self.per_class_total_error_sum / self.per_class_total_error_count
+            # ENDPOINT ERROR DISAGGREGATION
+            for epe_idx, (lower_epe_bound, upper_epe_bound) in enumerate(
+                    self.epe_bucket_bounds()):
+                endpoint_error_mask = (endpoint_errors >= lower_epe_bound) & (
+                    endpoint_errors < upper_epe_bound)
+
+                speed_and_endpoint_error_mask = speed_mask & endpoint_error_mask
+
+                self.per_class_bucketed_error_sum[
+                    class_index, speed_idx, epe_idx] += torch.sum(
+                        endpoint_errors[speed_and_endpoint_error_mask])
+                self.per_class_bucketed_error_count[
+                    class_index, speed_idx,
+                    epe_idx] += torch.sum(speed_and_endpoint_error_mask)
 
 
 class ModelWrapper(pl.LightningModule):
 
     def __init__(self, cfg):
         super().__init__()
+        self.cfg = cfg
         self.model = getattr(models, cfg.model.name)(**cfg.model.args)
 
         if not hasattr(cfg, "is_trainable") or cfg.is_trainable:
@@ -125,7 +160,8 @@ class ModelWrapper(pl.LightningModule):
                                               "has_labels") else cfg.has_labels
 
         self.metric = EndpointDistanceMetricRawTorch(
-            CATEGORY_NAMES, SPEED_BUCKET_SPLITS_METERS_PER_SECOND)
+            CATEGORY_NAMES, SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
+            ENDPOINT_ERROR_SPLITS_METERS)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
@@ -211,7 +247,8 @@ class ModelWrapper(pl.LightningModule):
         vis.run()
 
     def validation_step(self, input_batch, batch_idx):
-        output_batch = self.model(input_batch, **self.val_forward_args)["forward"]
+        output_batch = self.model(input_batch,
+                                  **self.val_forward_args)["forward"]
         self.metric.to(self.device)
 
         if not self.has_labels:
@@ -235,54 +272,47 @@ class ModelWrapper(pl.LightningModule):
                 pc0_valid_point_idxes]
             pc0_pc_class_info = class_info[-2][pc0_valid_point_idxes]
 
+            ground_truth_flow = ground_truth_flowed_pc0_to_pc1 - pc0_pc
+
             assert pc0_pc.shape == ground_truth_flowed_pc0_to_pc1.shape, f"The input and ground truth pointclouds are not the same shape. {pc0_pc.shape} != {ground_truth_flowed_pc0_to_pc1.shape}"
             assert pc0_pc.shape == regressed_flow.shape, f"The input pc and output flow are not the same shape. {pc0_pc.shape} != {regressed_flow.shape}"
 
-            regressed_flowed_pc0_to_pc1 = pc0_pc + regressed_flow
+            assert regressed_flow.shape == ground_truth_flow.shape, f"The regressed and ground truth flowed pointclouds are not the same shape."
 
-            assert regressed_flowed_pc0_to_pc1.shape == ground_truth_flowed_pc0_to_pc1.shape, f"The regressed and ground truth flowed pointclouds are not the same shape. {regressed_flowed_pc0_to_pc1.shape} != {ground_truth_flowed_pc0_to_pc1.shape}"
-
-            # print("Batch", batch_idx, ":", torch.mean(torch.norm(regressed_flow, dim=1)).item())
-
+            # regressed_flowed_pc0_to_pc1 = pc0_pc + regressed_flow
             # if batch_idx % 64 == 0 and minibatch_idx == 0:
             #     self._visualize_regressed_ground_truth_pcs(
             #         pc0_pc, pc1_pc, regressed_flowed_pc0_to_pc1,
             #         ground_truth_flowed_pc0_to_pc1)
 
-            # Per point L2 error between the regressed flowed pointcloud and the ground truth flowed pointcloud.
-            endpoint_errors = torch.norm(regressed_flowed_pc0_to_pc1 -
-                                         ground_truth_flowed_pc0_to_pc1,
-                                         dim=1,
-                                         p=2)
-
-            # ======================== Compute Per-Class Metrics ========================
+            # ======================== Compute Metrics Split By Class ========================
 
             for cls_id in torch.unique(pc0_pc_class_info):
                 cls_mask = (pc0_pc_class_info == cls_id)
-                cls_distance_array = endpoint_errors[cls_mask]
-                total_distance = torch.sum(cls_distance_array)
-                self.metric.update_class_error(cls_id.item(), total_distance,
-                                               cls_distance_array.shape[0])
+                self.metric.update_class_error(cls_id.item(),
+                                               regressed_flow[cls_mask],
+                                               ground_truth_flow[cls_mask])
 
-            # ======================== Compute Speed Bucket Metrics ========================
+    def _save_validation_data(self, save_dict):
 
-            # Scale the ground truth flow, computed over 1/10th of a second, to be over 1 second.
-            ground_truth_speeds = torch.norm(
-                (ground_truth_flowed_pc0_to_pc1 - pc0_pc) * 10.0, dim=1, p=2)
-            self.metric.update_speed_bucket_error(ground_truth_speeds,
-                                                  endpoint_errors)
+        def dict_vals_to_numpy(d):
+            for k, v in d.items():
+                if isinstance(v, dict):
+                    d[k] = dict_vals_to_numpy(v)
+                else:
+                    d[k] = v.cpu().numpy()
+            return d
+
+        save_dict = dict_vals_to_numpy(save_dict)
+        save_pickle(
+            f"validation_results/{self.cfg.filename}.pkl",
+            save_dict)
 
     def validation_epoch_end(self, batch_parts):
         import time
         before_gather = time.time()
-        world_per_class_total_error_sum = self.all_gather(
-            self.metric.per_class_total_error_sum)
-        world_per_class_total_error_count = self.all_gather(
-            self.metric.per_class_total_error_count)
-        world_speed_bucket_errors = self.all_gather(
-            self.metric.speed_bucket_errors)
-        world_speed_bucket_counts = self.all_gather(
-            self.metric.speed_bucket_counts)
+        per_class_bucketed_error_sum, per_class_bucketed_error_count = self.metric.gather(
+            self.all_gather)
 
         after_gather = time.time()
 
@@ -293,39 +323,88 @@ class ModelWrapper(pl.LightningModule):
         if self.global_rank != 0:
             return {}
 
-        # Sum the per-GPU metrics across the world axis.
-        per_class_total_error_sum = torch.sum(world_per_class_total_error_sum,
-                                              dim=0)
-        per_class_total_error_count = torch.sum(
-            world_per_class_total_error_count, dim=0)
+        # Per class bucketed error sum and count are CLASS x SPEED x EPE tensors
 
-        speed_bucket_errors = torch.sum(world_speed_bucket_errors, dim=0)
-        speed_bucket_counts = torch.sum(world_speed_bucket_counts, dim=0)
+        # ======================== Compute Full Metric Decomp ========================
+        per_class_bucketed_avg = per_class_bucketed_error_sum / per_class_bucketed_error_count
 
-        # ======================== Log Per-Class Metrics ========================
+        full_perf_dict = {}
 
-        cls_avg_errors = per_class_total_error_sum / per_class_total_error_count
+        # PER CLASS
+        for cls_idx in range(per_class_bucketed_avg.shape[0]):
+            # PER SPEED BUCKET
+            for speed_idx, (speed_lower_bound, speed_upper_bound) in zip(
+                    range(per_class_bucketed_avg.shape[1]),
+                    self.metric.speed_bucket_bounds()):
+                # PER EPE BUCKET
+                for epe_idx, (epe_lower_bound, epe_upper_bound) in zip(
+                        range(per_class_bucketed_avg.shape[2]),
+                        self.metric.epe_bucket_bounds()):
+                    category_name = self.metric.class_index_to_name_map[
+                        cls_idx]
+                    bucket_name = f"speed_{speed_lower_bound}-{speed_upper_bound}"
+                    epe_bucket_name = f"epe_{epe_lower_bound}-{epe_upper_bound}"
+                    error_key = f"val/{category_name}/{bucket_name}/{epe_bucket_name}"
+                    value = per_class_bucketed_avg[cls_idx, speed_idx, epe_idx]
+                    self.log(error_key,
+                             value,
+                             sync_dist=False,
+                             rank_zero_only=True)
+                    full_perf_dict[error_key] = value
 
-        perf_dict = {}
-        for cls_idx, cls_avg_error in enumerate(cls_avg_errors):
-            category_name = self.metric.class_index_to_name_map[cls_idx]
-            perf_dict[category_name] = cls_avg_error.item()
-            self.log(f"val/{category_name}",
-                     cls_avg_error,
-                     sync_dist=False,
-                     rank_zero_only=True)
-
-        bucket_avg_errors = speed_bucket_errors / speed_bucket_counts
-
-        # ======================== Log Speed Bucket Metrics ========================
-        for bucket_avg_error, (lower_bound, upper_bound) in zip(
-                bucket_avg_errors,
+        speed_dict = {}
+        # ======================== Compute Per Speed Metrics ========================
+        for speed_idx, (speed_lower_bound, speed_upper_bound) in zip(
+                range(per_class_bucketed_avg.shape[1]),
                 self.metric.speed_bucket_bounds()):
-            category_name = f"{lower_bound}-{upper_bound}_speed_bucket"
-            perf_dict[category_name] = bucket_avg_error.item()
-            self.log(f"val/{category_name}",
-                     bucket_avg_error,
+            speed_error = per_class_bucketed_error_sum[:, speed_idx, :].sum(
+            ) / per_class_bucketed_error_count[:, speed_idx, :].sum()
+            bucket_name = f"speed_{speed_lower_bound}-{speed_upper_bound}"
+            error_key = f"val/{bucket_name}"
+            self.log(error_key,
+                     speed_error,
                      sync_dist=False,
                      rank_zero_only=True)
+            speed_dict[error_key] = speed_error
 
-        return perf_dict
+        epe_dict = {}
+        # ======================== Compute Per EPE Metrics ========================
+        for epe_idx, (epe_lower_bound, epe_upper_bound) in zip(
+                range(per_class_bucketed_avg.shape[2]),
+                self.metric.epe_bucket_bounds()):
+            epe_avg_error = per_class_bucketed_error_sum[:, :, epe_idx].sum(
+            ) / per_class_bucketed_error_count[:, :, epe_idx].sum()
+            epe_error_count = per_class_bucketed_error_count[:, :,
+                                                             epe_idx].sum()
+            epe_bucket_name = f"epe_{epe_lower_bound}-{epe_upper_bound}"
+            error_key = f"val/{epe_bucket_name}"
+            self.log(error_key,
+                     epe_avg_error,
+                     sync_dist=False,
+                     rank_zero_only=True)
+            epe_dict[error_key] = epe_avg_error
+            epe_count_bucket_name = f"epe_count_{epe_lower_bound}-{epe_upper_bound}"
+            count_key = f"val/{epe_count_bucket_name}"
+            self.log(count_key,
+                     epe_error_count,
+                     sync_dist=False,
+                     rank_zero_only=True)
+            epe_dict[count_key] = epe_error_count
+
+        self._save_validation_data({
+            "per_class_bucketed_error_sum": per_class_bucketed_error_sum,
+            "per_class_bucketed_error_count": per_class_bucketed_error_count,
+            "full_perf_dict": full_perf_dict,
+            "speed_dict": speed_dict,
+            "epe_dict": epe_dict
+        })
+
+        ret_dict = {}
+        for k, v in full_perf_dict.items():
+            ret_dict["full_" + k] = v
+        for k, v in speed_dict.items():
+            ret_dict["speed_" + k] = v
+        for k, v in epe_dict.items():
+            ret_dict["epe_" + k] = v
+
+        return ret_dict

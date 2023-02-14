@@ -1,0 +1,263 @@
+import numpy as np
+from pathlib import Path
+from loader_utils import load_pickle
+import matplotlib.pyplot as plt
+import argparse
+
+CATEGORY_NAMES = {
+    0: 'BACKGROUND',
+    1: 'ANIMAL',
+    2: 'ARTICULATED_BUS',
+    3: 'BICYCLE',
+    4: 'BICYCLIST',
+    5: 'BOLLARD',
+    6: 'BOX_TRUCK',
+    7: 'BUS',
+    8: 'CONSTRUCTION_BARREL',
+    9: 'CONSTRUCTION_CONE',
+    10: 'DOG',
+    11: 'LARGE_VEHICLE',
+    12: 'MESSAGE_BOARD_TRAILER',
+    13: 'MOBILE_PEDESTRIAN_CROSSING_SIGN',
+    14: 'MOTORCYCLE',
+    15: 'MOTORCYCLIST',
+    16: 'OFFICIAL_SIGNALER',
+    17: 'PEDESTRIAN',
+    18: 'RAILED_VEHICLE',
+    19: 'REGULAR_VEHICLE',
+    20: 'SCHOOL_BUS',
+    21: 'SIGN',
+    22: 'STOP_SIGN',
+    23: 'STROLLER',
+    24: 'TRAFFIC_LIGHT_TRAILER',
+    25: 'TRUCK',
+    26: 'TRUCK_CAB',
+    27: 'VEHICULAR_TRAILER',
+    28: 'WHEELCHAIR',
+    29: 'WHEELED_DEVICE',
+    30: 'WHEELED_RIDER'
+}
+
+CATEGORY_NAME_TO_IDX = {v: k for k, v in CATEGORY_NAMES.items()}
+
+SPEED_BUCKET_SPLITS_METERS_PER_SECOND = [0, 0.1, 1.0, np.inf]
+
+BACKGROUND_CATEGORIES = [
+    'BOLLARD', 'CONSTRUCTION_BARREL', 'CONSTRUCTION_CONE',
+    'MOBILE_PEDESTRIAN_CROSSING_SIGN', 'SIGN', 'STOP_SIGN'
+]
+PEDESTRIAN_CATEGORIES = [
+    'PEDESTRIAN', 'STROLLER', 'WHEELCHAIR', 'OFFICIAL_SIGNALER'
+]
+SMALL_VEHICLE_CATEGORIES = [
+    'BICYCLE', 'BICYCLIST', 'MOTORCYCLE', 'MOTORCYCLIST', 'WHEELED_DEVICE',
+    'WHEELED_RIDER'
+]
+VEHICLE_CATEGORIES = [
+    'ARTICULATED_BUS', 'BOX_TRUCK', 'BUS', 'LARGE_VEHICLE', 'RAILED_VEHICLE',
+    'REGULAR_VEHICLE', 'SCHOOL_BUS', 'TRUCK', 'TRUCK_CAB', 'VEHICULAR_TRAILER',
+    'TRAFFIC_LIGHT_TRAILER', 'MESSAGE_BOARD_TRAILER'
+]
+ANIMAL_CATEGORIES = ['ANIMAL', 'DOG']
+
+METACATAGORIES = {
+    "BACKGROUND": BACKGROUND_CATEGORIES,
+    "PEDESTRIAN": PEDESTRIAN_CATEGORIES,
+    "SMALL_MOVERS": SMALL_VEHICLE_CATEGORIES,
+    "LARGE_MOVERS": VEHICLE_CATEGORIES
+}
+
+# Get path to methods from command line
+parser = argparse.ArgumentParser()
+parser.add_argument('results_folder', type=Path)
+args = parser.parse_args()
+
+assert args.results_folder.exists(
+), f"Results folder {args.results_folder} does not exist"
+
+
+class ResultInfo():
+
+    def __init__(self, name, path: Path):
+        self.name = name
+        self.path = path
+        self.results = load_pickle(path)
+
+    def __repr__(self):
+        return self.name + " @ " + str(self.path)
+
+
+def load_results(validation_folder: Path):
+    print("Loading results from", validation_folder)
+    config_folder = validation_folder / "configs"
+    print()
+    assert config_folder.exists(
+    ), f"Config folder {config_folder} does not exist"
+    result_lst = []
+    for architecture_folder in sorted(config_folder.glob("*/")):
+        for result_file in architecture_folder.glob("*.pkl"):
+            result_lst.append(
+                ResultInfo(
+                    architecture_folder.name + "_" +
+                    result_file.stem.split(".")[0], result_file))
+
+    return result_lst
+
+
+print("Loading results...")
+results = load_results(args.results_folder)
+print("Done loading results.")
+print(results)
+
+
+def speed_bucket_categories():
+    return list(
+        zip(SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
+            SPEED_BUCKET_SPLITS_METERS_PER_SECOND[1:]))
+
+
+def process_speed_performance(result):
+    full_error_sum = result['per_class_bucketed_error_sum']
+    full_error_count = result['per_class_bucketed_error_count']
+
+    results = {}
+    # How do we do on vehicles by speed?
+    for metacatagory in METACATAGORIES:
+        category_idxes = [
+            CATEGORY_NAME_TO_IDX[cat] for cat in METACATAGORIES[metacatagory]
+        ]
+        error_sum = full_error_sum[category_idxes]
+        error_count = full_error_count[category_idxes]
+        # Sum up all the catagories into a single metacatagory
+        error_sum = np.sum(error_sum, axis=0)
+        error_count = np.sum(error_count, axis=0)
+        # Sum up all the EPEs
+        error_sum = np.sum(error_sum, axis=1)
+        error_count = np.sum(error_count, axis=1)
+        # Only remaining axis is speed
+        results[metacatagory] = error_sum / error_count
+
+    return results
+
+
+def process_metacategory_counts(result):
+    full_error_count = result['per_class_bucketed_error_count']
+    metacatagory_results = {}
+    # How do we do on vehicles by speed?
+    for metacatagory in METACATAGORIES:
+        category_names = METACATAGORIES[metacatagory]
+        category_idxes = [CATEGORY_NAME_TO_IDX[cat] for cat in category_names]
+
+        metacatagory_counts = full_error_count[category_idxes]
+        # Sum up other axes
+        metacatagory_counts = np.sum(metacatagory_counts, axis=(1, 2))
+        metacatagory_results[metacatagory] = {}
+        for category_result, category_name in zip(metacatagory_counts,
+                                                  category_names):
+            metacatagory_results[metacatagory][category_name] = category_result
+
+    return metacatagory_results
+
+
+def process_category_speed_counts(result):
+    category_speed_counts_raw = result['per_class_bucketed_error_count'].sum(axis=2)
+    category_speed_counts_normalized = category_speed_counts_raw / category_speed_counts_raw.sum(axis=1, keepdims=True)
+    return category_speed_counts_normalized, category_speed_counts_raw
+    
+
+def bar_offset(pos_idx, num_pos, position_offset=0.2):
+    """
+    Compute the X offset for a bar plot given the number of bars and the
+    index of the bar.
+    """
+    return -(num_pos + 1) / 2 * position_offset + position_offset * (pos_idx +
+                                                                     1)
+
+
+BAR_WIDTH = 0.2
+
+num_metacatagories = len(METACATAGORIES)
+speed_buckets = speed_bucket_categories()
+
+
+def plot_metacatagory_speed_vs_error():
+    fig, subplot_axes = plt.subplots(1, num_metacatagories, sharey=True)
+
+    for result_idx, result in enumerate(results):
+        result_bar_offset = bar_offset(result_idx, len(results), BAR_WIDTH)
+        speed_performance = process_speed_performance(result.results)
+        category_counts = process_metacategory_counts(result.results)
+
+        bar_positions = np.arange(len(speed_buckets)) + result_bar_offset
+
+        for metacatagory, ax in zip(speed_performance, subplot_axes):
+
+            # Plot histogram of EPEs by speed
+            ax.bar(
+                bar_positions,
+                speed_performance[metacatagory],
+                label=result.name.replace("fastflow3d_", " "),
+                width=BAR_WIDTH,
+            )
+            ax.set_title(metacatagory)
+            ax.set_xlabel("Speed")
+            ax.set_xticks(range(len(speed_buckets)),
+                          [f"{l}-{u}" for l, u in speed_buckets])
+            ax.set_ylabel("EPE")
+            ax.grid(True)
+    return fig
+
+
+def plot_meta_catagory_category_counts():
+    fig, subplot_axes = plt.subplots(1, num_metacatagories)
+
+    for result_idx, result in enumerate(results):
+        metacategory_counts = process_metacategory_counts(result.results)
+
+        for metacatagory, ax in zip(metacategory_counts, subplot_axes):
+            category_counts = metacategory_counts[metacatagory]
+            categories, counts = zip(*category_counts.items())
+            ax.set_title(metacatagory)
+            ax.bar(
+                np.arange(len(categories)),
+                counts,
+                label=result.name.replace("fastflow3d_", " "),
+            )
+            ax.set_xticks(range(len(categories)), categories, rotation=90)
+            
+    return fig
+
+def plot_category_speed_counts():
+    fig, axes = plt.subplots(1, len(results))
+    for result_idx, (result, ax) in enumerate(zip(results, axes)):
+        speed_counts_norm, speed_counts_raw = process_category_speed_counts(result.results)
+        ax.matshow(speed_counts_norm)
+        for (i, j), z in np.ndenumerate(speed_counts_raw):
+            ax.text(j, i, '{}'.format(z), ha='center', va='center',
+                    bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
+        ax.set_yticks(range(len(CATEGORY_NAMES)), CATEGORY_NAMES.values())
+
+        
+
+    return fig
+
+
+fig = plot_metacatagory_speed_vs_error()
+fig.set_size_inches(20, 5)
+fig.savefig(args.results_folder / "speed_vs_error.png")
+plt.clf()
+
+fig = plot_meta_catagory_category_counts()
+fig.set_size_inches(20, 10)
+plt.tight_layout()
+fig.savefig(args.results_folder / "category_counts.png")
+plt.clf()
+
+fig = plot_category_speed_counts()
+fig.set_size_inches(10, 30)
+plt.tight_layout()
+fig.savefig(args.results_folder / "category_speed_counts.png")
+plt.clf()
+
+
+
