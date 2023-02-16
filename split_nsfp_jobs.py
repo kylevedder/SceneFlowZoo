@@ -13,6 +13,7 @@ parser.add_argument('--configs_path',
                     type=Path,
                     default=Path("./nsfp_split_configs"))
 parser.add_argument('--runtime_mins', type=int, default=180)
+parser.add_argument('--job_prefix', type=str, default='np')
 args = parser.parse_args()
 
 assert args.lidar_path.is_dir(), f"Path {args.lidar_path} is not a directory"
@@ -72,7 +73,7 @@ def make_srun(i):
     assert docker_image_path.is_file(
     ), f"Docker image {docker_image_path} squash file does not exist"
     srun_file_content = f"""#!/bin/bash
-srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time={get_runtime_format(args.runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name=nsfp{i:04d} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
+srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time={get_runtime_format(args.runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name={args.job_prefix}{i:06d} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
