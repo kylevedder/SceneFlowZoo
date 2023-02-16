@@ -247,8 +247,8 @@ class ModelWrapper(pl.LightningModule):
         vis.run()
 
     def validation_step(self, input_batch, batch_idx):
-        output_batch = self.model(input_batch,
-                                  **self.val_forward_args)["forward"]
+        model_res = self.model(input_batch, **self.val_forward_args)
+        output_batch = model_res["forward"]
         self.metric.to(self.device)
 
         if not self.has_labels:
@@ -304,9 +304,7 @@ class ModelWrapper(pl.LightningModule):
             return d
 
         save_dict = dict_vals_to_numpy(save_dict)
-        save_pickle(
-            f"validation_results/{self.cfg.filename}.pkl",
-            save_dict)
+        save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
 
     def validation_epoch_end(self, batch_parts):
         import time

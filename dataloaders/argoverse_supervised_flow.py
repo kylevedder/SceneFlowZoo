@@ -1,6 +1,6 @@
 from pathlib import Path
 from collections import defaultdict
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 import pandas as pd
 from pointclouds import PointCloud, SE3, SE2
 import numpy as np
@@ -76,7 +76,7 @@ class ArgoverseSupervisedFlowSequence(ArgoverseRawSequence):
         ego_motion = flow_info['ego_motion']
         return flow_0_1, classes_0, classes_1, is_ground0, is_ground1, ego_motion
 
-    def load(self, idx, relative_to_idx) -> (PointCloud, SE3):
+    def load(self, idx: int, relative_to_idx: int) -> Dict[str, Any]:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
@@ -86,12 +86,11 @@ class ArgoverseSupervisedFlowSequence(ArgoverseRawSequence):
         idx_pose = self._load_pose(idx)
 
         relative_pose = start_pose.inverse().compose(idx_pose)
-        
+
         # Global frame PC is needed to compute hte ground point mask.
         absolute_global_frame_pc = raw_pc.transform(idx_pose)
         is_ground_points = self.is_ground_points(absolute_global_frame_pc)
 
-        
         pc = raw_pc.mask_points(~is_ground_points)
         relative_global_frame_pc = pc.transform(relative_pose)
         if flow_0_1 is not None:
@@ -159,13 +158,15 @@ class ArgoverseSupervisedFlowSequenceLoader():
     def get_sequence_ids(self):
         return self.sequence_id_lst
 
-    def _load_sequence_raw(self, sequence_id: str) -> ArgoverseSupervisedFlowSequence:
+    def _load_sequence_raw(
+            self, sequence_id: str) -> ArgoverseSupervisedFlowSequence:
         assert sequence_id in self.sequence_id_to_flow_lst, f'sequence_id {sequence_id} does not exist'
-        return ArgoverseSupervisedFlowSequence(sequence_id,
-                                     self.sequence_id_to_raw_data[sequence_id],
-                                     self.sequence_id_to_flow_lst[sequence_id])
+        return ArgoverseSupervisedFlowSequence(
+            sequence_id, self.sequence_id_to_raw_data[sequence_id],
+            self.sequence_id_to_flow_lst[sequence_id])
 
-    def load_sequence(self, sequence_id: str) -> ArgoverseSupervisedFlowSequence:
+    def load_sequence(self,
+                      sequence_id: str) -> ArgoverseSupervisedFlowSequence:
         # Basic caching mechanism for repeated loads of the same sequence
         if self.last_loaded_sequence_id != sequence_id:
             self.last_loaded_sequence = self._load_sequence_raw(sequence_id)

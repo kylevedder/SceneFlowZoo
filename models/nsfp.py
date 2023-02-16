@@ -109,41 +109,62 @@ class NSFP(nn.Module):
 
 class NSFPCached(NSFP):
 
-    def _load_result(self, batch_idx: int, minibatch_idx: int):
-        data = np.load(self.flow_save_folder /
-                       f'{batch_idx:010d}_{minibatch_idx:03d}.npz',
-                       allow_pickle=True)
+    def __init__(self, VOXEL_SIZE, POINT_CLOUD_RANGE, SEQUENCE_LENGTH,
+                 flow_save_folder: Path) -> None:
+        super().__init__(VOXEL_SIZE, POINT_CLOUD_RANGE, SEQUENCE_LENGTH,
+                         flow_save_folder)
+        # Implement basic caching to avoid repeated folder reads for the same log.
+        self.flow_folder_id = None
+        self.flow_folder_list = None
+
+    def _load_result(self, log_id: str, log_idx: int):
+        if self.flow_folder_id != log_id:
+            self.flow_folder_id = log_id
+            flow_folder = self.flow_save_folder / log_id
+            assert flow_folder.is_dir(), f"{flow_folder} does not exist"
+            self.flow_folder_list = sorted(flow_folder.glob('*.npz'))
+
+        assert log_idx < len(
+            self.flow_folder_list), f"Log index {log_idx} is out of range"
+        flow_file = self.flow_folder_list[log_idx]
+        data = np.load(flow_file, allow_pickle=True)
         flow = data['flow']
         return flow
 
-    def _load_low_prec_result(self, batch_idx: int, minibatch_idx: int):
-        data = np.load(Path("/bigdata/nsfp_results_low_prec") /
-                       f'{batch_idx:010d}_{minibatch_idx:03d}.npz',
-                       allow_pickle=True)
-        flow = data['flow']
-        return flow
+    def _transpose_list(self, lst):
+        if isinstance(lst[0], torch.Tensor):
+            return torch.stack(lst).T.tolist()
+        return np.array(lst).T.tolist()
 
     def forward(self, batched_sequence: Dict[str, torch.Tensor]):
         pc0_points_lst, pc0_valid_point_idxes, pc1_points_lst, pc1_valid_point_idxes = self._voxelize_batched_sequence(
             batched_sequence)
 
+        log_ids_lst = self._transpose_list(batched_sequence['log_ids'])
+        log_idxes_lst = self._transpose_list(batched_sequence['log_idxes'])
+
         flows = []
-        for minibatch_idx, (pc0_points, pc1_points) in enumerate(
-                zip(pc0_points_lst, pc1_points_lst)):
-            flow = self._load_result(
-                batch_idx=batched_sequence['data_index'].item(),
-                minibatch_idx=minibatch_idx)
-            low_prec_flow = self._load_low_prec_result(
-                batch_idx=batched_sequence['data_index'].item(),
-                minibatch_idx=minibatch_idx)
-            # flow = low_prec_flow
-            flows.append(
-                torch.from_numpy(flow.squeeze(0)).to(pc0_points.device))
+        for minibatch_idx, (pc0_points, pc1_points, log_ids,
+                            log_idxes) in enumerate(
+                                zip(pc0_points_lst, pc1_points_lst,
+                                    log_ids_lst, log_idxes_lst)):
+            assert len(
+                log_ids) == 2, f"Expect 2 frames for NSFP, got {len(log_ids)}"
+            assert len(
+                log_idxes
+            ) == 2, f"Expect 2 frames for NSFP, got {len(log_idxes)}"
+            flow = self._load_result(log_ids[0], log_idxes[0])
+            assert flow.shape[0] == 1, f"{flow.shape[0]} != 1"
+            flow = flow.squeeze(0)
+            assert flow.shape == pc0_points.shape, f"{flow.shape} != {pc0_points.shape}"
+            flows.append(torch.from_numpy(flow).to(pc0_points.device))
 
         return {
-            "flow": flows,
-            "pc0_points_lst": pc0_points_lst,
-            "pc0_valid_point_idxes": pc0_valid_point_idxes,
-            "pc1_points_lst": pc1_points_lst,
-            "pc1_valid_point_idxes": pc1_valid_point_idxes
+            "forward": {
+                "flow": flows,
+                "pc0_points_lst": pc0_points_lst,
+                "pc0_valid_point_idxes": pc0_valid_point_idxes,
+                "pc1_points_lst": pc1_points_lst,
+                "pc1_valid_point_idxes": pc1_valid_point_idxes
+            }
         }

@@ -12,6 +12,7 @@ sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
 
 sequence_id = sequence_loader.get_sequence_ids()[29]
 print("Sequence ID: ", sequence_id)
+sequence_id = "182ba3f7-b89a-36cc-ae40-32a341b0d3e9"
 sequence = sequence_loader.load_sequence(sequence_id)
 
 # make open3d visualizer
@@ -31,19 +32,22 @@ def sequence_idx_to_color(idx):
 
 
 frame_list = sequence.load_frame_list(0)
-for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[:1])):
+for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[114:115])):
     pc = frame_dict['relative_pc']
     pose = frame_dict['relative_pose']
     flowed_pc = frame_dict['relative_flowed_pc']
     classes = frame_dict['pc_classes']
     is_grounds = frame_dict['pc_is_ground']
 
+    is_stop_sign = classes == 21
+
     # Add base point cloud
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pc.points)
     pc_color = np.zeros_like(pc.points)
     # Base point cloud is red
-    pc_color[:, 0] = 1.0
+    pc_color[~is_stop_sign, 0] = 1.0
+    pc_color[is_stop_sign, 1] = 1.0
     pcd.colors = o3d.utility.Vector3dVector(pc_color)
     vis.add_geometry(pcd)
 
@@ -78,7 +82,8 @@ for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[:1])):
         next_pcd.points = o3d.utility.Vector3dVector(next_pc.points)
         next_pc_color = np.zeros_like(next_pc.points)
         # Next point cloud is green
-        next_pc_color[:, 1] = 1.0
+        pc_color[~is_stop_sign, 0] = 1.0
+        pc_color[is_stop_sign, 1] = 1.0
         next_pcd.colors = o3d.utility.Vector3dVector(next_pc_color)
         vis.add_geometry(next_pcd)
 

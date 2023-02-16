@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 from pointclouds import PointCloud, SE3, SE2
 from loader_utils import load_json
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 import time
 
 GROUND_HEIGHT_THRESHOLD = 0.4  # 40 centimeters
@@ -156,7 +156,7 @@ class ArgoverseRawSequence():
             frame_info['tz_m'])
         return se3
 
-    def load(self, idx, relative_to_idx) -> (PointCloud, SE3):
+    def load(self, idx: int, relative_to_idx: int) ->  Dict[str, Any]:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
