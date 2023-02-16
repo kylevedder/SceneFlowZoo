@@ -12,12 +12,15 @@ parser.add_argument('--reset_config_dir', action='store_true')
 parser.add_argument('--configs_path',
                     type=Path,
                     default=Path("./nsfp_split_configs"))
+parser.add_argument('--runtime_mins', type=int, default=180)
 args = parser.parse_args()
 
 assert args.lidar_path.is_dir(), f"Path {args.lidar_path} is not a directory"
 assert args.sequences_per_job > 0, f"Number of sequences per job must be positive"
 assert args.base_config.is_file(
 ), f"Config file {args.base_config} does not exist"
+
+assert args.runtime_mins > 0, f"Runtime must be positive"
 
 sequence_folders = sorted([c for c in args.lidar_path.glob("*") if c.is_dir()],
                           key=lambda x: x.name.lower())
@@ -46,6 +49,12 @@ else:
     configs_path.mkdir(exist_ok=True, parents=True)
 
 
+def get_runtime_format(runtime_mins):
+    hours = runtime_mins // 60
+    minutes = runtime_mins % 60
+    return f"{hours:02d}:{minutes:02d}:00"
+
+
 def make_config(i, job_sequence_names):
     config_path = configs_path / f"nsfp_split_{i:06d}.py"
     config_file_content = f"""
@@ -63,7 +72,7 @@ def make_srun(i):
     assert docker_image_path.is_file(
     ), f"Docker image {docker_image_path} squash file does not exist"
     srun_file_content = f"""#!/bin/bash
-srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time=03:00:00 --exclude=kd-2080ti-2.grasp.maas --job-name=nsfp{i:04d} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
+srun --gpus=1 --mem-per-gpu=12G --cpus-per-gpu=2 --time={get_runtime_format(args.runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name=nsfp{i:04d} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash -c "python test_pl.py {configs_path}/nsfp_split_{i:06d}.py; echo 'done' > {configs_path}/nsfp_{i:06d}.done"
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
