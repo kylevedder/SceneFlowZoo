@@ -110,6 +110,8 @@ for i, job_sequence_names in enumerate(job_sequence_names_lst):
     make_config(i, job_sequence_names)
     make_srun(i)
     make_screen(i)
+    if i % 100 == 0:
+        print(f"Made configs for {i} jobs")
 
 make_runall()
 
