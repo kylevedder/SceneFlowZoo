@@ -261,7 +261,7 @@ def plot_metacatagory_speed_vs_error(results: List[ResultInfo], metacatagory,
     else:
         speed_buckets = result.speed_bucket_categories()
         plt.xticks(np.arange(len(speed_buckets)),
-                   [f"{l:0.1f}-{u:0.1f}" for l, u in speed_buckets],
+                   [f"{l:0.1f}-" + (f"{u:0.1f}" if u != np.inf else "$\infty$") for l, u in speed_buckets],
                    rotation=0)
         plt.xlabel("Speed Bucket (m/s)")
     plt.ylabel("EPE (m)")
