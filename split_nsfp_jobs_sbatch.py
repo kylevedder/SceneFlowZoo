@@ -80,7 +80,7 @@ def make_sbatch():
 #SBATCH --exclude=kd-2080ti-2.grasp.maas
 #SBATCH --array=0-{num_jobs - 1}
 #SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
-#SBATCH --container-image=kylevedder_offline_sceneflow_latest.sqsh
+#SBATCH --container-image={current_working_dir / "kylevedder_offline_sceneflow_latest.sqsh"}
 
 export MY_RUN_ID=$(printf "%06d" $SLURM_ARRAY_TASK_ID)
 python test_pl.py {configs_path}/nsfp_split_$MY_RUN_ID.py; echo 'done' > {configs_path}/nsfp_$MY_RUN_ID.done
