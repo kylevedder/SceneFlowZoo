@@ -67,6 +67,7 @@ test_loader = dict(args=dict(log_subset={job_sequence_names}))
 
 
 def make_sbatch():
+    current_working_dir = Path.cwd().absolute()
     sbatch_path = configs_path / f"sbatch.bash"
     sbatch_file_content = f"""#!/bin/bash
 #SBATCH --job-name={args.job_prefix}
@@ -78,7 +79,7 @@ def make_sbatch():
 #SBATCH --cpus-per-gpu=2
 #SBATCH --exclude=kd-2080ti-2.grasp.maas
 #SBATCH --array=0-{num_jobs - 1}
-#SBATCH --container-mounts=../../datasets/:/efs/,`pwd`:/project
+#SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
 #SBATCH --container-image=kylevedder_offline_sceneflow_latest.sqsh
 
 export MY_RUN_ID=$(printf "%06d" $SLURM_ARRAY_TASK_ID)
