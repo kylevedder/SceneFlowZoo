@@ -67,7 +67,7 @@ test_loader = dict(args=dict(log_subset={job_sequence_names}))
 
 
 def make_sbatch():
-    sbatch_path = configs_path / f"sbatch_{i:06d}.sh"
+    sbatch_path = configs_path / f"sbatch.bash"
     sbatch_file_content = f"""#!/bin/bash
 #SBATCH --job-name={args.job_prefix}
 #SBATCH --output={configs_path}/nsfp_%a.out
