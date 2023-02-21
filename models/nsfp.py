@@ -67,6 +67,7 @@ class NSFP(nn.Module):
 
         # process minibatch
         flows = []
+        delta_times = []
         for minibatch_idx, (pc0_points, pc1_points) in enumerate(
                 zip(pc0_points_lst, pc1_points_lst)):
             pc0_points = torch.unsqueeze(pc0_points, 0)
@@ -95,10 +96,12 @@ class NSFP(nn.Module):
                 delta_time=delta_time,
                 flow=flow)
             flows.append(flow.squeeze(0))
+            delta_times.append(delta_time)
 
         return {
             "forward": {
                 "flow": flows,
+                "batch_delta_time": np.sum(delta_times),
                 "pc0_points_lst": pc0_points_lst,
                 "pc0_valid_point_idxes": pc0_valid_point_idxes,
                 "pc1_points_lst": pc1_points_lst,
@@ -129,7 +132,8 @@ class NSFPCached(NSFP):
         flow_file = self.flow_folder_list[log_idx]
         data = np.load(flow_file, allow_pickle=True)
         flow = data['flow']
-        return flow
+        delta_time = data['delta_time']
+        return flow, delta_time
 
     def _transpose_list(self, lst):
         if isinstance(lst[0], torch.Tensor):
@@ -144,6 +148,7 @@ class NSFPCached(NSFP):
         log_idxes_lst = self._transpose_list(batched_sequence['log_idxes'])
 
         flows = []
+        delta_times = []
         for minibatch_idx, (pc0_points, pc1_points, log_ids,
                             log_idxes) in enumerate(
                                 zip(pc0_points_lst, pc1_points_lst,
@@ -153,15 +158,17 @@ class NSFPCached(NSFP):
             assert len(
                 log_idxes
             ) == 2, f"Expect 2 frames for NSFP, got {len(log_idxes)}"
-            flow = self._load_result(log_ids[0], log_idxes[0])
+            flow, delta_time = self._load_result(log_ids[0], log_idxes[0])
             assert flow.shape[0] == 1, f"{flow.shape[0]} != 1"
             flow = flow.squeeze(0)
             assert flow.shape == pc0_points.shape, f"{flow.shape} != {pc0_points.shape}"
             flows.append(torch.from_numpy(flow).to(pc0_points.device))
+            delta_times.append(delta_time)
 
         return {
             "forward": {
                 "flow": flows,
+                "batch_delta_time": np.sum(delta_times),
                 "pc0_points_lst": pc0_points_lst,
                 "pc0_valid_point_idxes": pc0_valid_point_idxes,
                 "pc1_points_lst": pc1_points_lst,

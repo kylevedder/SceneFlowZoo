@@ -17,6 +17,7 @@ def to_fixed_array(array: np.ndarray,
             pad_tuples.append((0, 0))
         return np.pad(array, pad_tuples, constant_values=pad_val)
 
+
 def from_fixed_array(array: np.ndarray) -> np.ndarray:
     if isinstance(array, np.ndarray):
         are_valid_points = np.logical_not(np.isnan(array[:, 0]))
@@ -75,6 +76,16 @@ class PointCloud():
         assert mask.shape[0] == len(self)
         assert mask.dtype == bool
         return PointCloud(self.points[mask])
+
+    def within_region(self, x_min, x_max, y_min, y_max, z_min,
+                      z_max) -> 'PointCloud':
+        mask = np.logical_and(self.points[:, 0] < x_max,
+                              self.points[:, 0] > x_min)
+        mask = np.logical_and(mask, self.points[:, 1] < y_max)
+        mask = np.logical_and(mask, self.points[:, 1] > y_min)
+        mask = np.logical_and(mask, self.points[:, 2] < z_max)
+        mask = np.logical_and(mask, self.points[:, 2] > z_min)
+        return self.mask_points(mask)
 
     @property
     def shape(self) -> tuple:

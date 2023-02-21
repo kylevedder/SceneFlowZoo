@@ -80,11 +80,16 @@ class EndpointDistanceMetricRawTorch():
 
         self.per_frame_to_per_second_scale_factor = per_frame_to_per_second_scale_factor
 
+        self.total_forward_time = torch.tensor(0.0)
+        self.total_forward_count = torch.tensor(0, dtype=torch.long)
+
     def to(self, device):
         self.per_class_bucketed_error_sum = self.per_class_bucketed_error_sum.to(
             device)
         self.per_class_bucketed_error_count = self.per_class_bucketed_error_count.to(
             device)
+        self.total_forward_time = self.total_forward_time.to(device)
+        self.total_forward_count = self.total_forward_count.to(device)
 
     def gather(self, gather_fn):
         per_class_bucketed_error_sum = torch.sum(gather_fn(
@@ -93,7 +98,11 @@ class EndpointDistanceMetricRawTorch():
         per_class_bucketed_error_count = torch.sum(gather_fn(
             self.per_class_bucketed_error_count),
                                                    dim=0)
-        return per_class_bucketed_error_sum, per_class_bucketed_error_count
+        total_forward_time = torch.sum(gather_fn(self.total_forward_time),
+                                       dim=0)
+        total_forward_count = torch.sum(gather_fn(self.total_forward_count),
+                                        dim=0)
+        return per_class_bucketed_error_sum, per_class_bucketed_error_count, total_forward_time, total_forward_count
 
     def speed_bucket_bounds(self) -> List[Tuple[float, float]]:
         return list(
@@ -132,6 +141,10 @@ class EndpointDistanceMetricRawTorch():
                 self.per_class_bucketed_error_count[
                     class_index, speed_idx,
                     epe_idx] += torch.sum(speed_and_endpoint_error_mask)
+
+    def update_runtime(self, run_time: float, run_count: int):
+        self.total_forward_time += run_time
+        self.total_forward_count += run_count
 
 
 class ModelWrapper(pl.LightningModule):
@@ -254,6 +267,9 @@ class ModelWrapper(pl.LightningModule):
         if not self.has_labels:
             return
 
+        self.metric.update_runtime(output_batch["batch_delta_time"],
+                                   len(input_batch["pc_array_stack"]))
+
         # Decode the mini-batch.
         for minibatch_idx, (pc_array, flowed_pc_array, regressed_flow,
                             pc0_valid_point_idxes, pc1_valid_point_idxes,
@@ -309,7 +325,7 @@ class ModelWrapper(pl.LightningModule):
     def validation_epoch_end(self, batch_parts):
         import time
         before_gather = time.time()
-        per_class_bucketed_error_sum, per_class_bucketed_error_count = self.metric.gather(
+        per_class_bucketed_error_sum, per_class_bucketed_error_count, total_forward_time, total_forward_count = self.metric.gather(
             self.all_gather)
 
         after_gather = time.time()
@@ -390,11 +406,18 @@ class ModelWrapper(pl.LightningModule):
             epe_dict[count_key] = epe_error_count
 
         self._save_validation_data({
-            "per_class_bucketed_error_sum": per_class_bucketed_error_sum,
-            "per_class_bucketed_error_count": per_class_bucketed_error_count,
-            "full_perf_dict": full_perf_dict,
-            "speed_dict": speed_dict,
-            "epe_dict": epe_dict
+            "per_class_bucketed_error_sum":
+            per_class_bucketed_error_sum,
+            "per_class_bucketed_error_count":
+            per_class_bucketed_error_count,
+            "full_perf_dict":
+            full_perf_dict,
+            "speed_dict":
+            speed_dict,
+            "epe_dict":
+            epe_dict,
+            "average_forward_time":
+            total_forward_time / total_forward_count
         })
 
         ret_dict = {}

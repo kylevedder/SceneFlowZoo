@@ -9,6 +9,7 @@ from pointclouds import PointCloud, warped_pc_loss, pc0_to_pc1_distance, from_fi
 
 from typing import Dict, Any, Optional
 from collections import defaultdict
+import time
 
 
 class FastFlow3DSelfSupervisedLoss():
@@ -247,6 +248,8 @@ class FastFlow3D(nn.Module):
             self.head = FastFlowDecoder()
 
     def _model_forward(self, pc0s, pc1s):
+
+        before_forward = time.time()
         pc0_before_pseudoimages, pc0_voxel_infos_lst = self.embedder(pc0s)
         pc1_before_pseudoimages, pc1_voxel_infos_lst = self.embedder(pc1s)
 
@@ -255,6 +258,7 @@ class FastFlow3D(nn.Module):
         flows = self.head(
             torch.cat((pc0_before_pseudoimages, pc1_before_pseudoimages),
                       dim=1), grid_flow_pseudoimage, pc0_voxel_infos_lst)
+        after_forward = time.time()
 
         pc0_points_lst = [e["points"] for e in pc0_voxel_infos_lst]
         pc0_valid_point_idxes = [e["point_idxes"] for e in pc0_voxel_infos_lst]
@@ -268,6 +272,7 @@ class FastFlow3D(nn.Module):
 
         return {
             "flow": flows,
+            "batch_delta_time": after_forward - before_forward,
             "pc0_points_lst": pc0_points_lst,
             "pc0_warped_pc1_points_lst": pc0_warped_pc1_points_lst,
             "pc0_valid_point_idxes": pc0_valid_point_idxes,

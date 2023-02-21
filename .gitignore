@@ -13,3 +13,4 @@ chamfer_investigation/merged_dicts.pkl
 validation_results/
 **.pkl
 **.png
+job_dir/
