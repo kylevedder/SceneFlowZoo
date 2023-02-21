@@ -12,6 +12,8 @@ parser.add_argument('--mem_per_gpu', type=int, default=12)
 parser.add_argument('--runtime_mins', type=int, default=180)
 parser.add_argument('--runtime_hours', type=int, default=None)
 parser.add_argument('--job_name', type=str, default='ff3d')
+parser.add_argument('--qos', type=str, default='ee-med')
+parser.add_argument('--dry_run', action='store_true')
 args = parser.parse_args()
 
 jobdir_path = args.job_dir / f"{time.time():06f}"
@@ -42,7 +44,7 @@ def make_srun():
     assert docker_image_path.is_file(
     ), f"Docker image {docker_image_path} squash file does not exist"
     srun_file_content = f"""#!/bin/bash
-srun --gpus={args.num_gpus} --mem-per-gpu={args.mem_per_gpu}G --cpus-per-gpu={args.cpus_per_gpu} --time={get_runtime_format(job_runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name={args.job_name} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash command.sh"
+srun --gpus={args.num_gpus} --mem-per-gpu={args.mem_per_gpu}G --cpus-per-gpu={args.cpus_per_gpu} --time={get_runtime_format(job_runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name={args.job_name} --qos={args.qos} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash command.sh"
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
@@ -60,6 +62,7 @@ screen -L -Logfile {jobdir_path}/stdout.log -dmS {args.job_name} bash {jobdir_pa
 make_command_file(args.command)
 make_srun()
 make_screen()
-run_cmd(f"bash {jobdir_path}/runme.sh")
+if not args.dry_run:
+    run_cmd(f"bash {jobdir_path}/runme.sh")
 
 print(f"Config files written to {jobdir_path.absolute()}")
