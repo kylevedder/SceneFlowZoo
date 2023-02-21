@@ -22,10 +22,9 @@ job_runtime_mins = args.runtime_mins if args.runtime_hours is None else args.run
 
 
 def get_runtime_format(runtime_mins):
-    days = runtime_mins // (60 * 24)
     hours = runtime_mins // 60
     minutes = runtime_mins % 60
-    return f"{days:02d}::{hours:02d}:{minutes:02d}:00"
+    return f"{hours:02d}:{minutes:02d}:00"
 
 
 def make_command_file(command):
