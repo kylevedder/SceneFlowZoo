@@ -17,7 +17,9 @@ parser.add_argument('--partition', type=str, default='eaton-compute')
 parser.add_argument('--dry_run', action='store_true')
 args = parser.parse_args()
 
-jobdir_path = args.job_dir / f"{time.time():06f}"
+
+num_prior_jobs = len(list(args.job_dir.glob("*")))
+jobdir_path = args.job_dir / f"{num_prior_jobs:06d}"
 jobdir_path.mkdir(exist_ok=True, parents=True)
 job_runtime_mins = args.runtime_mins if args.runtime_hours is None else args.runtime_hours * 60
 
@@ -44,7 +46,7 @@ def make_srun():
     assert docker_image_path.is_file(
     ), f"Docker image {docker_image_path} squash file does not exist"
     srun_file_content = f"""#!/bin/bash
-srun --gpus={args.num_gpus} --nodes=1 --mem-per-gpu={args.mem_per_gpu}G --cpus-per-gpu={args.cpus_per_gpu} --time={get_runtime_format(job_runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name={args.job_name} --qos={args.qos} --partition={args.partition} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash command.sh
+srun --gpus={args.num_gpus} --nodes=1 --mem-per-gpu={args.mem_per_gpu}G --cpus-per-gpu={args.cpus_per_gpu} --time={get_runtime_format(job_runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name={args.job_name} --qos={args.qos} --partition={args.partition} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash {jobdir_path}/command.sh
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
