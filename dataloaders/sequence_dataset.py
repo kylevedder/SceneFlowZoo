@@ -19,6 +19,7 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
                  max_sequence_length: int,
                  origin_mode: Union[OriginMode, str],
                  max_pc_points: int = 90000,
+                 subset_fraction: float = 1.0,
                  shuffle=False):
         self.sequence_loader = sequence_loader
         assert subsequence_length > 0, f"subsequence_length must be > 0, got {subsequence_length}"
@@ -49,8 +50,12 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
                 len(self.subsequence_id_begin_index))
             random_state.shuffle(self.subsequence_id_shuffled_index)
 
+        if subset_fraction < 1.0:
+            self.subsequence_id_shuffled_index = self.subsequence_id_shuffled_index[:int(
+                len(self.subsequence_id_shuffled_index) * subset_fraction)]
+
     def __len__(self):
-        return len(self.subsequence_id_begin_index)
+        return len(self.subsequence_id_shuffled_index)
 
     def _get_subsequence(self, index):
         shuffled_index = self.subsequence_id_shuffled_index[index]

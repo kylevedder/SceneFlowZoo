@@ -104,21 +104,23 @@ def set_font(size):
                             })
 
 
-def color(count, total_elements):
+def color(count, total_elements, intensity = 1.3):
     start = 0.2
     stop = 0.7
     cm_subsection = np.linspace(start, stop, total_elements)
-    return [matplotlib.cm.magma(x) for x in cm_subsection][count]
+    color = [matplotlib.cm.gist_earth(x) for x in cm_subsection][count]
+    # Scale the color by intensity while leaving the 4th channel (alpha) unchanged
+    return [min(x * intensity, 1) for x in color[:3]] + [color[3]]
 
 
 def color2d(count_x, count_y, total_elements_x, total_elements_y):
 
     # Select the actual color, then scale along the intensity axis
-    color1d = color(count_x, total_elements_x)
     start = 1.7
     stop = 1
     intensity_scale = np.linspace(start, stop, total_elements_y)
-    return [min(x * intensity_scale[count_y], 1) for x in color1d[:3]] + [1]
+    intensity = intensity_scale[count_y]
+    return color(count_x, total_elements_x, intensity)
 
 
 linewidth = 0.5
@@ -368,6 +370,144 @@ def plot_metacatagory_epe_counts(results: List[ResultInfo]):
     # plt.legend()
 
 
+def plot_metacatagory_epe_counts_v15(results: List[ResultInfo]):
+
+    for meta_idx, metacatagory in enumerate(sorted(METACATAGORIES.keys())):
+        for result_idx, result in enumerate(results):
+            # Each error bucket is a single bar in the stacked bar plot.
+            metacatagory_epe_counts = result.get_metacatagory_count_by_epe(
+                metacatagory)
+            x_pos = meta_idx + bar_offset(
+                len(results) - result_idx - 1, len(results), BAR_WIDTH)
+            y_height = metacatagory_epe_counts.sum(
+            ) / metacatagory_epe_counts.sum()
+            bottom = 0
+            metacatagory_epe_counts_subset = metacatagory_epe_counts[:2]
+            for epe_idx, epe_count in enumerate(metacatagory_epe_counts_subset):
+                y_height = epe_count / metacatagory_epe_counts.sum()
+                y_sum = metacatagory_epe_counts[:epe_idx + 1].sum(
+                ) / metacatagory_epe_counts.sum()
+                epe_color = color2d(result_idx, epe_idx, len(results),
+                                    len(metacatagory_epe_counts_subset))
+
+                label = None
+                if epe_idx == len(metacatagory_epe_counts_subset) - 1 and meta_idx == 0:
+                    label = result.pretty_name()
+                rect = plt.barh([x_pos], [y_height],
+                                label=label,
+                                height=BAR_WIDTH,
+                                color=epe_color,
+                                left=bottom)
+                bottom += y_height
+                # Draw text in middle of bar
+                # plt.text(bottom - y_height / 2,
+                #          x_pos,
+                #          f"{y_sum * 100:0.1f}%",
+                #          ha="center",
+                #          va="center",
+                #          color="white",
+                #          fontsize=4)
+
+    # xlabels to be the metacatagories
+    plt.yticks(np.arange(len(METACATAGORIES)),
+               [METACATAGORY_TO_SHORTNAME[e] for e in METACATAGORIES.keys()],
+               rotation=0)
+    plt.xticks(np.linspace(0, 1, 5),
+               [f"{e}%" for e in np.linspace(0, 100, 5).astype(int)])
+    plt.xlabel("Endpoints Within Error Threshold")
+    legend = plt.legend(loc="lower left", fancybox=False)
+    # set the boarder of the legend artist to be transparent
+    # legend.get_frame().set_edgecolor('none')
+    plt.tight_layout()
+    # plt.legend()
+
+
+def plot_metacatagory_epe_counts_v2(results: List[ResultInfo]):
+
+    for meta_idx, metacatagory in enumerate(sorted(METACATAGORIES.keys())):
+        for result_idx, result in enumerate(results):
+            # Each error bucket is a single bar in the stacked bar plot.
+            metacatagory_epe_counts = result.get_metacatagory_count_by_epe(
+                metacatagory)
+            x_pos_center = meta_idx + bar_offset(
+                len(results) - result_idx - 1, len(results), BAR_WIDTH)
+            y_height = metacatagory_epe_counts.sum(
+            ) / metacatagory_epe_counts.sum()
+            for epe_idx, epe_count in enumerate(metacatagory_epe_counts[:2]):
+                x_offset = bar_offset(epe_idx, 2, BAR_WIDTH / 2)
+                y_height = metacatagory_epe_counts[:epe_idx + 1].sum(
+                ) / metacatagory_epe_counts.sum()
+                epe_color = color2d(result_idx, epe_idx, len(results), 2)
+
+                label = None
+                if meta_idx == 0:
+                    label = result.pretty_name()
+                    if epe_idx == 0:
+                        label += " (Strict)"
+                    else:
+                        label += " (Relaxed)"
+
+                # if meta_idx == 0 and epe_idx == 0:
+                #     label = result.pretty_name()
+
+                plt.barh([x_pos_center + x_offset], [y_height],
+                         label=label,
+                         height=BAR_WIDTH / 2,
+                         color=epe_color)
+
+    # xlabels to be the metacatagories
+    plt.yticks(np.arange(len(METACATAGORIES)),
+               [METACATAGORY_TO_SHORTNAME[e] for e in METACATAGORIES.keys()],
+               rotation=0)
+    plt.xticks(np.linspace(0, 1, 5),
+               [f"{e}%" for e in np.linspace(0, 100, 5).astype(int)])
+    plt.xlabel("Percentage of Endpoints Within Error Threshold")
+    legend = plt.legend(loc="lower left", fancybox=False)
+    # set the boarder of the legend artist to be transparent
+    # legend.get_frame().set_edgecolor('none')
+    plt.tight_layout()
+    # plt.legend()
+
+
+def plot_metacatagory_epe_counts_v3(results: List[ResultInfo],
+                                    epe_bucket_idx: int):
+
+    for meta_idx, metacatagory in enumerate(sorted(METACATAGORIES.keys())):
+        for result_idx, result in enumerate(results):
+            # Each error bucket is a single bar in the stacked bar plot.
+            metacatagory_epe_counts = result.get_metacatagory_count_by_epe(
+                metacatagory)
+            x_pos = meta_idx + bar_offset(
+                len(results) - result_idx - 1, len(results), BAR_WIDTH)
+            y_height = metacatagory_epe_counts.sum(
+            ) / metacatagory_epe_counts.sum()
+
+            y_height = metacatagory_epe_counts[:epe_bucket_idx + 1].sum(
+            ) / metacatagory_epe_counts.sum()
+            epe_color = color(result_idx, len(results))
+
+            label = None
+            if meta_idx == 0:
+                label = result.pretty_name()
+            plt.barh([x_pos], [y_height],
+                     label=label,
+                     height=BAR_WIDTH,
+                     color=epe_color)
+
+    # xlabels to be the metacatagories
+    plt.yticks(np.arange(len(METACATAGORIES)),
+               [METACATAGORY_TO_SHORTNAME[e] for e in METACATAGORIES.keys()],
+               rotation=0)
+    plt.xticks(np.linspace(0, 1, 5),
+               [f"{e}%" for e in np.linspace(0, 100, 5).astype(int)])
+    plt.xlabel("Endpoints Within Error Threshold")
+    legend = plt.legend(loc="lower left", fancybox=False)
+    # set the boarder of the legend artist to be transparent
+    # legend.get_frame().set_edgecolor('none')
+    plt.tight_layout()
+    # plt.legend()
+
+
 def table_latency(results: List[ResultInfo]):
     table = []
     for result in results:
@@ -415,6 +555,28 @@ for metacatagory in METACATAGORIES:
 plt.gcf().set_size_inches(5.5, 2.5)
 plot_metacatagory_epe_counts(results)
 savefig(f"epe_counts")
+
+################################################################################
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_metacatagory_epe_counts_v15(results)
+savefig(f"epe_counts_v15")
+
+################################################################################
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_metacatagory_epe_counts_v2(results)
+savefig(f"epe_counts_v2")
+
+################################################################################
+
+plt.gcf().set_size_inches(5.5 / 2, 2.5)
+plot_metacatagory_epe_counts_v3(results, 0)
+savefig(f"epe_counts_v3_strict")
+
+plt.gcf().set_size_inches(5.5 / 2, 2.5)
+plot_metacatagory_epe_counts_v3(results, 1)
+savefig(f"epe_counts_v3_loose")
 
 ################################################################################
 
