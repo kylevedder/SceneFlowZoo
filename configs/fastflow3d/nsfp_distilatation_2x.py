@@ -11,7 +11,7 @@ def get_max_sequence_length(sequence_dir):
     if "argoverse2" in sequence_dir:
         return 145
     else:
-        return 296
+        return 294
 
 
 max_sensor_train_sequence_length = get_max_sequence_length(
