@@ -40,5 +40,5 @@ dataset = [
          args=dict(subsequence_length=SUBSEQUENCE_LENGTH,
                    max_sequence_length=max_lidar_train_sequence_length,
                    origin_mode="FIRST_ENTRY",
-                   subset_fraction=0.675))
+                   subset_fraction=0.224))
 ]
