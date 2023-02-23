@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 import enum
-from typing import Union
+from typing import Union, List, Tuple, Dict, Optional, Any
 from pointclouds import to_fixed_array
 
 
@@ -177,3 +177,32 @@ class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
             "log_ids": log_ids,
             "log_idxes": log_idxes
         }
+
+
+class ConcatDataset(torch.utils.data.Dataset):
+    r"""Dataset to concatenate multiple datasets.
+
+    Args:
+        datasets (sequence): List of datasets to be concatenated
+    """
+
+    def __init__(self, datasets: List[torch.utils.data.Dataset]):
+        self.datasets = datasets
+        for d in self.datasets:
+            assert isinstance(
+                d, torch.utils.data.Dataset
+            ), f"ConcatDataset only supports datasets, got {type(d)}"
+        self._length = sum(len(d) for d in self.datasets)
+
+    def __len__(self):
+        return self._length
+
+    def __getitem__(self, idx):
+        assert idx >= 0, f"Index must be >= 0, got {idx}"
+        assert idx < len(
+            self), f"Index must be < len(self), got {idx} and {len(self)}"
+        for d in self.datasets:
+            if idx < len(d):
+                return d[idx]
+            idx -= len(d)
+        raise IndexError('Index out of range')

@@ -1,4 +1,4 @@
 _base_ = "./nsfp_distilatation.py"
 
-epochs = 50
+epochs = 100
 dataset = dict(args=dict(subset_fraction=0.5))

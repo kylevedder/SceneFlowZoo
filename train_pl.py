@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from tqdm import tqdm
 import dataloaders
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseRawSequence, SubsequenceRawDataset, OriginMode
+from dataloaders import ConcatDataset
 
 from pointclouds import PointCloud, SE3
 
@@ -49,6 +49,56 @@ def get_checkpoint_path(cfg, checkpoint_dir_name: str):
         return checkpoint_path, checkpoint_path.name
 
 
+def make_train_dataloader(cfg):
+    # Handle single loader case
+    if not isinstance(cfg.loader, list) and not isinstance(cfg.dataset, list):
+        train_sequence_loader = getattr(dataloaders,
+                                        cfg.loader.name)(**cfg.loader.args)
+        train_dataset = getattr(dataloaders, cfg.dataset.name)(
+            sequence_loader=train_sequence_loader, **cfg.dataset.args)
+        return torch.utils.data.DataLoader(train_dataset,
+                                           **cfg.dataloader.args)
+        return train_dataloader
+
+    # Handle multiple loader case
+    assert isinstance(cfg.loader, list) and isinstance(cfg.dataset, list), \
+        f"Either both loader and dataset should be lists, or neither should be. Got loader: {type(cfg.loader)} and dataset: {type(cfg.dataset)}"
+
+    assert len(cfg.loader) == len(cfg.dataset), \
+        f"Length of loader list {len(cfg.loader)} should be equal to length of dataset list {len(cfg.dataset)}"
+
+    print("Using multiple loaders of length:", len(cfg.loader))
+    train_sequence_loader_lst = []
+    for loader in cfg.loader:
+        train_sequence_loader_lst.append(
+            getattr(dataloaders, loader.name)(**loader.args))
+
+    print("Using multiple datasets of length:", len(cfg.dataset))
+    train_dataloader_lst = []
+    for dataset, train_sequence_loader in zip(cfg.dataset,
+                                              train_sequence_loader_lst):
+        train_dataset = getattr(dataloaders, dataset.name)(
+            sequence_loader=train_sequence_loader, **dataset.args)
+        train_dataloader_lst.append(train_dataset)
+
+    # Use the concat dataloader to combine the multiple dataloaders
+    concat_dataset = dataloaders.ConcatDataset(train_dataloader_lst)
+
+    return torch.utils.data.DataLoader(concat_dataset, **cfg.dataloader.args)
+
+
+def make_val_dataloader(cfg):
+    # Setup val infra
+    val_sequence_loader = getattr(dataloaders,
+                                  cfg.test_loader.name)(**cfg.test_loader.args)
+    val_dataset = getattr(dataloaders, cfg.test_dataset.name)(
+        sequence_loader=val_sequence_loader, **cfg.test_dataset.args)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset,
+                                                 **cfg.test_dataloader.args)
+
+    return val_dataloader
+
+
 def main():
 
     # Get config file from command line
@@ -82,27 +132,9 @@ def main():
                             name=cfg.filename,
                             version=checkpoint_dir_name)
 
-    # Setup train infra
-    train_sequence_loader = getattr(dataloaders,
-                                    cfg.loader.name)(**cfg.loader.args)
-    train_dataset = getattr(dataloaders, cfg.dataset.name)(
-        sequence_loader=train_sequence_loader, **cfg.dataset.args)
-    train_dataloader = torch.utils.data.DataLoader(train_dataset,
-                                                   **cfg.dataloader.args)
+    train_dataloader = make_train_dataloader(cfg)
+    val_dataloader = make_val_dataloader(cfg)
 
-    val_sequence_loader = getattr(dataloaders,
-                                  cfg.test_loader.name)(**cfg.test_loader.args)
-    val_dataset = getattr(dataloaders, cfg.test_dataset.name)(
-        sequence_loader=val_sequence_loader, **cfg.test_dataset.args)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset,
-                                                 **cfg.test_dataloader.args)
-
-    # if resume_from_checkpoint is not None:
-    #     assert resume_from_checkpoint.exists(
-    #     ), f"Checkpoint file {resume_from_checkpoint} does not exist"
-    #     model = ModelWrapper.load_from_checkpoint(resume_from_checkpoint,
-    #                                               cfg=cfg)
-    # else:
     model = ModelWrapper(cfg)
 
     checkpoint_callback = ModelCheckpoint(
