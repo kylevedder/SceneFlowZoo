@@ -31,6 +31,15 @@ loader = [
                    flow_data_path=lidar_train_flow_dir))
 ]
 
+# The sensor dataset is 3600 batches from 750 * 145 sequences
+# 3600 / (750 * 145) = 0.0331034483
+# 3600  = 0.0331034483 * (750 * 145)
+
+# We want to match this with the lidar dataset.
+# 3600 = X * (2500 * 294) * 0.0331034483
+# 3600 / (2500 * 294 * 0.0331034483) = 0.1479
+
+
 dataset = [
     dict(name="SubsequenceUnsupervisedFlowDataset",
          args=dict(subsequence_length=SUBSEQUENCE_LENGTH,
@@ -40,5 +49,5 @@ dataset = [
          args=dict(subsequence_length=SUBSEQUENCE_LENGTH,
                    max_sequence_length=max_lidar_train_sequence_length,
                    origin_mode="FIRST_ENTRY",
-                   subset_fraction=0.224))
+                   subset_fraction=0.1479))
 ]

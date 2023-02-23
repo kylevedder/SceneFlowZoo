@@ -50,9 +50,15 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
                 len(self.subsequence_id_begin_index))
             random_state.shuffle(self.subsequence_id_shuffled_index)
 
+        assert 1.0 >= subset_fraction > 0.0, f"subset_fraction must be in (0.0, 1.0], got {subset_fraction}"
         if subset_fraction < 1.0:
-            self.subsequence_id_shuffled_index = self.subsequence_id_shuffled_index[:int(
-                len(self.subsequence_id_shuffled_index) * subset_fraction)]
+            max_index = int(
+                len(self.subsequence_id_shuffled_index) * subset_fraction)
+            print(
+                f"Using only {max_index} of {len(self.subsequence_id_shuffled_index)} sequences."
+            )
+            self.subsequence_id_shuffled_index = self.subsequence_id_shuffled_index[:
+                                                                                    max_index]
 
     def __len__(self):
         return len(self.subsequence_id_shuffled_index)
@@ -193,6 +199,9 @@ class ConcatDataset(torch.utils.data.Dataset):
                 d, torch.utils.data.Dataset
             ), f"ConcatDataset only supports datasets, got {type(d)}"
         self._length = sum(len(d) for d in self.datasets)
+        print(
+            f"Concatenated {len(self.datasets)} datasets with total length {self._length})"
+        )
 
     def __len__(self):
         return self._length
