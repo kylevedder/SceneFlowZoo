@@ -174,8 +174,9 @@ class FastFlow3DDistillationLoss():
 
 class FastFlow3DSupervisedLoss():
 
-    def __init__(self, device: str = None):
+    def __init__(self, device: str = None, scale_background: bool = True):
         super().__init__()
+        self._scale_background = scale_background
 
     def __call__(self, input_batch, model_res_dict):
         model_res = model_res_dict["forward"]
@@ -187,8 +188,7 @@ class FastFlow3DSupervisedLoss():
         pc_classes = input_batch['pc_class_mask_stack']
         input_flows = flowed_input_pcs - input_pcs
 
-        foreground_loss = 0
-        background_loss = 0
+        total_loss = 0
         # Iterate through the batch
         for estimated_flow, input_flow, pc0_valid_point_idx, pc_class_arr in zip(
                 estimated_flows, input_flows, pc0_valid_point_idxes,
@@ -196,23 +196,21 @@ class FastFlow3DSupervisedLoss():
             ground_truth_flow = input_flow[0, pc0_valid_point_idx]
 
             error = torch.norm(estimated_flow - ground_truth_flow, dim=1, p=2)
-            classes = pc_class_arr[0, pc0_valid_point_idx]
-            is_background_class = (classes < 0)
-            is_foreground_class = ~is_background_class
-            # Compute mean error on foreground and background points separately
-            if is_foreground_class.sum() > 0:
-                foreground_error = error[is_foreground_class].mean()
-                foreground_loss += foreground_error
-            if is_background_class.sum() > 0:
-                background_error = error[is_background_class].mean() * 0.1
-                background_loss += background_error
 
-        total_loss = foreground_loss + background_loss
-        return {
-            "loss": total_loss,
-            "foreground_loss": foreground_loss,
-            "background_loss": background_loss
-        }
+            if self._scale_background:
+                classes = pc_class_arr[0, pc0_valid_point_idx]
+                # Background class is -1
+                is_foreground_class = (classes >= 0)
+                # We want to build a scalar array where the background points are 0.1 and the foreground points are 1
+                # This is because we want to downweight the background points by 10x
+                # We do this simply by converting the bool, where the foreground points are 1, to float, and then
+                # multiplying by 0.9 and adding 0.1 to get a scalar in {0.1, 1}
+                background_scalar = is_foreground_class.float() * 0.9 + 0.1
+                error = error * background_scalar
+
+            total_loss += error.mean()
+
+        return {"loss": total_loss}
 
 
 class FastFlow3D(nn.Module):
