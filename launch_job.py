@@ -26,15 +26,18 @@ job_runtime_mins = args.runtime_mins if args.runtime_hours is None else args.run
 
 
 def load_available_nodes():
-    res = run_cmd("sinfo --Node | awk '{print $1}' | tail +2", return_stdout=True)
+    res = run_cmd("sinfo --Node | awk '{print $1}' | tail +2",
+                  return_stdout=True)
     available_nodes = res.split('\n')
     return [e.strip() for e in available_nodes]
 
 
 node_blacklist = []
 if args.blacklist_substring is not None:
-    node_blacklist = [node for node in load_available_nodes() if args.blacklist_substring in node]
-
+    node_blacklist = [
+        node for node in load_available_nodes()
+        if args.blacklist_substring in node
+    ]
 
 
 def get_runtime_format(runtime_mins):
@@ -77,8 +80,8 @@ def make_sbatch():
 #SBATCH --qos={args.qos}
 #SBATCH --partition={args.partition}
 #SBATCH --nodes=1
-#SBATCH --output={jobdir_path}/nsfp_%a.out
-#SBATCH --error={jobdir_path}/nsfp_%a.err
+#SBATCH --output={jobdir_path}/job.out
+#SBATCH --error={jobdir_path}/job.err
 #SBATCH --time={get_runtime_format(job_runtime_mins)}
 #SBATCH --gpus={args.num_gpus}
 #SBATCH --mem-per-gpu={args.mem_per_gpu}G
