@@ -85,7 +85,7 @@ def symlink_files(old_dir: Path, new_dir: Path, file_name_list: list):
         (new_dir / fn).symlink_to(old_dir / fn)
 
 
-def run_cmd(cmd: str):
+def run_cmd(cmd: str, return_stdout: bool = False):
     res = subprocess.run(cmd,
                          shell=True,
                          encoding='utf-8',
@@ -101,3 +101,5 @@ def run_cmd(cmd: str):
             print('...')
             print(lines[-1].strip())
     assert res.returncode == 0, f'Command {cmd} failed with return code {res.returncode}'
+    if return_stdout:
+        return res.stdout

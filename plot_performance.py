@@ -1,83 +1,12 @@
 import numpy as np
 from pathlib import Path
-from loader_utils import load_pickle
+from loader_utils import *
 import matplotlib
 import matplotlib.pyplot as plt
 import argparse
 from typing import List, Tuple, Dict, Any, Optional
 import shutil
 from pathlib import Path
-
-CATEGORY_NAMES = {
-    0: 'BACKGROUND',
-    1: 'ANIMAL',
-    2: 'ARTICULATED_BUS',
-    3: 'BICYCLE',
-    4: 'BICYCLIST',
-    5: 'BOLLARD',
-    6: 'BOX_TRUCK',
-    7: 'BUS',
-    8: 'CONSTRUCTION_BARREL',
-    9: 'CONSTRUCTION_CONE',
-    10: 'DOG',
-    11: 'LARGE_VEHICLE',
-    12: 'MESSAGE_BOARD_TRAILER',
-    13: 'MOBILE_PEDESTRIAN_CROSSING_SIGN',
-    14: 'MOTORCYCLE',
-    15: 'MOTORCYCLIST',
-    16: 'OFFICIAL_SIGNALER',
-    17: 'PEDESTRIAN',
-    18: 'RAILED_VEHICLE',
-    19: 'REGULAR_VEHICLE',
-    20: 'SCHOOL_BUS',
-    21: 'SIGN',
-    22: 'STOP_SIGN',
-    23: 'STROLLER',
-    24: 'TRAFFIC_LIGHT_TRAILER',
-    25: 'TRUCK',
-    26: 'TRUCK_CAB',
-    27: 'VEHICULAR_TRAILER',
-    28: 'WHEELCHAIR',
-    29: 'WHEELED_DEVICE',
-    30: 'WHEELED_RIDER'
-}
-
-CATEGORY_NAME_TO_IDX = {v: k for k, v in CATEGORY_NAMES.items()}
-
-SPEED_BUCKET_SPLITS_METERS_PER_SECOND = [0, 0.1, 1.0, np.inf]
-ENDPOINT_ERROR_SPLITS_METERS = [0, 0.05, 0.1, np.inf]
-
-BACKGROUND_CATEGORIES = [
-    'BOLLARD', 'CONSTRUCTION_BARREL', 'CONSTRUCTION_CONE',
-    'MOBILE_PEDESTRIAN_CROSSING_SIGN', 'SIGN', 'STOP_SIGN'
-]
-PEDESTRIAN_CATEGORIES = [
-    'PEDESTRIAN', 'STROLLER', 'WHEELCHAIR', 'OFFICIAL_SIGNALER'
-]
-SMALL_VEHICLE_CATEGORIES = [
-    'BICYCLE', 'BICYCLIST', 'MOTORCYCLE', 'MOTORCYCLIST', 'WHEELED_DEVICE',
-    'WHEELED_RIDER'
-]
-VEHICLE_CATEGORIES = [
-    'ARTICULATED_BUS', 'BOX_TRUCK', 'BUS', 'LARGE_VEHICLE', 'RAILED_VEHICLE',
-    'REGULAR_VEHICLE', 'SCHOOL_BUS', 'TRUCK', 'TRUCK_CAB', 'VEHICULAR_TRAILER',
-    'TRAFFIC_LIGHT_TRAILER', 'MESSAGE_BOARD_TRAILER'
-]
-ANIMAL_CATEGORIES = ['ANIMAL', 'DOG']
-
-METACATAGORIES = {
-    "BACKGROUND": BACKGROUND_CATEGORIES,
-    "PEDESTRIAN": PEDESTRIAN_CATEGORIES,
-    "SMALL_MOVERS": SMALL_VEHICLE_CATEGORIES,
-    "LARGE_MOVERS": VEHICLE_CATEGORIES
-}
-
-METACATAGORY_TO_SHORTNAME = {
-    "BACKGROUND": "BG",
-    "PEDESTRIAN": "PED",
-    "SMALL_MOVERS": "SMALL",
-    "LARGE_MOVERS": "LARGE"
-}
 
 # Get path to methods from command line
 parser = argparse.ArgumentParser()
@@ -104,10 +33,11 @@ def set_font(size):
                             })
 
 
-def color(count, total_elements, intensity = 1.3):
+def color(count, total_elements, intensity=1.3):
     start = 0.2
     stop = 0.7
     cm_subsection = np.linspace(start, stop, total_elements)
+    #color = [matplotlib.cm.gist_earth(x) for x in cm_subsection][count]
     color = [matplotlib.cm.gist_earth(x) for x in cm_subsection][count]
     # Scale the color by intensity while leaving the 4th channel (alpha) unchanged
     return [min(x * intensity, 1) for x in color[:3]] + [color[3]]
@@ -146,73 +76,6 @@ def savefig(name, pad: float = 0):
     plt.clf()
 
 
-class ResultInfo():
-
-    def __init__(self, name, path: Path):
-        self.name = name
-        self.path = path
-        self.results = load_pickle(path)
-
-    def __repr__(self):
-        return self.name + " @ " + str(self.path)
-
-    def pretty_name(self):
-        name_dict = {
-            "fastflow3d_nsfp_distilatation": "DRLFS (Ours)",
-            "fastflow3d_supervised": "FastFlow3D",
-            "nsfp_unsupervised_flow_data_cached": "NSFP",
-        }
-        if self.name in name_dict:
-            return name_dict[self.name]
-        print("WARNING: No pretty name for", self.name)
-        return self.name
-
-    def speed_bucket_categories(self):
-        return list(
-            zip(SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
-                SPEED_BUCKET_SPLITS_METERS_PER_SECOND[1:]))
-
-    def endpoint_error_categories(self):
-        return list(
-            zip(ENDPOINT_ERROR_SPLITS_METERS,
-                ENDPOINT_ERROR_SPLITS_METERS[1:]))
-
-    def get_metacatagory_epe_by_speed(self, metacatagory):
-        full_error_sum = self.results['per_class_bucketed_error_sum']
-        full_error_count = self.results['per_class_bucketed_error_count']
-        category_idxes = [
-            CATEGORY_NAME_TO_IDX[cat] for cat in METACATAGORIES[metacatagory]
-        ]
-        error_sum = full_error_sum[category_idxes]
-        error_count = full_error_count[category_idxes]
-        # Sum up all the catagories into a single metacatagory
-        error_sum = np.sum(error_sum, axis=0)
-        error_count = np.sum(error_count, axis=0)
-        # Sum up all the EPEs
-        error_sum = np.sum(error_sum, axis=1)
-        error_count = np.sum(error_count, axis=1)
-        # Only remaining axis is speed
-        if metacatagory == "BACKGROUND":
-            return [np.sum(error_sum) / np.sum(error_count)]
-        return error_sum / error_count
-
-    def get_metacatagory_count_by_epe(self, metacatagory):
-        full_error_count = self.results['per_class_bucketed_error_count']
-        category_idxes = [
-            CATEGORY_NAME_TO_IDX[cat] for cat in METACATAGORIES[metacatagory]
-        ]
-        error_count = full_error_count[category_idxes]
-        # Sum up all the catagories into a single metacatagory
-        error_count = np.sum(error_count, axis=0)
-        # Sum up all the speeds
-        error_count = np.sum(error_count, axis=0)
-        # Only remaining axis is epe
-        return error_count
-
-    def get_latency(self):
-        return self.results['average_forward_time']
-
-
 def load_results(validation_folder: Path):
     print("Loading results from", validation_folder)
     config_folder = validation_folder / "configs"
@@ -221,6 +84,8 @@ def load_results(validation_folder: Path):
     ), f"Config folder {config_folder} does not exist"
     result_lst = []
     for architecture_folder in sorted(config_folder.glob("*/")):
+        if "bak" in architecture_folder.name:
+            continue
         for result_file in architecture_folder.glob("*.pkl"):
             result_lst.append(
                 ResultInfo(
@@ -272,7 +137,7 @@ def bar_offset(pos_idx, num_pos, position_offset=0.2):
                                                                      1)
 
 
-BAR_WIDTH = 0.2
+BAR_WIDTH = 0.1
 
 num_metacatagories = len(METACATAGORIES)
 
@@ -287,8 +152,8 @@ def merge_dict_list(dict_list):
     return result_dict
 
 
-def plot_metacatagory_speed_vs_error(results: List[ResultInfo], metacatagory,
-                                     vmax):
+def plot_mover_nonmover_vs_error_by_category(results: List[ResultInfo],
+                                             metacatagory, vmax):
     for result_idx, result in enumerate(results):
         metacatagory_epe_by_speed = result.get_metacatagory_epe_by_speed(
             metacatagory)
@@ -314,6 +179,40 @@ def plot_metacatagory_speed_vs_error(results: List[ResultInfo], metacatagory,
         plt.xlabel("Speed Bucket (m/s)")
     plt.ylabel("Average EPE (m)")
     plt.ylim(0, vmax)
+    grid()
+
+
+def plot_nonmover_epe_overall(results: List[ResultInfo], vmax):
+    for result_idx, result in enumerate(results):
+        nonmover_epe = result.get_nonmover_point_epe()
+        xs = bar_offset(result_idx, len(results), BAR_WIDTH)
+        plt.bar(xs,
+                nonmover_epe,
+                label=result.pretty_name(),
+                width=BAR_WIDTH,
+                color=color(result_idx, len(results)),
+                zorder=3)
+    plt.ylabel("Average EPE (m)")
+    plt.xticks([], [])
+    plt.ylim(0, vmax)
+    plt.legend()
+    grid()
+
+
+def plot_mover_epe_overall(results: List[ResultInfo], vmax):
+    for result_idx, result in enumerate(results):
+        mover_epe = result.get_mover_point_epe()
+        xs = bar_offset(result_idx, len(results), BAR_WIDTH)
+        plt.bar(xs,
+                mover_epe,
+                label=result.pretty_name(),
+                width=BAR_WIDTH,
+                color=color(result_idx, len(results)),
+                zorder=3)
+    plt.ylabel("Average EPE (m)")
+    plt.xticks([], [])
+    plt.ylim(0, vmax)
+    plt.legend()
     grid()
 
 
@@ -383,7 +282,8 @@ def plot_metacatagory_epe_counts_v15(results: List[ResultInfo]):
             ) / metacatagory_epe_counts.sum()
             bottom = 0
             metacatagory_epe_counts_subset = metacatagory_epe_counts[:2]
-            for epe_idx, epe_count in enumerate(metacatagory_epe_counts_subset):
+            for epe_idx, epe_count in enumerate(
+                    metacatagory_epe_counts_subset):
                 y_height = epe_count / metacatagory_epe_counts.sum()
                 y_sum = metacatagory_epe_counts[:epe_idx + 1].sum(
                 ) / metacatagory_epe_counts.sum()
@@ -391,7 +291,8 @@ def plot_metacatagory_epe_counts_v15(results: List[ResultInfo]):
                                     len(metacatagory_epe_counts_subset))
 
                 label = None
-                if epe_idx == len(metacatagory_epe_counts_subset) - 1 and meta_idx == 0:
+                if epe_idx == len(
+                        metacatagory_epe_counts_subset) - 1 and meta_idx == 0:
                     label = result.pretty_name()
                 rect = plt.barh([x_pos], [y_height],
                                 label=label,
@@ -533,7 +434,7 @@ def plot_validation_pointcloud_size():
     print(f"Mean point cloud count: {mean}, std: {std}")
     point_cloud_counts = point_cloud_counts[point_cloud_counts < 30000]
     # Make histogram of point cloud counts
-    plt.hist(point_cloud_counts, bins=100, zorder=3)
+    plt.hist(point_cloud_counts, bins=100, zorder=3, color=color(0, 1))
     plt.xlabel("Number of points")
     plt.ylabel("Number of point clouds")
     plt.tight_layout()
@@ -545,10 +446,20 @@ set_font(8)
 
 for metacatagory in METACATAGORIES:
     plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
-    plot_metacatagory_speed_vs_error(results, metacatagory, vmax=0.25)
+    plot_mover_nonmover_vs_error_by_category(results, metacatagory, vmax=0.3)
     print("saving", f"speed_vs_error_{metacatagory}")
     savefig(f"speed_vs_error_{metacatagory}")
     plt.clf()
+
+################################################################################
+
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
+plot_nonmover_epe_overall(results, 0.3)
+savefig(f"nonmover_epe_overall")
+
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
+plot_mover_epe_overall(results, 0.3)
+savefig(f"mover_epe_overall")
 
 ################################################################################
 
@@ -584,7 +495,7 @@ print(table_latency(results))
 
 ################################################################################
 
-plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
+plt.gcf().set_size_inches(5.5, 5.5 / 1.6 / 2)
 plot_validation_pointcloud_size()
 grid()
 savefig(f"validation_pointcloud_size", pad=0.02)
