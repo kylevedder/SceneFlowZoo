@@ -40,6 +40,7 @@ if args.blacklist_substring is not None:
     node_blacklist = [
         node for node in node_list if args.blacklist_substring in node
     ]
+    print(f"Blacklisted nodes: {node_blacklist}")
 
 
 def get_runtime_format(runtime_mins):
@@ -64,7 +65,7 @@ def make_srun():
     assert docker_image_path.is_file(
     ), f"Docker image {docker_image_path} squash file does not exist"
     srun_file_content = f"""#!/bin/bash
-srun --gpus={args.num_gpus} --nodes=1 --mem-per-gpu={args.mem_per_gpu}G --cpus-per-gpu={args.cpus_per_gpu} --time={get_runtime_format(job_runtime_mins)} --exclude=kd-2080ti-2.grasp.maas --job-name={args.job_name} --qos={args.qos} --partition={args.partition} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash {jobdir_path}/command.sh
+srun --gpus={args.num_gpus} --nodes=1 --mem-per-gpu={args.mem_per_gpu}G --cpus-per-gpu={args.cpus_per_gpu} --time={get_runtime_format(job_runtime_mins)} --exclude={','.join(node_blacklist)} --job-name={args.job_name} --qos={args.qos} --partition={args.partition} --container-mounts=../../datasets/:/efs/,`pwd`:/project --container-image={docker_image_path} bash {jobdir_path}/command.sh
 """
     with open(srun_path, "w") as f:
         f.write(srun_file_content)
@@ -92,7 +93,7 @@ def make_sbatch():
 #SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
 #SBATCH --container-image={docker_image_path}
 
-bash {jobdir_path}/command.sh | tee command.log && echo 'done' > {jobdir_path}/job.done
+bash {jobdir_path}/command.sh && echo 'done' > {jobdir_path}/job.done
 """
     with open(sbatch_path, "w") as f:
         f.write(sbatch_file_content)
@@ -117,6 +118,7 @@ if not args.dry_run:
     if args.use_srun:
         run_cmd(f"bash {jobdir_path}/screen.sh")
     else:
-        run_cmd(f"sbatch {jobdir_path}/sbatch.bash")
+        print(f"RUN COMMAND: sbatch {jobdir_path}/sbatch.bash")
+        # run_cmd(f"sbatch {jobdir_path}/sbatch.bash")
 
 print(f"Config files written to {jobdir_path.absolute()}")
