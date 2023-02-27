@@ -34,9 +34,11 @@ def load_available_nodes():
 
 node_blacklist = []
 if args.blacklist_substring is not None:
+    node_list = load_available_nodes()
+    print(f"Blacklisting nodes with substring {args.blacklist_substring}")
+    print(f"Available nodes: {node_list}")
     node_blacklist = [
-        node for node in load_available_nodes()
-        if args.blacklist_substring in node
+        node for node in node_list if args.blacklist_substring in node
     ]
 
 
