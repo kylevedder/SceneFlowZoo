@@ -15,8 +15,8 @@ parser.add_argument('--job_name', type=str, default='ff3d')
 parser.add_argument('--qos', type=str, default='ee-med')
 parser.add_argument('--partition', type=str, default='eaton-compute')
 parser.add_argument('--dry_run', action='store_true')
+parser.add_argument('--use_srun', action='store_true')
 args = parser.parse_args()
-
 
 num_prior_jobs = len(list(args.job_dir.glob("*")))
 jobdir_path = args.job_dir / f"{num_prior_jobs:06d}"
@@ -52,8 +52,36 @@ srun --gpus={args.num_gpus} --nodes=1 --mem-per-gpu={args.mem_per_gpu}G --cpus-p
         f.write(srun_file_content)
 
 
+def make_sbatch():
+    current_working_dir = Path.cwd().absolute()
+    sbatch_path = jobdir_path / f"sbatch.bash"
+    docker_image_path = Path(
+        "kylevedder_offline_sceneflow_latest.sqsh").absolute()
+    assert docker_image_path.is_file(
+    ), f"Docker image {docker_image_path} squash file does not exist"
+    sbatch_file_content = f"""#!/bin/bash
+#SBATCH --job-name={args.job_name}
+#SBATCH --qos={args.qos}
+#SBATCH --partition={args.partition}
+#SBATCH --nodes=1
+#SBATCH --output={jobdir_path}/nsfp_%a.out
+#SBATCH --error={jobdir_path}/nsfp_%a.err
+#SBATCH --time={get_runtime_format(job_runtime_mins)}
+#SBATCH --gpus={args.num_gpus}
+#SBATCH --mem-per-gpu={args.mem_per_gpu}G
+#SBATCH --cpus-per-gpu={args.cpus_per_gpu}
+#SBATCH --exclude=kd-2080ti-2.grasp.maas
+#SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
+#SBATCH --container-image={docker_image_path}
+
+bash {jobdir_path}/command.sh; echo 'done' > {jobdir_path}/job.done
+"""
+    with open(sbatch_path, "w") as f:
+        f.write(sbatch_file_content)
+
+
 def make_screen():
-    screen_path = jobdir_path / f"runme.sh"
+    screen_path = jobdir_path / f"screen.sh"
     screen_file_content = f"""#!/bin/bash
 screen -L -Logfile {jobdir_path}/stdout.log -dmS {args.job_name} bash {jobdir_path}/srun.sh
 """
@@ -62,9 +90,15 @@ screen -L -Logfile {jobdir_path}/stdout.log -dmS {args.job_name} bash {jobdir_pa
 
 
 make_command_file(args.command)
-make_srun()
-make_screen()
+if args.use_srun:
+    make_srun()
+    make_screen()
+else:
+    make_sbatch()
 if not args.dry_run:
-    run_cmd(f"bash {jobdir_path}/runme.sh")
+    if args.use_srun:
+        run_cmd(f"bash {jobdir_path}/screen.sh")
+    else:
+        run_cmd(f"sbatch {jobdir_path}/sbatch.bash")
 
 print(f"Config files written to {jobdir_path.absolute()}")
