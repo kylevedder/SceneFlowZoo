@@ -90,7 +90,7 @@ def make_sbatch():
 #SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
 #SBATCH --container-image={docker_image_path}
 
-bash {jobdir_path}/command.sh; echo 'done' > {jobdir_path}/job.done
+bash {jobdir_path}/command.sh | tee command.log && echo 'done' > {jobdir_path}/job.done
 """
     with open(sbatch_path, "w") as f:
         f.write(sbatch_file_content)
