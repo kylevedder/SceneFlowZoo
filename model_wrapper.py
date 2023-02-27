@@ -90,9 +90,10 @@ class EndpointDistanceMetricRawTorch():
         assert pc.shape[
             1] == 3, f"Shapes do not match: {regressed_flow.shape[1]} vs 3"
 
-        # L0 norm the XY coordinates needs to be within the close object threshold.
-        is_close_mask = torch.norm(pc[:, :2], dim=1,
-                                   p=0) <= self.close_object_threshold_meters
+        # L_\infty norm the XY coordinates needs to be within the close object threshold.
+        xy_points = pc[:, :2]
+        point_xy_distances = torch.norm(xy_points, dim=1, p=np.inf)
+        is_close_mask = point_xy_distances <= self.close_object_threshold_meters
 
         class_index = self.class_id_to_index_map[class_id]
         endpoint_errors = torch.norm(regressed_flow - gt_flow, dim=1, p=2)

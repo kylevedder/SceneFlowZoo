@@ -76,7 +76,7 @@ def savefig(name, pad: float = 0):
     plt.clf()
 
 
-def load_results(validation_folder: Path):
+def load_results(validation_folder: Path, full_distance: bool = True):
     print("Loading results from", validation_folder)
     config_folder = validation_folder / "configs"
     print()
@@ -88,15 +88,17 @@ def load_results(validation_folder: Path):
             continue
         for result_file in architecture_folder.glob("*.pkl"):
             result_lst.append(
-                ResultInfo(
-                    architecture_folder.name + "_" +
-                    result_file.stem.split(".")[0], result_file))
+                ResultInfo(architecture_folder.name + "_" +
+                           result_file.stem.split(".")[0],
+                           result_file,
+                           full_distance=full_distance))
 
     return sorted(result_lst, key=lambda x: x.pretty_name())
 
 
 print("Loading results...")
 results = load_results(args.results_folder)
+results_close = load_results(args.results_folder, full_distance=False)
 print("Done loading results.")
 print(results)
 
@@ -451,6 +453,13 @@ for metacatagory in METACATAGORIES:
     savefig(f"speed_vs_error_{metacatagory}")
     plt.clf()
 
+for metacatagory in METACATAGORIES:
+    plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
+    plot_mover_nonmover_vs_error_by_category(results_close, metacatagory, vmax=0.3)
+    print("saving", f"speed_vs_error_{metacatagory}")
+    savefig(f"speed_vs_error_{metacatagory}_close")
+    plt.clf()
+
 ################################################################################
 
 plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
@@ -461,17 +470,33 @@ plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
 plot_mover_epe_overall(results, 0.3)
 savefig(f"mover_epe_overall")
 
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
+plot_nonmover_epe_overall(results_close, 0.3)
+savefig(f"nonmover_epe_overall_close")
+
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
+plot_mover_epe_overall(results_close, 0.3)
+savefig(f"mover_epe_overall_close")
+
 ################################################################################
 
 plt.gcf().set_size_inches(5.5, 2.5)
 plot_metacatagory_epe_counts(results)
 savefig(f"epe_counts")
 
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_metacatagory_epe_counts(results_close)
+savefig(f"epe_counts_close")
+
 ################################################################################
 
 plt.gcf().set_size_inches(5.5, 2.5)
 plot_metacatagory_epe_counts_v15(results)
 savefig(f"epe_counts_v15")
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_metacatagory_epe_counts_v15(results_close)
+savefig(f"epe_counts_v15_close")
 
 ################################################################################
 

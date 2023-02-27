@@ -97,9 +97,9 @@ class ResultInfo():
 
         # Shapes should be (distance threshold, num_classes, num_speed_buckets, num_endpoint_error_buckets)
         assert self.results[
-                'per_class_bucketed_error_sum'].ndim == 4, f"per_class_bucketed_error_sum should have 4 dimensions but has {self.results['per_class_bucketed_error_sum'].ndim}"
+                'per_class_bucketed_error_sum'].ndim == 4, f"per_class_bucketed_error_sum should have 4 dimensions but has {self.results['per_class_bucketed_error_sum'].ndim}; shape is {self.results['per_class_bucketed_error_sum'].shape}"
         assert self.results[
-            'per_class_bucketed_error_count'].ndim == 4, f"per_class_bucketed_error_count should have 4 dimensions but has {self.results['per_class_bucketed_error_count'].ndim}"
+            'per_class_bucketed_error_count'].ndim == 4, f"per_class_bucketed_error_count should have 4 dimensions but has {self.results['per_class_bucketed_error_count'].ndim}; shape is {self.results['per_class_bucketed_error_count'].shape}"
 
         self.full_distance = full_distance
         if full_distance:

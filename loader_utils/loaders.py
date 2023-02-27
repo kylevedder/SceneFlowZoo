@@ -44,14 +44,14 @@ def load_json(filename: Path, verbose: bool = True):
         return json.load(f)
 
 
-def save_json(filename: Path, contents):
+def save_json(filename: Path, contents, indent=None):
     print(f'Saving {filename}', end='')
     filename = Path(filename)
     if filename.exists():
         filename.unlink()
     filename.parent.mkdir(parents=True, exist_ok=True)
     with open(filename, 'w') as f:
-        json.dump(contents, f)
+        json.dump(contents, f, indent=indent)
 
     print(f"\rSaved {filename} of size {_compute_size_metric(filename)}")
 
