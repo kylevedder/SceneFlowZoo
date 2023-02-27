@@ -16,12 +16,25 @@ parser.add_argument('--qos', type=str, default='ee-med')
 parser.add_argument('--partition', type=str, default='eaton-compute')
 parser.add_argument('--dry_run', action='store_true')
 parser.add_argument('--use_srun', action='store_true')
+parser.add_argument('--blacklist_substring', type=str, default=None)
 args = parser.parse_args()
 
 num_prior_jobs = len(list(args.job_dir.glob("*")))
 jobdir_path = args.job_dir / f"{num_prior_jobs:06d}"
 jobdir_path.mkdir(exist_ok=True, parents=True)
 job_runtime_mins = args.runtime_mins if args.runtime_hours is None else args.runtime_hours * 60
+
+
+def load_available_nodes():
+    res = run_cmd("sinfo --Node | awk '{print $1}' | tail +2", return_stdout=True)
+    available_nodes = res.split('\n')
+    return [e.strip() for e in available_nodes]
+
+
+node_blacklist = []
+if args.blacklist_substring is not None:
+    node_blacklist = [node for node in load_available_nodes() if args.blacklist_substring in node]
+
 
 
 def get_runtime_format(runtime_mins):
@@ -70,7 +83,7 @@ def make_sbatch():
 #SBATCH --gpus={args.num_gpus}
 #SBATCH --mem-per-gpu={args.mem_per_gpu}G
 #SBATCH --cpus-per-gpu={args.cpus_per_gpu}
-#SBATCH --exclude=kd-2080ti-2.grasp.maas
+#SBATCH --exclude={','.join(node_blacklist)}
 #SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
 #SBATCH --container-image={docker_image_path}
 
