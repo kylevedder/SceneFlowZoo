@@ -76,7 +76,7 @@ def savefig(name, pad: float = 0):
     plt.clf()
 
 
-def load_results(validation_folder: Path, full_distance: bool = True):
+def load_results(validation_folder: Path, full_distance: str = "ALL"):
     print("Loading results from", validation_folder)
     config_folder = validation_folder / "configs"
     print()
@@ -98,7 +98,8 @@ def load_results(validation_folder: Path, full_distance: bool = True):
 
 print("Loading results...")
 results = load_results(args.results_folder)
-results_close = load_results(args.results_folder, full_distance=False)
+results_close = load_results(args.results_folder, full_distance="CLOSE")
+results_far = load_results(args.results_folder, full_distance="FAR")
 print("Done loading results.")
 print(results)
 
@@ -203,7 +204,7 @@ def plot_nonmover_epe_overall(results: List[ResultInfo], vmax):
 
 def plot_mover_epe_overall(results: List[ResultInfo], vmax):
     for result_idx, result in enumerate(results):
-        mover_epe = result.get_mover_point_epe()
+        mover_epe = result.get_mover_point_all_epe()
         xs = bar_offset(result_idx, len(results), BAR_WIDTH)
         plt.bar(xs,
                 mover_epe,
@@ -421,6 +422,28 @@ def table_latency(results: List[ResultInfo]):
     return table
 
 
+def table_epe(results: List[ResultInfo]):
+    table_rows = []
+    for result in results:
+        foreground_counts = result.get_foreground_counts()
+        relaxed_percentage = foreground_counts[:2].sum(
+        ) / foreground_counts.sum()
+        strict_percentage = foreground_counts[0] / foreground_counts.sum()
+        epe_entries = [
+            result.get_mover_point_dynamic_epe(),
+            result.get_mover_point_static_epe(),
+            result.get_nonmover_point_epe()
+        ]
+        average_epe = np.average(epe_entries)
+
+        entries = [
+            result.pretty_name(), average_epe, *epe_entries,
+            relaxed_percentage, strict_percentage
+        ]
+        table_rows.append(entries)
+    return table_rows
+
+
 def plot_validation_pointcloud_size():
     validation_data_counts_path = args.results_folder / "validation_pointcloud_point_count.pkl"
     assert validation_data_counts_path.exists(
@@ -448,16 +471,27 @@ set_font(8)
 
 for metacatagory in METACATAGORIES:
     plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
-    plot_mover_nonmover_vs_error_by_category(results, metacatagory, vmax=0.3)
+    plot_mover_nonmover_vs_error_by_category(results, metacatagory, vmax=0.35)
     print("saving", f"speed_vs_error_{metacatagory}")
     savefig(f"speed_vs_error_{metacatagory}")
     plt.clf()
 
 for metacatagory in METACATAGORIES:
     plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
-    plot_mover_nonmover_vs_error_by_category(results_close, metacatagory, vmax=0.3)
+    plot_mover_nonmover_vs_error_by_category(results_close,
+                                             metacatagory,
+                                             vmax=0.35)
     print("saving", f"speed_vs_error_{metacatagory}")
     savefig(f"speed_vs_error_{metacatagory}_close")
+    plt.clf()
+
+for metacatagory in METACATAGORIES:
+    plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
+    plot_mover_nonmover_vs_error_by_category(results_far,
+                                             metacatagory,
+                                             vmax=0.35)
+    print("saving", f"speed_vs_error_{metacatagory}")
+    savefig(f"speed_vs_error_{metacatagory}_far")
     plt.clf()
 
 ################################################################################
@@ -478,6 +512,14 @@ plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
 plot_mover_epe_overall(results_close, 0.3)
 savefig(f"mover_epe_overall_close")
 
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
+plot_nonmover_epe_overall(results_far, 0.4)
+savefig(f"nonmover_epe_overall_far")
+
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
+plot_mover_epe_overall(results_far, 0.4)
+savefig(f"mover_epe_overall_far")
+
 ################################################################################
 
 plt.gcf().set_size_inches(5.5, 2.5)
@@ -488,6 +530,10 @@ plt.gcf().set_size_inches(5.5, 2.5)
 plot_metacatagory_epe_counts(results_close)
 savefig(f"epe_counts_close")
 
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_metacatagory_epe_counts(results_far)
+savefig(f"epe_counts_close_far")
+
 ################################################################################
 
 plt.gcf().set_size_inches(5.5, 2.5)
@@ -497,6 +543,10 @@ savefig(f"epe_counts_v15")
 plt.gcf().set_size_inches(5.5, 2.5)
 plot_metacatagory_epe_counts_v15(results_close)
 savefig(f"epe_counts_v15_close")
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_metacatagory_epe_counts_v15(results_far)
+savefig(f"epe_counts_v15_far")
 
 ################################################################################
 
@@ -516,14 +566,20 @@ savefig(f"epe_counts_v3_loose")
 
 ################################################################################
 
-print(table_latency(results))
-
-################################################################################
-
 plt.gcf().set_size_inches(5.5, 5.5 / 1.6 / 2)
 plot_validation_pointcloud_size()
 grid()
 savefig(f"validation_pointcloud_size", pad=0.02)
+
+################################################################################
+
+print(table_latency(results))
+
+################################################################################
+
+for row in table_epe(results_close):
+    print(" & ".join([f"${e:.3f}$" if type(e) != str else e
+                      for e in row]) + " \\\\")
 
 # def plot_meta_catagory_category_counts():
 #     fig, subplot_axes = plt.subplots(1, num_metacatagories)

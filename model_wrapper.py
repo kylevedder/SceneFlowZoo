@@ -306,16 +306,16 @@ class ModelWrapper(pl.LightningModule):
     def _log_validation_metrics(self, validation_result_dict):
         result_full_info = ResultInfo(Path(self.cfg.filename).stem,
                                       validation_result_dict,
-                                      full_distance=True)
+                                      full_distance='ALL')
         result_close_info = ResultInfo(Path(self.cfg.filename).stem,
                                        validation_result_dict,
-                                       full_distance=False)
+                                       full_distance='CLOSE')
         self.log("val/full/nonmover_epe",
                  result_full_info.get_nonmover_point_epe(),
                  sync_dist=False,
                  rank_zero_only=True)
         self.log("val/full/mover_epe",
-                 result_full_info.get_mover_point_epe(),
+                 result_full_info.get_mover_point_dynamic_epe(),
                  sync_dist=False,
                  rank_zero_only=True)
         self.log("val/close/nonmover_epe",
@@ -323,7 +323,7 @@ class ModelWrapper(pl.LightningModule):
                  sync_dist=False,
                  rank_zero_only=True)
         self.log("val/close/mover_epe",
-                 result_close_info.get_mover_point_epe(),
+                 result_close_info.get_mover_point_dynamic_epe(),
                  sync_dist=False,
                  rank_zero_only=True)
 
