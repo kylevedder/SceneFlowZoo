@@ -5,17 +5,17 @@ import argparse
 job_dir = Path() / 'job_dir'
 assert job_dir.exists(), f"Job dir {job_dir} does not exist"
 
-job_dir_folders = {int(f.name): f for f in job_dir.glob('*/')}
+job_dir_folders = {int(f.name.replace('.', '')): f for f in job_dir.glob('*/')}
 
 # Grab job log id
 
 parser = argparse.ArgumentParser()
-parser.add_argument('job_id', type=int, default=None)
+parser.add_argument('job_id', type=int, nargs='?', default=None)
 args = parser.parse_args()
 
 if args.job_id is None:
     print("Job ids:")
-    print(job_dir_folders.keys())
+    print(sorted(job_dir_folders.keys()))
     exit(0)
 
 job_id = args.job_id
