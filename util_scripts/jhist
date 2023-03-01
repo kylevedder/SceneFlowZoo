@@ -10,6 +10,8 @@ job_logs = sorted(job_dir.glob('*/'))
 def load_job(job_folder: Path):
     folder_name = job_folder.name
     command_file = job_folder / 'command.sh'
+    if not command_file.exists():
+        return None
     assert command_file.exists(), f"Command file {command_file} does not exist"
     # read the command file lines
     with open(command_file, 'r') as f:
@@ -31,6 +33,8 @@ def get_max_len_keys(dicts):
 
 # Load all the jobs
 jobs = [load_job(job) for job in job_logs]
+# Filter out the jobs that failed to load
+jobs = [job for job in jobs if job is not None]
 # Get the max length of each key
 max_len = get_max_len_keys(jobs)
 # Print the jobs in a table format
