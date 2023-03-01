@@ -118,7 +118,19 @@ if not args.dry_run:
     if args.use_srun:
         run_cmd(f"bash {jobdir_path}/screen.sh")
     else:
-        print(f"RUN COMMAND: sbatch {jobdir_path}/sbatch.bash")
-        # run_cmd(f"sbatch {jobdir_path}/sbatch.bash")
+        print("RUN THIS COMMAND TO SUBMIT THE JOB:")
+        print("|")
+        print("|")
+        print("|")
+        print("|")
+        print("|")
+        print("V")
+        print(f"sbatch {jobdir_path}/sbatch.bash")
+        print("^")
+        print("|")
+        print("|")
+        print("|")
+        print("|")
+        print("|")
 
 print(f"Config files written to {jobdir_path.absolute()}")
