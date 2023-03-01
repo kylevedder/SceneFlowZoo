@@ -150,8 +150,9 @@ class FastFlow3DSelfSupervisedLoss():
 
 class FastFlow3DDistillationLoss():
 
-    def __init__(self, device: str = None):
+    def __init__(self, device: str = None, fast_mover_scale: bool = False):
         super().__init__()
+        self.fast_mover_scale = fast_mover_scale
 
     def __call__(self, input_batch, model_res_dict):
         model_res = model_res_dict["forward"]
@@ -165,7 +166,15 @@ class FastFlow3DDistillationLoss():
                                            gt_flow_array_stack):
             gt_flow = from_fixed_array(gt_flow_array[0])
             assert est_flow.shape == gt_flow.shape, f"estimated_flow {est_flow.shape} != ground_truth_flow {gt_flow.shape}"
-            total_loss += torch.norm(est_flow - gt_flow, dim=1, p=2).mean()
+
+            importance_scale = torch.ones_like(gt_flow[:, 0])
+            if self.fast_mover_scale:
+                # Compute the importance scale
+                gt_speed = torch.norm(gt_flow, dim=1, p=2)
+                importance_scale = torch.min(1, torch.max(gt_speed * 2, 10.0))
+
+            total_loss += (torch.norm(est_flow - gt_flow, dim=1, p=2) *
+                           importance_scale).mean()
 
         return {
             "loss": total_loss,
