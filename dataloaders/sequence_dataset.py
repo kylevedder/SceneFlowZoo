@@ -64,6 +64,12 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
         return len(self.subsequence_id_shuffled_index)
 
     def _get_subsequence(self, index):
+        assert index >= 0 and index < len(
+            self
+        ), f"index must be >= 0 and < len(self), got {index} and {len(self)}"
+        assert index < len(
+            self.subsequence_id_shuffled_index
+        ), f"index must be < len(self.subsequence_id_shuffled_index), got {index} and {len(self.subsequence_id_shuffled_index)}"
         shuffled_index = self.subsequence_id_shuffled_index[index]
         id, subsequence_begin_index = self.subsequence_id_begin_index[
             shuffled_index]
@@ -92,6 +98,9 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
         return subsequence_lst
 
     def __getitem__(self, index):
+        assert index >= 0 and index < len(
+            self
+        ), f"index must be >= 0 and < len(self), got {index} and {len(self)}"
 
         subsequence_lst = self._get_subsequence(index)
 
