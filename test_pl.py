@@ -32,25 +32,38 @@ args = parser.parse_args()
 assert args.config.exists(), f"Config file {args.config} does not exist"
 cfg = Config.fromfile(args.config)
 
-test_sequence_loader = getattr(dataloaders,
-                               cfg.test_loader.name)(**cfg.test_loader.args)
-test_dataset = getattr(dataloaders, cfg.test_dataset.name)(
-    sequence_loader=test_sequence_loader, **cfg.test_dataset.args)
-test_dataloader = torch.utils.data.DataLoader(test_dataset,
-                                              **cfg.test_dataloader.args)
 
-if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
-    model = ModelWrapper(cfg)
-else:
-    assert args.checkpoint is not None, "Must provide checkpoint for validation"
-    assert args.checkpoint.exists(
-    ), f"Checkpoint file {args.checkpoint} does not exist"
-    model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg)
+def make_test_dataloader(cfg):
+    # Setup val infra
+    test_sequence_loader = getattr(
+        dataloaders, cfg.test_loader.name)(**cfg.test_loader.args)
+    test_dataset = getattr(dataloaders, cfg.test_dataset.name)(
+        sequence_loader=test_sequence_loader, **cfg.test_dataset.args)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset,
+                                                  **cfg.test_dataloader.args)
+
+    return test_dataloader
 
 
-trainer = pl.Trainer(devices=args.gpus,
-                     accelerator="gpu",
-                     strategy=DDPStrategy(find_unused_parameters=False),
-                     move_metrics_to_cpu=False, 
-                     )
+def setup_model(cfg):
+    if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
+        model = ModelWrapper(cfg)
+    else:
+        assert args.checkpoint is not None, "Must provide checkpoint for validation"
+        assert args.checkpoint.exists(
+        ), f"Checkpoint file {args.checkpoint} does not exist"
+        model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg)
+    return model
+
+
+test_dataloader = make_test_dataloader(cfg)
+model = setup_model(cfg)
+
+trainer = pl.Trainer(
+    devices=args.gpus,
+    accelerator="gpu",
+    strategy=DDPStrategy(find_unused_parameters=False),
+    resume_from_checkpoint=args.checkpoint,
+    move_metrics_to_cpu=False,
+)
 trainer.validate(model=model, dataloaders=test_dataloader)
