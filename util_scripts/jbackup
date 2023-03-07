@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+import sys
+sys.path.insert(0, '.')
+from pathlib import Path
+import argparse
+import shutil
+import datetime
+from loader_utils import load_json, save_json
+
+# Get path to weights file and name of model
+parser = argparse.ArgumentParser()
+parser.add_argument('weights', type=Path)
+parser.add_argument('--save_folder',
+                    type=Path,
+                    default=Path('/efs/sceneflow_golden_weights/'))
+args = parser.parse_args()
+
+# Check that weights file exists
+assert args.weights.exists(), f"Weights file {args.weights} does not exist"
+
+model_name = args.weights.parent.parent.name
+print(f"Model name: {model_name}")
+
+save_folder = args.save_folder / model_name
+# Make sure save folder exists
+save_folder.mkdir(parents=True, exist_ok=True)
+
+metadata_file = args.save_folder / 'metadata.json'
+if metadata_file.exists():
+    print(f"Loading metadata from {metadata_file}")
+    metadata = load_json(metadata_file)
+else:
+    metadata = {}
+
+# Copy weights file to save folder
+save_path = save_folder / (model_name + '.ckpt')
+print(f"Saving weights to {save_path}")
+shutil.copy(args.weights, save_path)
+
+# Update metadata
+metadata[model_name] = {
+    'weight_origin': str(args.weights),
+    'weight_dest': str(save_path),
+    'timestamp': datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
+}
+
+# Save metadata
+save_json(metadata_file, metadata, indent=4)

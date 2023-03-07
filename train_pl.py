@@ -1,4 +1,8 @@
 import os
+# PL_FAULT_TOLERANT_TRAINING=1 
+# to enable fault tolerant training
+#os.environ['PL_FAULT_TOLERANT_TRAINING'] = '1'
+
 import datetime
 import torch
 from pathlib import Path
@@ -141,8 +145,8 @@ def main():
         dirpath=checkpoint_path,
         filename="checkpoint_{epoch:03d}_{step:010d}",
         save_top_k=-1,
-        every_n_train_steps=cfg.save_every,
-        # every_n_epochs=1,
+        # every_n_train_steps=cfg.save_every,
+        every_n_epochs=1,
         save_on_train_epoch_end=True)
 
     trainer = pl.Trainer(devices=args.gpus,

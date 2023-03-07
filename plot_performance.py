@@ -294,8 +294,7 @@ def plot_metacatagory_epe_counts_v15(results: List[ResultInfo]):
                                     len(metacatagory_epe_counts_subset))
 
                 label = None
-                if epe_idx == len(
-                        metacatagory_epe_counts_subset) - 1 and meta_idx == 0:
+                if epe_idx == 0 and meta_idx == 0:
                     label = result.pretty_name()
                 rect = plt.barh([x_pos], [y_height],
                                 label=label,
@@ -469,9 +468,11 @@ def plot_validation_pointcloud_size():
 
 set_font(8)
 
+vmax = 0.4
+
 for metacatagory in METACATAGORIES:
     plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
-    plot_mover_nonmover_vs_error_by_category(results, metacatagory, vmax=0.35)
+    plot_mover_nonmover_vs_error_by_category(results, metacatagory, vmax=vmax)
     print("saving", f"speed_vs_error_{metacatagory}")
     savefig(f"speed_vs_error_{metacatagory}")
     plt.clf()
@@ -480,7 +481,7 @@ for metacatagory in METACATAGORIES:
     plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
     plot_mover_nonmover_vs_error_by_category(results_close,
                                              metacatagory,
-                                             vmax=0.35)
+                                             vmax=vmax)
     print("saving", f"speed_vs_error_{metacatagory}")
     savefig(f"speed_vs_error_{metacatagory}_close")
     plt.clf()
@@ -489,7 +490,7 @@ for metacatagory in METACATAGORIES:
     plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
     plot_mover_nonmover_vs_error_by_category(results_far,
                                              metacatagory,
-                                             vmax=0.35)
+                                             vmax=vmax)
     print("saving", f"speed_vs_error_{metacatagory}")
     savefig(f"speed_vs_error_{metacatagory}_far")
     plt.clf()

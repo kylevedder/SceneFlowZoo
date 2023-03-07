@@ -1,18 +1,20 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
 
 # sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
-sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
-    '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
+# sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
+#     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
+sequence_loader = WaymoSupervisedFlowSequenceLoader(
+    '/efs/waymo_open_preprocessed/train/')
 
-sequence_id = sequence_loader.get_sequence_ids()[29]
+sequence_id = sequence_loader.get_sequence_ids()[0]
 print("Sequence ID: ", sequence_id)
-sequence_id = "e2e921fe-e489-3656-a0a2-5e17bd399ddf"
+# sequence_id = "e2e921fe-e489-3656-a0a2-5e17bd399ddf"
 sequence = sequence_loader.load_sequence(sequence_id)
 
 # make open3d visualizer
@@ -32,12 +34,12 @@ def sequence_idx_to_color(idx):
 
 
 frame_list = sequence.load_frame_list(0)
-for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[131:132])):
+for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[:2])):
     pc = frame_dict['relative_pc']
     pose = frame_dict['relative_pose']
     flowed_pc = frame_dict['relative_flowed_pc']
     classes = frame_dict['pc_classes']
-    is_grounds = frame_dict['pc_is_ground']
+    # is_grounds = frame_dict['pc_is_ground']
 
     is_stop_sign = classes == 21
 

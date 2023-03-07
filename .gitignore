@@ -4,8 +4,10 @@
 docker_history.txt
 work_dirs/
 model_checkpoints/
+model_checkpoints_old/
 tb_logs/
 tb_logs_old/
+tb_logs_remote/
 nsfp_split_configs/
 lightning_logs/
 kylevedder_offline_sceneflow_latest.sqsh
@@ -14,3 +16,4 @@ validation_results/
 **.pkl
 **.png
 job_dir/
+.pl_auto_save.ckpt

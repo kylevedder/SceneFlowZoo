@@ -151,6 +151,7 @@ class ResultInfo():
             "fastflow3d_nsfp_distilatation": "DRLFS (Ours)",
             "fastflow3d_nsfp_distilatation_2x": "DRLFS 2x (Ours)",
             "fastflow3d_nsfp_distilatation_half": "DRLFS 0.5x (Ours)",
+            "fastflow3d_nsfp_distilatation_speed_scaled": "DRLFS (Ours, speed scaled)",
             "fastflow3d_supervised": "FastFlow3D",
             "fastflow3d_supervised_no_scale": "FastFlow3D (no scale)",
             "nsfp_unsupervised_flow_data_cached": "NSFP",

@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import pickle
 import subprocess
+import numpy as np
 
 
 def _compute_size_metric(filepath: Path):
@@ -14,7 +15,23 @@ def _compute_size_metric(filepath: Path):
         return f'{size / (1024 * 1024):.2f} MB'
     else:
         return f'{size / (1024 * 1024 * 1024):.2f} GB'
+    
 
+def load_npz(filepath: Path):
+    filepath = Path(filepath)
+    assert filepath.exists(), f'{filepath} does not exist'
+    print(f'Loading {filepath} of size {_compute_size_metric(filepath)}')
+    return np.load(filepath, allow_pickle=True)
+
+
+def save_npz(filepath: Path, npz):
+    filepath = Path(filepath)
+    print(f'Saving {filepath}', end='')
+    if filepath.exists():
+        filepath.unlink()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(filepath, **npz)
+    print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
 
 def load_pickle(filepath: Path):
     filepath = Path(filepath)

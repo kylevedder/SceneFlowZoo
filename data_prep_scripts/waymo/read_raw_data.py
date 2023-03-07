@@ -3,11 +3,11 @@ from loader_utils import load_npz
 from pathlib import Path
 from typing import List, Tuple, Dict, Any
 
-from dataloaders import WaymoRawSequenceLoader
+from dataloaders import WaymoSupervisedFlowSequenceLoader
 
 
 root_path = Path('/efs/waymo_open_preprocessed/train')
-sequence_loader = WaymoRawSequenceLoader(root_path)
+sequence_loader = WaymoSupervisedFlowSequenceLoader(root_path)
 
 for sequence_id in sequence_loader.get_sequence_ids():
     sequence = sequence_loader.load_sequence(sequence_id)

@@ -15,21 +15,48 @@ class WaymoFrame:
     def __init__(self, frame_dir: Path, frame_name: str,
                  frame_transform_lst: List[float]):
         self.name = frame_name
+
         self.file_path = Path(frame_dir) / frame_name
         assert self.file_path.is_file(
         ), f'file {self.file_path} does not exist'
-        self.transform = np.array(frame_transform_lst).reshape(4, 4)
 
-    def __repr__(self):
+        assert len(
+            frame_transform_lst
+        ) == 16, f'Expected 16 elements, got {len(frame_transform_lst)}'
+        self.transform = SE3.from_array(
+            np.array(frame_transform_lst).reshape(4, 4))
+
+    def __repr__(self) -> str:
         return f'WaymoFrame({self.name})'
 
-    def get_log_name(self):
+    def get_log_name(self) -> str:
         return self.name.split('_frame_')[0]
 
+    def load_frame_data(self) -> Tuple[PointCloud, np.ndarray, np.ndarray]:
+        frame_data = dict(load_npz(self.file_path))['frame']
+        # - points - [N, 5] matrix which stores the [x, y, z, intensity, elongation] in the frame reference
+        # - flows - [N, 4] matrix where each row is the flow for each point in the form [vx, vy, vz, label] in the reference frame
+        assert frame_data.shape[
+            1] == 9, f'Expected 9 columns, got {frame_data.shape[1]}'
+        points = frame_data[:, :3]
+        flows = frame_data[:, 5:8]
+        labels = frame_data[:, 8]
+        return PointCloud(points), flows, labels
+
     def load_point_cloud(self) -> PointCloud:
-        pc = load_npz(self.file_path)
-        breakpoint()
-        return PointCloud.load(self.file_path)
+        points, _, _ = self.load_frame_data()
+        return points
+
+    def load_flow(self) -> np.ndarray:
+        _, flows, _ = self.load_frame_data()
+        return flows
+
+    def load_labels(self) -> np.ndarray:
+        _, _, labels = self.load_frame_data()
+        return labels
+
+    def load_transform(self) -> SE3:
+        return self.transform
 
 
 class WaymoRawSequence():
@@ -52,42 +79,31 @@ class WaymoRawSequence():
     def __len__(self):
         return len(self.sequence_metadata_lst)
 
-    def _load_pc(self, idx) -> PointCloud:
+    def _get_frame(self, idx: int) -> WaymoFrame:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.sequence_name}'
-        frame = self.sequence_metadata_lst[idx][0]
-        return frame.load_point_cloud()
-
-    def _load_pose(self, idx) -> SE3:
-        assert idx < len(
-            self
-        ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
-        timestamp = self.timestamp_list[idx]
-        infos_idx = self.timestamp_to_info_idx_map[timestamp]
-        frame_info = self.frame_infos.iloc[infos_idx]
-        se3 = SE3.from_rot_w_x_y_z_translation_x_y_z(
-            frame_info['qw'], frame_info['qx'], frame_info['qy'],
-            frame_info['qz'], frame_info['tx_m'], frame_info['ty_m'],
-            frame_info['tz_m'])
-        return se3
+        frame, _ = self.sequence_metadata_lst[idx]
+        return frame
 
     def load(self, idx: int, relative_to_idx: int) -> Dict[str, Any]:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
-        pc = self._load_pc(idx)
-        start_pose = self._load_pose(relative_to_idx)
-        idx_pose = self._load_pose(idx)
+        idx_frame = self._get_frame(idx)
+        relative_to_frame = self._get_frame(relative_to_idx)
+        pc = idx_frame.load_point_cloud()
+        start_pose = relative_to_frame.load_transform()
+        idx_pose = relative_to_frame.load_transform()
         relative_pose = start_pose.inverse().compose(idx_pose)
-        absolute_global_frame_pc = pc.transform(idx_pose)
-        is_ground_points = self.is_ground_points(absolute_global_frame_pc)
-        pc = pc.mask_points(~is_ground_points)
+        # absolute_global_frame_pc = pc.transform(idx_pose)
+        # is_ground_points = self.is_ground_points(absolute_global_frame_pc)
+        # pc = pc.mask_points(~is_ground_points)
         relative_global_frame_pc = pc.transform(relative_pose)
         return {
             "relative_pc": relative_global_frame_pc,
             "relative_pose": relative_pose,
-            "log_id": self.log_id,
+            "log_id": self.sequence_name,
             "log_idx": idx,
         }
 
