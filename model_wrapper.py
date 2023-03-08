@@ -129,6 +129,12 @@ class EndpointDistanceMetricRawTorch():
         self.total_forward_time += run_time
         self.total_forward_count += run_count
 
+    def reset(self):
+        self.per_class_bucketed_error_sum.zero_()
+        self.per_class_bucketed_error_count.zero_()
+        self.total_forward_time.zero_()
+        self.total_forward_count.zero_()
+
 
 class ModelWrapper(pl.LightningModule):
 
@@ -303,7 +309,7 @@ class ModelWrapper(pl.LightningModule):
     def _save_validation_data(self, save_dict):
         save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
 
-    def _log_validation_metrics(self, validation_result_dict):
+    def _log_validation_metrics(self, validation_result_dict, verbose=True):
         result_full_info = ResultInfo(Path(self.cfg.filename).stem,
                                       validation_result_dict,
                                       full_distance='ALL')
@@ -327,9 +333,26 @@ class ModelWrapper(pl.LightningModule):
                  sync_dist=False,
                  rank_zero_only=True)
 
+        if verbose:
+            print("Validation Results:")
+            print(
+                f"Close Mover EPE: {result_close_info.get_mover_point_dynamic_epe()}"
+            )
+            print(
+                f"Close Nonmover EPE: {result_close_info.get_nonmover_point_epe()}"
+            )
+            print(
+                f"Full Mover EPE: {result_full_info.get_mover_point_dynamic_epe()}"
+            )
+            print(
+                f"Full Nonmover EPE: {result_full_info.get_nonmover_point_epe()}"
+            )
+
     def validation_epoch_end(self, batch_parts):
         import time
         before_gather = time.time()
+
+        # These are copies of the metric values on each rank.
         per_class_bucketed_error_sum, per_class_bucketed_error_count, total_forward_time, total_forward_count = self.metric.gather(
             self.all_gather)
 
@@ -338,6 +361,10 @@ class ModelWrapper(pl.LightningModule):
         print(
             f"Rank {self.global_rank} gathers done in {after_gather - before_gather}."
         )
+
+        # Reset the metric for the next epoch. We have to do this on each rank, and because we are using
+        # copies of the metric values above, we don't have to worry about over-writing the values.
+        self.metric.reset()
 
         if self.global_rank != 0:
             return {}
