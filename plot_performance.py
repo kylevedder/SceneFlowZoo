@@ -140,7 +140,7 @@ def bar_offset(pos_idx, num_pos, position_offset=0.2):
                                                                      1)
 
 
-BAR_WIDTH = 0.1
+BAR_WIDTH = 0.07
 
 num_metacatagories = len(METACATAGORIES)
 

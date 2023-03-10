@@ -56,14 +56,24 @@ def setup_model(cfg):
     return model
 
 
-test_dataloader = make_test_dataloader(cfg)
-model = setup_model(cfg)
+pl.seed_everything(42069)
 
-trainer = pl.Trainer(
-    devices=args.gpus,
-    accelerator="gpu",
-    strategy=DDPStrategy(find_unused_parameters=False),
-    resume_from_checkpoint=args.checkpoint,
-    move_metrics_to_cpu=False,
-)
-trainer.validate(model=model, dataloaders=test_dataloader)
+test_dataloader = make_test_dataloader(cfg)
+
+print("Val dataloader length:", len(test_dataloader))
+
+model = setup_model(cfg)
+trainer = pl.Trainer(devices=args.gpus,
+                         accelerator="gpu",
+                         strategy=DDPStrategy(find_unused_parameters=False),
+                         move_metrics_to_cpu=False,
+                         num_sanity_val_steps=2,
+                         log_every_n_steps=2,
+                         val_check_interval=cfg.validate_every,
+                         max_epochs=cfg.epochs,
+                         resume_from_checkpoint=args.checkpoint,
+                         accumulate_grad_batches=cfg.accumulate_grad_batches
+                         if hasattr(cfg, "accumulate_grad_batches") else 1,
+                         gradient_clip_val=cfg.gradient_clip_val if hasattr(
+                             cfg, "gradient_clip_val") else 0.0)
+trainer.validate(model, dataloaders=test_dataloader)

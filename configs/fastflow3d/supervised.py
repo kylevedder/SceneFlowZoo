@@ -15,7 +15,7 @@ def get_max_sequence_length(sequence_dir):
 max_train_sequence_length = get_max_sequence_length(train_sequence_dir)
 max_test_sequence_length = get_max_sequence_length(test_sequence_dir)
 
-epochs = 50
+epochs = 100
 learning_rate = 2e-6
 save_every = 500
 validate_every = 500

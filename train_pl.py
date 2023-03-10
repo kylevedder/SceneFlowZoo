@@ -62,7 +62,6 @@ def make_train_dataloader(cfg):
             sequence_loader=train_sequence_loader, **cfg.dataset.args)
         return torch.utils.data.DataLoader(train_dataset,
                                            **cfg.dataloader.args)
-        return train_dataloader
 
     # Handle multiple loader case
     assert isinstance(cfg.loader, list) and isinstance(cfg.dataset, list), \
@@ -138,6 +137,9 @@ def main():
 
     train_dataloader = make_train_dataloader(cfg)
     val_dataloader = make_val_dataloader(cfg)
+
+    print("Train dataloader length:", len(train_dataloader))
+    print("Val dataloader length:", len(val_dataloader))
 
     model = ModelWrapper(cfg)
 
