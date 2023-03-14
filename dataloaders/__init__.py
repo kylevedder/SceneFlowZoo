@@ -4,6 +4,7 @@ from .argoverse_unsupervised_flow import ArgoverseUnsupervisedFlowSequenceLoader
 
 from .waymo_raw_lidar import WaymoRawSequenceLoader, WaymoRawSequence, WaymoFrame
 from .waymo_supervised_flow import WaymoSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence
+from .waymo_unsupervised_flow import WaymoUnsupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequence
 
 from .sequence_dataset import OriginMode, SubsequenceRawDataset, SubsequenceSupervisedFlowDataset, SubsequenceUnsupervisedFlowDataset, ConcatDataset
 from .pointcloud_dataset import PointCloudDataset

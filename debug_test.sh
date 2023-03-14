@@ -1,0 +1,2 @@
+#!/bin/bash
+python test_pl.py configs/fastflow3d/supervised_val_debug.py --checkpoint ./model_checkpoints/fastflow3d/supervised/2023_03_05-03_32_34_PM/checkpoint_epoch=038_step=0000061854.ckpt --gpus 4

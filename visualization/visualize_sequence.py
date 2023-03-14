@@ -1,13 +1,13 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, WaymoRawSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, WaymoRawSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
 
-sequence_loader = ArgoverseRawSequenceLoader('/bigdata/argoverse_lidar/train/')
-sequence_loader = WaymoRawSequenceLoader('/efs/waymo_open_preprocessed/train/')
+# sequence_loader = ArgoverseRawSequenceLoader('/bigdata/argoverse_lidar/train/')
+sequence_loader = WaymoSupervisedFlowSequenceLoader('/efs/waymo_open_preprocessed/train/')
 sequence = sequence_loader.load_sequence(sequence_loader.get_sequence_ids()[0])
 
 # make open3d visualizer
@@ -26,7 +26,9 @@ def sequence_idx_to_color(idx):
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
-for idx, (pc, pose) in enumerate(tqdm.tqdm(sequence.load_frame_list(0))):
+for idx, entry_dict in enumerate(tqdm.tqdm(sequence.load_frame_list(0))):
+    pc = entry_dict['relative_pc']
+    pose = entry_dict['relative_pose']
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pc.points)
     vis.add_geometry(pcd)

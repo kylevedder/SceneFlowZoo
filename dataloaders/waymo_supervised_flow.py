@@ -5,18 +5,27 @@ import pandas as pd
 from pointclouds import PointCloud, SE3, SE2
 import numpy as np
 
-from . import WaymoRawSequence, WaymoRawSequenceLoader
+from . import WaymoRawSequence, WaymoRawSequenceLoader, WaymoFrame
 
 
 class WaymoSupervisedFlowSequence(WaymoRawSequence):
+
+    def __init__(self,
+                 sequence_name: str,
+                 sequence_metadata_lst: List[Tuple[WaymoFrame, WaymoFrame]],
+                 verbose: bool = False,
+                 refresh_hz: int = 10):
+        super().__init__(sequence_name, sequence_metadata_lst, verbose)
+        self.refresh_hz = refresh_hz
 
     def load(self, idx: int, relative_to_idx: int) -> Dict[str, Any]:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         idx_frame = self._get_frame(idx)
-        relative_to_frame = self._get_frame(relative_to_idx)
+        start_frame = self._get_frame(relative_to_idx)
         pc, flow, labels = idx_frame.load_frame_data()
+        flow = flow / self.refresh_hz
 
         assert pc.points.shape[0] == flow.shape[
             0], f'pc and flow have different number of points, pc: {pc.points.shape[0]}, flow: {flow.shape[0]}'
@@ -25,8 +34,8 @@ class WaymoSupervisedFlowSequence(WaymoRawSequence):
 
         flowed_pc = pc.flow(flow)
 
-        start_pose = relative_to_frame.load_transform()
-        idx_pose = relative_to_frame.load_transform()
+        start_pose = start_frame.load_transform()
+        idx_pose = idx_frame.load_transform()
         relative_pose = start_pose.inverse().compose(idx_pose)
         # absolute_global_frame_pc = pc.transform(idx_pose)
         # is_ground_points = self.is_ground_points(absolute_global_frame_pc)

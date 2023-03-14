@@ -15,12 +15,13 @@ def _compute_size_metric(filepath: Path):
         return f'{size / (1024 * 1024):.2f} MB'
     else:
         return f'{size / (1024 * 1024 * 1024):.2f} GB'
-    
 
-def load_npz(filepath: Path):
+
+def load_npz(filepath: Path, verbose: bool = True):
     filepath = Path(filepath)
     assert filepath.exists(), f'{filepath} does not exist'
-    print(f'Loading {filepath} of size {_compute_size_metric(filepath)}')
+    if verbose:
+        print(f'Loading {filepath} of size {_compute_size_metric(filepath)}')
     return np.load(filepath, allow_pickle=True)
 
 
@@ -32,6 +33,25 @@ def save_npz(filepath: Path, npz):
     filepath.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(filepath, **npz)
     print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
+
+
+def load_npy(filepath: Path, verbose: bool = True):
+    filepath = Path(filepath)
+    assert filepath.exists(), f'{filepath} does not exist'
+    if verbose:
+        print(f'Loading {filepath} of size {_compute_size_metric(filepath)}')
+    return np.load(filepath, allow_pickle=True)
+
+
+def save_npy(filepath: Path, npy):
+    filepath = Path(filepath)
+    print(f'Saving {filepath}', end='')
+    if filepath.exists():
+        filepath.unlink()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    np.save(filepath, npy)
+    print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
+
 
 def load_pickle(filepath: Path):
     filepath = Path(filepath)

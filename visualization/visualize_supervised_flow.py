@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
@@ -12,7 +12,7 @@ import tqdm
 sequence_loader = WaymoSupervisedFlowSequenceLoader(
     '/efs/waymo_open_preprocessed/train/')
 
-sequence_id = sequence_loader.get_sequence_ids()[0]
+sequence_id = sequence_loader.get_sequence_ids()[1]
 print("Sequence ID: ", sequence_id)
 # sequence_id = "e2e921fe-e489-3656-a0a2-5e17bd399ddf"
 sequence = sequence_loader.load_sequence(sequence_id)
@@ -34,23 +34,17 @@ def sequence_idx_to_color(idx):
 
 
 frame_list = sequence.load_frame_list(0)
-for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[:2])):
+for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[1:13])):
     pc = frame_dict['relative_pc']
     pose = frame_dict['relative_pose']
     flowed_pc = frame_dict['relative_flowed_pc']
     classes = frame_dict['pc_classes']
-    # is_grounds = frame_dict['pc_is_ground']
 
-    is_stop_sign = classes == 21
+
 
     # Add base point cloud
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pc.points)
-    pc_color = np.zeros_like(pc.points)
-    # Base point cloud is red
-    pc_color[~is_stop_sign, 0] = 1.0
-    pc_color[is_stop_sign, 1] = 1.0
-    pcd.colors = o3d.utility.Vector3dVector(pc_color)
     vis.add_geometry(pcd)
 
     # Add flowed point cloud
@@ -75,19 +69,17 @@ for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[:2])):
         line_set.lines = o3d.utility.Vector2iVector(lines)
         # Line set is blue
         line_set.colors = o3d.utility.Vector3dVector(
-            [[0, 0, 1] for _ in range(len(lines))])
+            [[1, 0, 0] for _ in range(len(lines))])
         vis.add_geometry(line_set)
 
-        # Add gt pc from next frame
-        next_pc = frame_list[idx + 1]['relative_pc']
-        next_pcd = o3d.geometry.PointCloud()
-        next_pcd.points = o3d.utility.Vector3dVector(next_pc.points)
-        next_pc_color = np.zeros_like(next_pc.points)
-        # Next point cloud is green
-        pc_color[~is_stop_sign, 0] = 1.0
-        pc_color[is_stop_sign, 1] = 1.0
-        next_pcd.colors = o3d.utility.Vector3dVector(next_pc_color)
-        vis.add_geometry(next_pcd)
+        # # Add gt pc from next frame
+        # next_pc = frame_list[idx + 1]['relative_pc']
+        # next_pcd = o3d.geometry.PointCloud()
+        # next_pcd.points = o3d.utility.Vector3dVector(next_pc.points)
+        # next_pc_color = np.zeros_like(next_pc.points)
+
+        # next_pcd.colors = o3d.utility.Vector3dVector(next_pc_color)
+        # vis.add_geometry(next_pcd)
 
     # Add center of mass
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1)

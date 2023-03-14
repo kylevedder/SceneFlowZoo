@@ -66,14 +66,19 @@ if __name__ == '__main__':
 
     t = time.time()
 
-    pool = mp.Pool(min(n_cores, len(tfrecord_filenames)))
 
-    for _ in tqdm(pool.imap_unordered(preprocess_wrap, tfrecord_filenames), total=len(tfrecord_filenames)):
-        pass
+    if n_cores > 1:
+        pool = mp.Pool(min(n_cores, len(tfrecord_filenames)))
 
-    # Close Pool and let all the processes complete
-    pool.close()
-    pool.join()  # postpones the execution of next line of code until all processes in the queue are done.
+        for _ in tqdm(pool.imap_unordered(preprocess_wrap, tfrecord_filenames), total=len(tfrecord_filenames)):
+            pass
+
+        # Close Pool and let all the processes complete
+        pool.close()
+        pool.join()  # postpones the execution of next line of code until all processes in the queue are done.
+    else:
+        for tfrecord_file in tqdm(tfrecord_filenames):
+            preprocess_wrap(tfrecord_file)
 
     # Merge look up tables
     print("Merging individual metadata...")

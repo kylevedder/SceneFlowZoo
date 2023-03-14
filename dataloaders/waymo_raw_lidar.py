@@ -33,13 +33,17 @@ class WaymoFrame:
         return self.name.split('_frame_')[0]
 
     def load_frame_data(self) -> Tuple[PointCloud, np.ndarray, np.ndarray]:
-        frame_data = dict(load_npz(self.file_path))['frame']
+        frame_data = dict(load_npz(self.file_path, verbose=False))['frame']
         # - points - [N, 5] matrix which stores the [x, y, z, intensity, elongation] in the frame reference
         # - flows - [N, 4] matrix where each row is the flow for each point in the form [vx, vy, vz, label] in the reference frame
         assert frame_data.shape[
             1] == 9, f'Expected 9 columns, got {frame_data.shape[1]}'
         points = frame_data[:, :3]
         flows = frame_data[:, 5:8]
+        # For some reason the flows are -1s for the first entry
+        if (flows == -1).all():
+            flows = np.zeros_like(flows)
+        
         labels = frame_data[:, 8]
         return PointCloud(points), flows, labels
 
@@ -67,6 +71,7 @@ class WaymoRawSequence():
                  verbose: bool = False):
         self.sequence_name = sequence_name
         self.sequence_metadata_lst = sequence_metadata_lst
+        
 
         if verbose:
             print(
@@ -90,11 +95,12 @@ class WaymoRawSequence():
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
+
         idx_frame = self._get_frame(idx)
-        relative_to_frame = self._get_frame(relative_to_idx)
+        start_frame = self._get_frame(relative_to_idx)
         pc = idx_frame.load_point_cloud()
-        start_pose = relative_to_frame.load_transform()
-        idx_pose = relative_to_frame.load_transform()
+        start_pose = start_frame.load_transform()
+        idx_pose = idx_frame.load_transform()
         relative_pose = start_pose.inverse().compose(idx_pose)
         # absolute_global_frame_pc = pc.transform(idx_pose)
         # is_ground_points = self.is_ground_points(absolute_global_frame_pc)
@@ -107,8 +113,14 @@ class WaymoRawSequence():
             "log_idx": idx,
         }
 
-    def load_frame_list(self, relative_to_idx) -> List[Tuple[PointCloud, SE3]]:
-        return [self.load(idx, relative_to_idx) for idx in range(len(self))]
+    def load_frame_list(
+            self, relative_to_idx: Optional[int]) -> List[Dict[str, Any]]:
+
+        return [
+            self.load(idx,
+                      relative_to_idx if relative_to_idx is not None else idx)
+            for idx in range(len(self))
+        ]
 
 
 class WaymoRawSequenceLoader():
@@ -145,12 +157,6 @@ class WaymoRawSequenceLoader():
 
     def get_sequence_ids(self):
         return sorted(self.log_lookup.keys())
-
-    def _raw_load_sequence(self, log_id: str) -> WaymoRawSequence:
-        assert log_id in self.log_lookup, f'log_id {log_id} does not exist'
-        log_dir = self.log_lookup[log_id]
-        assert log_dir.is_dir(), f'log_id {log_id} does not exist'
-        return WaymoRawSequence(log_id, log_dir, verbose=self.verbose)
 
     def load_sequence(self, log_id: str) -> WaymoRawSequence:
         metadata_lst = self.log_lookup[log_id]
