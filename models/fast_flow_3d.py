@@ -65,6 +65,8 @@ class FastFlow3DSelfSupervisedLoss():
 
     def __call__(self, input_batch, model_res_dict: Dict[str, Dict[str, Any]]):
         warped_loss = self._warped_loss(model_res_dict["forward"])
+        # self._visualize_regressed_ground_truth_pcs(model_res_dict["forward"])
+
         res_dict = {
             "warped_loss": warped_loss,
         }
@@ -95,8 +97,10 @@ class FastFlow3DSelfSupervisedLoss():
 
         return res_dict
 
-    def _visualize_regressed_ground_truth_pcs(self, pc0_pc, pc1_pc,
-                                              regressed_flowed_pc0_to_pc1):
+    def _visualize_regressed_ground_truth_pcs(self, model_res):
+        regressed_flowed_pc0_to_pc1 = model_res["flow"]
+        pc0_pc = model_res["pc0_points_lst"]
+        pc1_pc = model_res["pc1_points_lst"]
         import open3d as o3d
         import numpy as np
         pc0_pc = pc0_pc.detach().cpu().numpy()
@@ -159,6 +163,8 @@ class FastFlow3DDistillationLoss():
         estimated_flows = model_res["flow"]
 
         gt_flow_array_stack = input_batch['flow_array_stack']
+        # self._visualize_regressed_ground_truth_pcs(model_res,
+        #                                            gt_flow_array_stack)
 
         total_loss = 0
         # Iterate through the batch
@@ -182,6 +188,68 @@ class FastFlow3DDistillationLoss():
         return {
             "loss": total_loss,
         }
+
+    def _visualize_regressed_ground_truth_pcs(self, model_res,
+                                              gt_flow_array_stack):
+        regressed_flowed_pc0_to_pc1_lst = model_res["flow"]
+        pc0_pc_lst = model_res["pc0_points_lst"]
+        pc1_pc_lst = model_res["pc1_points_lst"]
+        import open3d as o3d
+        import numpy as np
+        for regressed_flowed_pc0_to_pc1, pc0_pc, pc1_pc, gt_flow_array in zip(
+                regressed_flowed_pc0_to_pc1_lst, pc0_pc_lst, pc1_pc_lst,
+                gt_flow_array_stack):
+            gt_flow = from_fixed_array(gt_flow_array[0])
+            pc0_pc = pc0_pc.detach().cpu().numpy()
+            pc1_pc = pc1_pc.detach().cpu().numpy()
+            regressed_flowed_pc0_to_pc1 = pc0_pc + gt_flow.detach().cpu(
+            ).numpy()
+            #regressed_flowed_pc0_to_pc1.detach().cpu().numpy()
+            # breakpoint()
+
+            # make open3d visualizer
+            vis = o3d.visualization.Visualizer()
+            vis.create_window()
+            vis.get_render_option().point_size = 1.5
+            vis.get_render_option().background_color = (0, 0, 0)
+            vis.get_render_option().show_coordinate_frame = True
+            # set up vector
+            vis.get_view_control().set_up([0, 0, 1])
+
+            # Add input PC
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(pc0_pc)
+            pc_color = np.zeros_like(pc0_pc)
+            pc_color[:, 0] = 1
+            pc_color[:, 1] = 1
+            pcd.colors = o3d.utility.Vector3dVector(pc_color)
+            vis.add_geometry(pcd)
+
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(pc1_pc)
+            pc_color = np.zeros_like(pc1_pc)
+            pc_color[:, 1] = 1
+            pc_color[:, 2] = 1
+            pcd.colors = o3d.utility.Vector3dVector(pc_color)
+            vis.add_geometry(pcd)
+
+            # Add line set between pc0 and regressed pc1
+            line_set = o3d.geometry.LineSet()
+            assert len(pc0_pc) == len(
+                regressed_flowed_pc0_to_pc1
+            ), f"{len(pc0_pc)} != {len(regressed_flowed_pc0_to_pc1)}"
+            line_set_points = np.concatenate(
+                [pc0_pc, regressed_flowed_pc0_to_pc1], axis=0)
+
+            lines = np.array([[i, i + len(regressed_flowed_pc0_to_pc1)]
+                              for i in range(len(pc0_pc))])
+            line_set.points = o3d.utility.Vector3dVector(line_set_points)
+            line_set.lines = o3d.utility.Vector2iVector(lines)
+            line_set.colors = o3d.utility.Vector3dVector(
+                [[0, 0, 1] for _ in range(len(lines))])
+            vis.add_geometry(line_set)
+
+            vis.run()
 
 
 class FastFlow3DSupervisedLoss():

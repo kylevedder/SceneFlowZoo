@@ -31,7 +31,7 @@ loader = dict(name="WaymoUnsupervisedFlowSequenceLoader",
                         flow_data_path=train_flow_dir))
 
 dataloader = dict(
-    args=dict(batch_size=16, num_workers=16, shuffle=False, pin_memory=False))
+    args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))
 
 dataset = dict(name="SubsequenceUnsupervisedFlowDataset",
                args=dict(subsequence_length=SEQUENCE_LENGTH,

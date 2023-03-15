@@ -1,3 +1,5 @@
+_base_ = "../../pseudoimage.py"
+
 train_sequence_dir = "/efs/argoverse2/train/"
 train_flow_dir = "/efs/argoverse2/train_nsfp_flow/"
 
@@ -23,9 +25,9 @@ validate_every = 500
 SEQUENCE_LENGTH = 2
 
 model = dict(name="FastFlow3D",
-             args=dict(VOXEL_SIZE=(0.2, 0.2, 4),
-                       PSEUDO_IMAGE_DIMS=(512, 512),
-                       POINT_CLOUD_RANGE=(-51.2, -51.2, -3, 51.2, 51.2, 1),
+             args=dict(VOXEL_SIZE={{_base_.VOXEL_SIZE}},
+                       PSEUDO_IMAGE_DIMS={{_base_.PSEUDO_IMAGE_DIMS}},
+                       POINT_CLOUD_RANGE={{_base_.POINT_CLOUD_RANGE}},
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
 

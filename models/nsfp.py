@@ -34,11 +34,14 @@ class NSFP(nn.Module):
         self.flow_save_folder.mkdir(parents=True, exist_ok=True)
 
     def _save_result(self, log_id: str, batch_idx: int, minibatch_idx: int,
-                     delta_time: float, flow: torch.Tensor):
+                     delta_time: float, flow: torch.Tensor,
+                     valid_idxes: torch.Tensor):
         flow = flow.cpu().numpy()
+        valid_idxes = valid_idxes.cpu().numpy()
         data = {
             'delta_time': delta_time,
             'flow': flow,
+            'valid_idxes': valid_idxes,
         }
         seq_save_folder = self.flow_save_folder / log_id
         seq_save_folder.mkdir(parents=True, exist_ok=True)
@@ -61,6 +64,34 @@ class NSFP(nn.Module):
 
         return pc0_points_lst, pc0_valid_point_idxes, pc1_points_lst, pc1_valid_point_idxes
 
+    def _visualize_result(self, pc0_points: torch.Tensor,
+                          warped_pc0_points: torch.Tensor):
+
+        pc0_points = pc0_points.cpu().numpy()[0]
+        warped_pc0_points = warped_pc0_points.cpu().numpy()[0]
+
+        import open3d as o3d
+
+        line_set = o3d.geometry.LineSet()
+        assert len(pc0_points) == len(
+            warped_pc0_points
+        ), f'pc and flowed_pc must have same length, but got {len(pc0_pcd)} and {len(warped_pc0_points)}'
+        line_set_points = np.concatenate([pc0_points, warped_pc0_points],
+                                         axis=0)
+
+        pc0_pcd = o3d.geometry.PointCloud()
+        pc0_pcd.points = o3d.utility.Vector3dVector(pc0_points)
+        warped_pc0_pcd = o3d.geometry.PointCloud()
+        warped_pc0_pcd.points = o3d.utility.Vector3dVector(warped_pc0_points)
+
+        line_set = o3d.geometry.LineSet()
+        line_set.points = o3d.utility.Vector3dVector(line_set_points)
+        lines = np.array([[i, i + len(pc0_points)]
+                          for i in range(len(pc0_points))])
+        line_set.lines = o3d.utility.Vector2iVector(lines)
+
+        o3d.visualization.draw_geometries([pc0_pcd, warped_pc0_pcd, line_set])
+
     def forward(self, batched_sequence: Dict[str, torch.Tensor]):
         pc0_points_lst, pc0_valid_point_idxes, pc1_points_lst, pc1_valid_point_idxes = self._voxelize_batched_sequence(
             batched_sequence)
@@ -68,8 +99,10 @@ class NSFP(nn.Module):
         # process minibatch
         flows = []
         delta_times = []
-        for minibatch_idx, (pc0_points, pc1_points) in enumerate(
-                zip(pc0_points_lst, pc1_points_lst)):
+        for minibatch_idx, (pc0_points, pc1_points,
+                            pc0_valid_point_idx) in enumerate(
+                                zip(pc0_points_lst, pc1_points_lst,
+                                    pc0_valid_point_idxes)):
             pc0_points = torch.unsqueeze(pc0_points, 0)
             pc1_points = torch.unsqueeze(pc1_points, 0)
 
@@ -88,13 +121,15 @@ class NSFP(nn.Module):
                     after_time = time.time()
 
             delta_time = after_time - before_time
+            # self._visualize_result(pc0_points, warped_pc0_points)
             flow = warped_pc0_points - pc0_points
             self._save_result(
                 log_id=batched_sequence['log_ids'][minibatch_idx][0],
                 batch_idx=batched_sequence['data_index'].item(),
                 minibatch_idx=minibatch_idx,
                 delta_time=delta_time,
-                flow=flow)
+                flow=flow,
+                valid_idxes=pc0_valid_point_idx)
             flows.append(flow.squeeze(0))
             delta_times.append(delta_time)
 

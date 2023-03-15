@@ -1,6 +1,7 @@
+_base_ = "../../pseudoimage.py"
+
 is_trainable = False
 has_labels = False
-
 
 test_sequence_dir = "/efs/argoverse2/train/"
 flow_save_folder = "/efs/argoverse2/train_nsfp_flow/"
@@ -25,8 +26,8 @@ validate_every = 500
 SEQUENCE_LENGTH = 2
 
 model = dict(name="NSFP",
-             args=dict(VOXEL_SIZE=(0.2, 0.2, 4),
-                       POINT_CLOUD_RANGE=(-51.2, -51.2, -3, 51.2, 51.2, 1),
+             args=dict(VOXEL_SIZE={{_base_.VOXEL_SIZE}},
+                       POINT_CLOUD_RANGE={{_base_.POINT_CLOUD_RANGE}},
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH,
                        flow_save_folder=flow_save_folder))
 
