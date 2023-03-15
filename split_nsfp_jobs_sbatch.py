@@ -13,7 +13,8 @@ parser.add_argument('--configs_path',
                     type=Path,
                     default=Path("./nsfp_split_configs"))
 parser.add_argument('--runtime_mins', type=int, default=180)
-parser.add_argument('--job_prefix', type=str, default='np')
+parser.add_argument('--job_prefix', type=str, default='nsfp')
+parser.add_argument('--elevated', action='store_true')
 args = parser.parse_args()
 
 assert args.lidar_path.is_dir(), f"Path {args.lidar_path} is not a directory"
@@ -69,11 +70,19 @@ test_loader = dict(args=dict(log_subset={job_sequence_names}))
 def make_sbatch():
     current_working_dir = Path.cwd().absolute()
     sbatch_path = configs_path / f"sbatch.bash"
+    if args.elevated:
+        qos = "ee-med"
+        partition = "eaton-compute"
+    else:
+        qos = "batch"
+        partition = "batch"
     sbatch_file_content = f"""#!/bin/bash
 #SBATCH --job-name={args.job_prefix}
 #SBATCH --output={configs_path}/nsfp_%a.out
 #SBATCH --error={configs_path}/nsfp_%a.err
 #SBATCH --time={get_runtime_format(args.runtime_mins)}
+#SBATCH --qos={qos}
+#SBATCH --partition={partition}
 #SBATCH --gpus=1
 #SBATCH --mem-per-gpu=12G
 #SBATCH --cpus-per-gpu=2
