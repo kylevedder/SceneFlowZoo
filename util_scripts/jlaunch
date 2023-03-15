@@ -37,15 +37,31 @@ def load_available_nodes():
     return [e.strip() for e in available_nodes]
 
 
-node_blacklist = []
-if args.blacklist_substring is not None:
+def get_node_blacklist():
+    if args.blacklist_substring is None:
+        return []
+
     node_list = load_available_nodes()
-    print(f"Blacklisting nodes with substring {args.blacklist_substring}")
+    node_blacklist_list = []
+    if "," in args.blacklist_substring:
+        node_blacklist_list = [
+            e.trim() for e in args.blacklist_substring.split(",")
+        ]
+    else:
+        node_blacklist_list = [args.blacklist_substring]
+
+    print(f"Blacklisting nodes with substrings {node_blacklist_list}")
     print(f"Available nodes: {node_list}")
-    node_blacklist = [
-        node for node in node_list if args.blacklist_substring in node
-    ]
+
+    def is_blacklisted(node):
+        for blacklist_str in node_blacklist_list:
+            if blacklist_str in node:
+                return True
+        return False
+
+    node_blacklist = [node for node in node_list if is_blacklisted(node)]
     print(f"Blacklisted nodes: {node_blacklist}")
+    return node_blacklist
 
 
 def get_runtime_format(runtime_mins):
@@ -113,6 +129,7 @@ screen -L -Logfile {jobdir_path}/stdout.log -dmS {args.job_name} bash {jobdir_pa
         f.write(screen_file_content)
 
 
+node_blacklist = get_node_blacklist()
 make_command_file(args.command)
 if args.use_srun:
     make_srun()
