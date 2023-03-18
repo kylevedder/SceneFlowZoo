@@ -18,7 +18,7 @@ class ArgoverseUnsupervisedFlowSequence(ArgoverseRawSequence):
 
         assert len(self.timestamp_list) > len(
             self.flow_data_files
-        ), f"More flow data files than pointclouds in {self.dataset_dir}"
+        ), f"More flow data files in {flow_data_lst} than pointclouds in {self.dataset_dir};  {len(self.timestamp_list)} vs {len(self.flow_data_files)}"
 
         # The first len(self.flow_data_files) timestamps have flow data.
         # We keep those timestamps, plus the final timestamp.
@@ -31,19 +31,19 @@ class ArgoverseUnsupervisedFlowSequence(ArgoverseRawSequence):
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         # There is no flow information for the last pointcloud in the sequence.
         if idx == len(self) - 1 or idx == -1:
-            return None
+            return None, None
 
         flow_data_file = self.flow_data_files[idx]
         flow_info = dict(np.load(flow_data_file))
-        flow_0_1 = flow_info['flow']
-        return flow_0_1
+        flow_0_1, valid_idxes = flow_info['flow'], flow_info['valid_idxes']
+        return flow_0_1, valid_idxes
 
     def load(self, idx, relative_to_idx) -> (PointCloud, SE3):
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         raw_pc = self._load_pc(idx)
-        flow_0_1 = self._load_flow(idx)
+        flow_0_1, valid_idxes = self._load_flow(idx)
         start_pose = self._load_pose(relative_to_idx)
         idx_pose = self._load_pose(idx)
 
@@ -57,6 +57,7 @@ class ArgoverseUnsupervisedFlowSequence(ArgoverseRawSequence):
             "relative_pc": relative_global_frame_pc,
             "relative_pose": relative_pose,
             "flow": flow_0_1,
+            "valid_idxes": valid_idxes,
             "log_id": self.log_id,
             "log_idx": idx,
         }

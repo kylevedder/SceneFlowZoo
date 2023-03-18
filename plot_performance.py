@@ -33,12 +33,17 @@ def set_font(size):
                             })
 
 
+def color_map():
+    return 'gist_earth'
+
 def color(count, total_elements, intensity=1.3):
     start = 0.2
     stop = 0.7
+
+    colormap = matplotlib.cm.get_cmap(color_map())
     cm_subsection = np.linspace(start, stop, total_elements)
     #color = [matplotlib.cm.gist_earth(x) for x in cm_subsection][count]
-    color = [matplotlib.cm.gist_earth(x) for x in cm_subsection][count]
+    color = [colormap(x) for x in cm_subsection][count]
     # Scale the color by intensity while leaving the 4th channel (alpha) unchanged
     return [min(x * intensity, 1) for x in color[:3]] + [color[3]]
 
@@ -464,6 +469,36 @@ def plot_validation_pointcloud_size():
     plt.tight_layout()
 
 
+def plot_val_endpoint_error_distribution():
+    error_distribution_files = sorted(
+        Path("/efs/argoverse2/val_unsupervised_vs_supervised_flow/").glob(
+            "*_error_distribution.npy"))
+    npy_file_arr = np.array([
+        load_npy(error_distribution_file)
+        for error_distribution_file in error_distribution_files
+    ])
+    distribution = np.sum(npy_file_arr, axis=0)
+    plt.imshow(np.log(distribution).T, cmap=color_map())
+    grid_radius_meters = 2
+    cells_per_meter = 100
+    plt.xticks(
+        np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
+                    grid_radius_meters * 2 + 1),
+        [
+            f"{e}m"
+            for e in np.linspace(-grid_radius_meters, grid_radius_meters,
+                                 grid_radius_meters * 2 + 1)
+        ])
+    plt.yticks(
+        np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
+                    grid_radius_meters * 2 + 1),
+        [
+            f"{e}m"
+            for e in np.linspace(-grid_radius_meters, grid_radius_meters,
+                                 grid_radius_meters * 2 + 1)
+        ])
+
+
 ################################################################################
 
 set_font(8)
@@ -494,6 +529,12 @@ for metacatagory in METACATAGORIES:
     print("saving", f"speed_vs_error_{metacatagory}")
     savefig(f"speed_vs_error_{metacatagory}_far")
     plt.clf()
+
+################################################################################
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_val_endpoint_error_distribution()
+savefig(f"val_endpoint_error_distribution")
 
 ################################################################################
 

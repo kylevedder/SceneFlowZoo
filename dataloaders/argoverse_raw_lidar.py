@@ -156,7 +156,7 @@ class ArgoverseRawSequence():
             frame_info['tz_m'])
         return se3
 
-    def load(self, idx: int, relative_to_idx: int) ->  Dict[str, Any]:
+    def load(self, idx: int, relative_to_idx: int) -> Dict[str, Any]:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
@@ -175,8 +175,14 @@ class ArgoverseRawSequence():
             "log_idx": idx,
         }
 
-    def load_frame_list(self, relative_to_idx) -> List[Tuple[PointCloud, SE3]]:
-        return [self.load(idx, relative_to_idx) for idx in range(len(self))]
+    def load_frame_list(
+            self, relative_to_idx: Optional[int]) -> List[Dict[str, Any]]:
+
+        return [
+            self.load(idx,
+                      relative_to_idx if relative_to_idx is not None else idx)
+            for idx in range(len(self))
+        ]
 
 
 class ArgoverseRawSequenceLoader():

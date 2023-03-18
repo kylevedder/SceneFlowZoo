@@ -1,20 +1,44 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
+from dataloaders import ArgoverseUnsupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
 
-POINT_CLOUD_RANGE = (-51.2, -51.2, -3, 51.2, 51.2, 1)
+from models.embedders import DynamicVoxelizer
 
-sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
-    '/efs/waymo_open_preprocessed/train/',
-    '/efs/waymo_open_preprocessed/train_nsfp_flow/')
+from configs.pseudoimage import POINT_CLOUD_RANGE, VOXEL_SIZE
+
+voxelizer = DynamicVoxelizer(voxel_size=VOXEL_SIZE,
+                             point_cloud_range=POINT_CLOUD_RANGE)
+
+
+def voxel_restrict_pointcloud(pc: PointCloud):
+    pc0s = pc.points
+    assert pc0s.ndim == 2, "pc0s must be a batch of 3D points"
+    assert pc0s.shape[1] == 3, "pc0s must be a batch of 3D points"
+    # Convert to torch tensor
+    pc0s = pc0s.reshape(1, -1, 3)
+    pc0s = torch.from_numpy(pc0s).float()
+
+    pc0_voxel_infos_lst = voxelizer(pc0s)
+
+    pc0_points_lst = [e["points"] for e in pc0_voxel_infos_lst]
+    pc0_valid_point_idxes = [e["point_idxes"] for e in pc0_voxel_infos_lst]
+
+    # Convert to numpy
+    pc0_points_lst = [e.numpy() for e in pc0_points_lst][0]
+    pc0_valid_point_idxes = [e.numpy() for e in pc0_valid_point_idxes][0]
+
+    return PointCloud.from_array(pc0_points_lst)
+
+
+sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
+    '/efs/argoverse2/val/', '/efs/argoverse2/val_nsfp_flow/')
 
 sequence_id = sequence_loader.get_sequence_ids()[1]
 print("Sequence ID: ", sequence_id)
-# sequence_id = "e2e921fe-e489-3656-a0a2-5e17bd399ddf"
 sequence = sequence_loader.load_sequence(sequence_id)
 
 # make open3d visualizer
@@ -36,11 +60,9 @@ def sequence_idx_to_color(idx):
 frame_list = sequence.load_frame_list(None)
 for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[1:13])):
     pc = frame_dict['relative_pc']
-    pc = pc.within_region(POINT_CLOUD_RANGE[0], POINT_CLOUD_RANGE[3],
-                          POINT_CLOUD_RANGE[1], POINT_CLOUD_RANGE[4],
-                          POINT_CLOUD_RANGE[2], POINT_CLOUD_RANGE[5])
+    pc = voxel_restrict_pointcloud(pc)
     pose = frame_dict['relative_pose']
-    flow = frame_dict['flow']
+    flow = frame_dict['flow'][0]
     assert flow is not None, 'flow must not be None'
     flowed_pc = pc.flow(flow)
 
