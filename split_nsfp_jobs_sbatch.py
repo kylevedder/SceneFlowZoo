@@ -44,9 +44,18 @@ if args.job_subset_file is not None:
     ), f"Job subset file {args.job_subset_file} does not exist"
     print(f"Using job subset file {args.job_subset_file} to filter jobs")
     with open(args.job_subset_file, "r") as f:
-        job_subset = [l.strip().split(' ')[0].strip() for l in f.readlines()]
-    job_sequence_names_lst = sorted(
-        set(job_sequence_names_lst).intersection(set(job_subset)))
+        valid_jobs = [l.strip().split(' ')[0].strip() for l in f.readlines()]
+    valid_jobs = set(valid_jobs)
+
+    # Filter out jobs that are not in the subset
+    job_sequence_names_lst = [[job for job in sequence if job in valid_jobs]
+                              for sequence in job_sequence_names_lst]
+
+    # Filter out empty sequences
+    job_sequence_names_lst = [
+        sequence for sequence in job_sequence_names_lst if len(sequence) > 0
+    ]
+
     print(f"Filtered to {len(job_sequence_names_lst)} jobs")
 
 sequence_names_set = set(f for seqs in job_sequence_names_lst for f in seqs)
