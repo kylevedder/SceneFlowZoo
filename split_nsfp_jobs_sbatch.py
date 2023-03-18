@@ -122,6 +122,7 @@ for i, job_sequence_names in enumerate(job_sequence_names_lst):
     make_config(i, job_sequence_names)
     if i % 100 == 0:
         print(f"Made configs for {i} jobs")
+print(f"Made total of {i} jobs")
 
 make_sbatch()
 
