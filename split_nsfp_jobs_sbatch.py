@@ -15,6 +15,7 @@ parser.add_argument('--configs_path',
 parser.add_argument('--runtime_mins', type=int, default=180)
 parser.add_argument('--job_prefix', type=str, default='nsfp')
 parser.add_argument('--elevated', action='store_true')
+parser.add_argument('--job_subset_file', type=Path, default=None)
 args = parser.parse_args()
 
 assert args.lidar_path.is_dir(), f"Path {args.lidar_path} is not a directory"
@@ -37,6 +38,16 @@ for i in range(num_jobs):
     job_sequence_folders = sequence_folders[start:end]
     job_sequence_names = [f.name for f in job_sequence_folders]
     job_sequence_names_lst.append(job_sequence_names)
+
+if args.job_subset_file is not None:
+    assert args.job_subset_file.is_file(
+    ), f"Job subset file {args.job_subset_file} does not exist"
+    print(f"Using job subset file {args.job_subset_file} to filter jobs")
+    with open(args.job_subset_file, "r") as f:
+        job_subset = [l.strip().split(' ')[0].strip() for l in f.readlines()]
+    job_sequence_names_lst = sorted(
+        set(job_sequence_names_lst).intersection(set(job_subset)))
+    print(f"Filtered to {len(job_sequence_names_lst)} jobs")
 
 sequence_names_set = set(f for seqs in job_sequence_names_lst for f in seqs)
 assert len(sequence_names_set) == len(
