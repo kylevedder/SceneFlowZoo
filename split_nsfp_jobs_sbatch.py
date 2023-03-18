@@ -107,7 +107,7 @@ def make_sbatch():
 #SBATCH --mem-per-gpu=12G
 #SBATCH --cpus-per-gpu=2
 #SBATCH --exclude=kd-2080ti-2.grasp.maas
-#SBATCH --array=0-{num_jobs - 1}
+#SBATCH --array=0-{len(job_sequence_names_lst) - 1}
 #SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
 #SBATCH --container-image={current_working_dir / "kylevedder_offline_sceneflow_latest.sqsh"}
 
