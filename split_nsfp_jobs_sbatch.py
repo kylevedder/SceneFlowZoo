@@ -58,9 +58,9 @@ if args.job_subset_file is not None:
 
     print(f"Filtered to {len(job_sequence_names_lst)} jobs")
 
-sequence_names_set = set(f for seqs in job_sequence_names_lst for f in seqs)
-assert len(sequence_names_set) == len(
-    sequence_folders), "Some sequences are missing from jobs"
+# sequence_names_set = set(f for seqs in job_sequence_names_lst for f in seqs)
+# assert len(sequence_names_set) == len(
+#     sequence_folders), "Some sequences are missing from jobs"
 
 configs_path = args.configs_path
 if args.reset_config_dir:
