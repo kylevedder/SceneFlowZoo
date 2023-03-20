@@ -13,6 +13,7 @@ lightning_logs/
 kylevedder_offline_sceneflow_latest.sqsh
 chamfer_investigation/merged_dicts.pkl
 validation_results/
+validation_results*/
 **.pkl
 **.png
 job_dir/
