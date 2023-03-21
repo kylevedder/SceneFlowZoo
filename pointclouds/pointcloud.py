@@ -75,6 +75,10 @@ class PointCloud():
         assert mask.ndim == 1
         if mask.dtype == np.bool:
             assert mask.shape[0] == len(self)
+        else:
+            in_bounds = mask < len(self)
+            assert np.all(in_bounds), f"mask values must be in bounds, got {(~in_bounds).sum()} not in bounds"
+
         return PointCloud(self.points[mask])
 
     def within_region(self, x_min, x_max, y_min, y_max, z_min,

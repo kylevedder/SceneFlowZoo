@@ -154,7 +154,7 @@ class ResultInfo():
             "fastflow3d_nsfp_distilatation_speed_scaled": "DRLFS (Ours, speed scaled)",
             "fastflow3d_supervised": "FastFlow3D",
             "fastflow3d_supervised_no_scale": "FastFlow3D (no scale)",
-            "nsfp_unsupervised_flow_data_cached": "NSFP",
+            "nsfp_unsupervised_sensor_val_cached": "NSFP",
         }
         if self.name in name_dict:
             return name_dict[self.name]

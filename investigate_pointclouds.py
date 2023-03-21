@@ -5,20 +5,48 @@ import joblib
 import multiprocessing
 from loader_utils import save_pickle
 import open3d as o3d
+from pointclouds import PointCloud
+import torch
 
 from dataloaders import ArgoverseRawSequenceLoader
 
 argoverse_data = Path("/efs/argoverse2")
 
+from models.embedders import DynamicVoxelizer
+
+from configs.pseudoimage import POINT_CLOUD_RANGE, VOXEL_SIZE
+
+voxelizer = DynamicVoxelizer(voxel_size=VOXEL_SIZE,
+                             point_cloud_range=POINT_CLOUD_RANGE)
+
 PARALLELIZE = True
 
+
+def voxel_restrict_pointcloud(pc: PointCloud):
+    pc0s = pc.points
+    assert pc0s.ndim == 2, "pc0s must be a batch of 3D points"
+    assert pc0s.shape[1] == 3, "pc0s must be a batch of 3D points"
+    # Convert to torch tensor
+    pc0s = pc0s.reshape(1, -1, 3)
+    pc0s = torch.from_numpy(pc0s).float()
+
+    pc0_voxel_infos_lst = voxelizer(pc0s)
+
+    pc0_points_lst = [e["points"] for e in pc0_voxel_infos_lst]
+    pc0_valid_point_idxes = [e["point_idxes"] for e in pc0_voxel_infos_lst]
+
+    # Convert to numpy
+    pc0_points_lst = [e.numpy() for e in pc0_points_lst][0]
+    pc0_valid_point_idxes = [e.numpy() for e in pc0_valid_point_idxes][0]
+
+    return PointCloud.from_array(pc0_points_lst), pc0_valid_point_idxes
 
 def get_pc_sizes(seq):
     pc_sizes = []
     for idx in range(len(seq)):
         frame = seq.load(idx, idx)
         pc = frame['relative_pc']
-        pc = pc.within_region(-51.2, 51.2, -51.2, 51.2, -3, 1)
+        pc, _ = voxel_restrict_pointcloud(pc)
         num_points = len(pc)
         if num_points < 100:
             print(seq.log_id, frame['log_idx'], num_points)

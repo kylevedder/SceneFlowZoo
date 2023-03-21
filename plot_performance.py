@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import argparse
 from typing import List, Tuple, Dict, Any, Optional
 import shutil
-from pathlib import Path
 
 # Get path to methods from command line
 parser = argparse.ArgumentParser()
@@ -34,7 +33,9 @@ def set_font(size):
 
 
 def color_map():
-    return 'gist_earth'
+    # return 'gist_earth'
+    return 'magma'
+
 
 def color(count, total_elements, intensity=1.3):
     start = 0.2
@@ -81,7 +82,9 @@ def savefig(name, pad: float = 0):
     plt.clf()
 
 
-def load_results(validation_folder: Path, full_distance: str = "ALL"):
+def load_results(validation_folder: Path,
+                 dataset: str = "argo",
+                 full_distance: str = "ALL"):
     print("Loading results from", validation_folder)
     config_folder = validation_folder / "configs"
     print()
@@ -91,7 +94,7 @@ def load_results(validation_folder: Path, full_distance: str = "ALL"):
     for architecture_folder in sorted(config_folder.glob("*/")):
         if "bak" in architecture_folder.name:
             continue
-        for result_file in architecture_folder.glob("*.pkl"):
+        for result_file in (architecture_folder / dataset).glob("*.pkl"):
             result_lst.append(
                 ResultInfo(architecture_folder.name + "_" +
                            result_file.stem.split(".")[0],
@@ -107,6 +110,8 @@ results_close = load_results(args.results_folder, full_distance="CLOSE")
 results_far = load_results(args.results_folder, full_distance="FAR")
 print("Done loading results.")
 print(results)
+assert len(
+    results) > 0, f"No results found in {args.results_folder.absolute()}"
 
 
 def process_metacategory_counts(result):
@@ -460,8 +465,10 @@ def plot_validation_pointcloud_size():
 
     mean = np.mean(point_cloud_counts)
     std = np.std(point_cloud_counts)
+    print("VVVVVVVVVVVVVVVVVVVV")
     print(f"Mean point cloud count: {mean}, std: {std}")
-    point_cloud_counts = point_cloud_counts[point_cloud_counts < 30000]
+    print("^^^^^^^^^^^^^^^^^^^^")
+    point_cloud_counts = point_cloud_counts[point_cloud_counts < 100000]
     # Make histogram of point cloud counts
     plt.hist(point_cloud_counts, bins=100, zorder=3, color=color(0, 1))
     plt.xlabel("Number of points")
@@ -469,7 +476,7 @@ def plot_validation_pointcloud_size():
     plt.tight_layout()
 
 
-def plot_val_endpoint_error_distribution():
+def plot_val_endpoint_error_distribution(use_log_scale: bool = False):
     error_distribution_files = sorted(
         Path("/efs/argoverse2/val_unsupervised_vs_supervised_flow/").glob(
             "*_error_distribution.npy"))
@@ -478,7 +485,23 @@ def plot_val_endpoint_error_distribution():
         for error_distribution_file in error_distribution_files
     ])
     distribution = np.sum(npy_file_arr, axis=0)
-    plt.imshow(np.log(distribution).T, cmap=color_map())
+
+    distribution_x = distribution.sum(axis=0)
+    distribution_y = distribution.sum(axis=1)
+
+    average_x = np.average(np.arange(distribution_x.shape[0]),
+                           weights=distribution_x)
+    average_y = np.average(np.arange(distribution_y.shape[0]),
+                           weights=distribution_y)
+
+    print("VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
+    print(f"Average x: {average_x}, average y: {average_y}")
+    print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+
+    plot_mat = np.flip(distribution, axis=1).T
+    if use_log_scale:
+        plot_mat = np.log(plot_mat)
+    plt.imshow(plot_mat, cmap=color_map())
     grid_radius_meters = 2
     cells_per_meter = 100
     plt.xticks(
@@ -493,7 +516,7 @@ def plot_val_endpoint_error_distribution():
         np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
                     grid_radius_meters * 2 + 1),
         [
-            f"{e}m"
+            f"{-e}m"
             for e in np.linspace(-grid_radius_meters, grid_radius_meters,
                                  grid_radius_meters * 2 + 1)
         ])
@@ -533,8 +556,12 @@ for metacatagory in METACATAGORIES:
 ################################################################################
 
 plt.gcf().set_size_inches(5.5, 2.5)
-plot_val_endpoint_error_distribution()
-savefig(f"val_endpoint_error_distribution")
+plot_val_endpoint_error_distribution(use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log")
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_val_endpoint_error_distribution(use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute")
 
 ################################################################################
 

@@ -165,10 +165,11 @@ class NSFPCached(NSFP):
         assert log_idx < len(
             self.flow_folder_list), f"Log index {log_idx} is out of range"
         flow_file = self.flow_folder_list[log_idx]
-        data = np.load(flow_file, allow_pickle=True)
+        data = dict(np.load(flow_file, allow_pickle=True))
         flow = data['flow']
+        valid_idxes = data['valid_idxes']
         delta_time = data['delta_time']
-        return flow, delta_time
+        return flow, valid_idxes, delta_time
 
     def _transpose_list(self, lst):
         if isinstance(lst[0], torch.Tensor):
@@ -184,16 +185,22 @@ class NSFPCached(NSFP):
 
         flows = []
         delta_times = []
-        for minibatch_idx, (pc0_points, pc1_points, log_ids,
+        for minibatch_idx, (pc0_points, pc0_valid_points_idx, log_ids,
                             log_idxes) in enumerate(
-                                zip(pc0_points_lst, pc1_points_lst,
+                                zip(pc0_points_lst, pc0_valid_point_idxes,
                                     log_ids_lst, log_idxes_lst)):
             assert len(
                 log_ids) == 2, f"Expect 2 frames for NSFP, got {len(log_ids)}"
             assert len(
                 log_idxes
             ) == 2, f"Expect 2 frames for NSFP, got {len(log_idxes)}"
-            flow, delta_time = self._load_result(log_ids[0], log_idxes[0])
+            flow, flow_valid_idxes, delta_time = self._load_result(
+                log_ids[0], log_idxes[0])
+            assert flow_valid_idxes.shape == pc0_valid_points_idx.shape, f"{flow_valid_idxes.shape} != {pc0_valid_points_idx.shape}"
+            idx_equality = flow_valid_idxes == pc0_valid_points_idx.detach(
+            ).cpu().numpy()
+            assert idx_equality.all(
+            ), f"Points that disagree: {(~idx_equality).astype(int).sum()}"
             assert flow.shape[0] == 1, f"{flow.shape[0]} != 1"
             flow = flow.squeeze(0)
             assert flow.shape == pc0_points.shape, f"{flow.shape} != {pc0_points.shape}"
