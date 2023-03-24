@@ -169,6 +169,9 @@ def main():
     if args.dry_run:
         print("Dry run, exiting")
         exit(0)
+    print("Starting training")
+    print("Length of train dataloader:", len(train_dataloader))
+    print("Length of val dataloader:", len(val_dataloader))
     trainer.fit(model, train_dataloader, val_dataloader)
 
 

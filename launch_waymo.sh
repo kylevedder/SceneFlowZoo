@@ -12,8 +12,5 @@ docker run --gpus=all --rm -it \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \
- offline_sceneflow_waymo:latest
- #offline_sceneflow_cuda117lightning:latest
-#  offline_sceneflow:latest
- #offline_sceneflow_cuda117:latest
- #offline_sceneflow:latest
+ offline_sceneflow_waymo_150:latest
+ #offline_sceneflow_waymo:latest

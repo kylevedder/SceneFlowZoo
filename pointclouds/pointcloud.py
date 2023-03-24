@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 from .se3 import SE3
 
@@ -23,6 +22,7 @@ def from_fixed_array(array: np.ndarray) -> np.ndarray:
         are_valid_points = np.logical_not(np.isnan(array[:, 0]))
         are_valid_points = are_valid_points.astype(bool)
     else:
+        import torch
         are_valid_points = torch.logical_not(torch.isnan(array[:, 0]))
         are_valid_points = are_valid_points.bool()
     return array[are_valid_points]

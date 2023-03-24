@@ -97,7 +97,7 @@ def load_results(validation_folder: Path,
         for result_file in (architecture_folder / dataset).glob("*.pkl"):
             result_lst.append(
                 ResultInfo(architecture_folder.name + "_" +
-                           result_file.stem.split(".")[0],
+                           ".".join(result_file.stem.split(".")[:-1]),
                            result_file,
                            full_distance=full_distance))
 

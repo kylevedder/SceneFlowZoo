@@ -119,8 +119,8 @@ def render_heightmap(drivable_areas, cells_per_meter, meters_beyond_poly_edge,
     return grid, grid_min_global_frame
 
 
-def save_grid_global_offset(sequence_folder: Path, grid,
-                            grid_min_global_frame):
+def save_grid_global_offset(sequence_folder: Path, grid, grid_min_global_frame,
+                            cells_per_meter):
     se2 = {
         "R": [1.0, 0.0, 0.0, 1.0],  # Identity rotation matrix flattened
         "t": [-grid_min_global_frame[0], -grid_min_global_frame[1]],
@@ -160,12 +160,16 @@ def process_sequence_folder(sequence_folder: Path,
                                                    cells_per_meter,
                                                    meters_beyond_poly_edge,
                                                    num_neighbors)
-    save_grid_global_offset(sequence_folder, grid, grid_min_global_frame)
+    save_grid_global_offset(sequence_folder, grid, grid_min_global_frame,
+                            cells_per_meter)
 
 
 def build_work_queue(root_path: Path):
     root_path = Path(root_path)
-    root_folders = [e for e in root_path.glob("*/") if e.is_dir() and e.name in ["train", "val"]]
+    root_folders = [
+        e for e in root_path.glob("*/")
+        if e.is_dir() and e.name in ["train", "val"]
+    ]
     work_queue = []
     for rf in root_folders:
         work_queue.extend([e for e in rf.glob("*/") if e.is_dir()])

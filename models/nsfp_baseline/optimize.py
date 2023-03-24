@@ -5,7 +5,7 @@ from pytorch3d.ops.knn import knn_gather, knn_points
 from pytorch3d.structures.pointclouds import Pointclouds
 import time
 
-from pointclouds import warped_pc_loss
+from pointclouds.losses import warped_pc_loss
 
 from .utils import EarlyStopping
 from .model import Neural_Prior

@@ -4,7 +4,6 @@ import torch.nn as nn
 import numpy as np
 from models.embedders import DynamicVoxelizer
 from models.nsfp_baseline import NSFPProcessor
-from pointclouds import PointCloud, warped_pc_loss, pc0_to_pc1_distance
 
 from typing import Dict, Any, Optional
 from collections import defaultdict

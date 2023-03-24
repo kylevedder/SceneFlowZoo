@@ -11,7 +11,8 @@ from models.attention import JointConvAttention
 from models.heads import NeuralSceneFlowPrior, NeuralSceneFlowPriorOptimizable
 
 from typing import List, Tuple, Dict
-from pointclouds import PointCloud, SE3, warped_pc_loss
+from pointclouds import PointCloud, SE3
+from pointclouds.losses import warped_pc_loss
 
 
 def _torch_to_jagged_pc(torch_tensor: torch.Tensor) -> PointCloud:
@@ -150,7 +151,7 @@ class JointFlowLoss():
         return loss
 
     def _visualize_bev_warp(self, pc_t0, pc_t0_warped_to_t1):
-        
+
         pc_xy = pc_t0[:, :2].detach().cpu().numpy()
         flow = pc_t0_warped_to_t1 - pc_t0
         flow = flow.detach().cpu().numpy()
@@ -158,11 +159,15 @@ class JointFlowLoss():
         flow_magnitudes = np.linalg.norm(flow_xy, axis=1)
         flow_angles = np.arctan2(flow_xy[:, 1], flow_xy[:, 0])
         flow_colors = (flow_angles + np.pi) / (2 * np.pi) * 360
-        
 
         # Scatterplot with matplotlib, using flow colors to color the dots
         import matplotlib.pyplot as plt
-        plt.scatter(pc_xy[:, 0], pc_xy[:, 1], c=flow_colors, cmap='hsv', vmin=0, vmax=360)
+        plt.scatter(pc_xy[:, 0],
+                    pc_xy[:, 1],
+                    c=flow_colors,
+                    cmap='hsv',
+                    vmin=0,
+                    vmax=360)
         plt.colorbar()
         plt.savefig(f"/efs/bev_warps/bev_warp{self.warp_idx:09d}.png")
         self.warp_idx += 1
@@ -229,10 +234,10 @@ class JointFlow(nn.Module):
         self.batch_size = batch_size
         self.device = device
         self.embedder = HardEmbedder(voxel_size=VOXEL_SIZE,
-                                 pseudo_image_dims=PSEUDO_IMAGE_DIMS,
-                                 point_cloud_range=POINT_CLOUD_RANGE,
-                                 max_points_per_voxel=MAX_POINTS_PER_VOXEL,
-                                 feat_channels=FEATURE_CHANNELS)
+                                     pseudo_image_dims=PSEUDO_IMAGE_DIMS,
+                                     point_cloud_range=POINT_CLOUD_RANGE,
+                                     max_points_per_voxel=MAX_POINTS_PER_VOXEL,
+                                     feat_channels=FEATURE_CHANNELS)
 
         self.pyramid = FeaturePyramidNetwork(
             pseudoimage_dims=PSEUDO_IMAGE_DIMS,

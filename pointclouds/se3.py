@@ -1,24 +1,26 @@
-import torch
 import numpy as np
 from pyquaternion import Quaternion
+
 
 class SE3:
     """An SE3 class allows point cloud rotation and translation operations."""
 
-    def __init__(self, rotation_matrix: np.ndarray, translation: np.ndarray) -> None:
+    def __init__(self, rotation_matrix: np.ndarray,
+                 translation: np.ndarray) -> None:
         """Initialize an SE3 instance with its rotation and translation matrices.
         Args:
             rotation: Array of shape (3, 3)
             translation: Array of shape (3,)
         """
         assert rotation_matrix.shape == (3, 3)
-        assert translation.shape == (3,)
+        assert translation.shape == (3, )
         self.rotation_matrix = rotation_matrix
         self.translation = translation
 
         if isinstance(self.rotation_matrix, np.ndarray):
             self.transform_matrix = np.eye(4)
         else:
+            import torch
             self.transform_matrix = torch.eye(4)
         self.transform_matrix[:3, :3] = self.rotation_matrix
         self.transform_matrix[:3, 3] = self.translation
@@ -50,7 +52,8 @@ class SE3:
             src_SE3_target: instance of SE3 class, representing
                 inverse of SE3 transformation target_SE3_src
         """
-        return SE3(rotation_matrix=self.rotation_matrix.T, translation=self.rotation_matrix.T.dot(-self.translation))
+        return SE3(rotation_matrix=self.rotation_matrix.T,
+                   translation=self.rotation_matrix.T.dot(-self.translation))
 
     def compose(self, right_se3: "SE3") -> "SE3":
         """Compose (right multiply) this class' transformation matrix T with another SE3 instance.
