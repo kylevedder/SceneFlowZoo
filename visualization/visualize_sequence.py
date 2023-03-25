@@ -6,9 +6,9 @@ from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
 
-# sequence_loader = ArgoverseRawSequenceLoader('/bigdata/argoverse_lidar/train/')
-sequence_loader = WaymoSupervisedFlowSequenceLoader('/efs/waymo_open_preprocessed/train/')
-sequence = sequence_loader.load_sequence(sequence_loader.get_sequence_ids()[0])
+sequence_loader = WaymoSupervisedFlowSequenceLoader(
+    '/efs/waymo_open_processed_flow/training/')
+sequence = sequence_loader.load_sequence(sequence_loader.get_sequence_ids()[1])
 
 # make open3d visualizer
 vis = o3d.visualization.Visualizer()

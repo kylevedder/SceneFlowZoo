@@ -202,4 +202,6 @@ def process_record(file_path: Path):
 work_queue = build_work_queue(args.waymo_directory)
 print("Work queue size:", len(work_queue))
 
-Parallel(args.cpus)(delayed(process_record)(record) for record in work_queue)
+num_processes = min(args.cpus, len(work_queue))
+Parallel(num_processes)(delayed(process_record)(record)
+                        for record in work_queue)

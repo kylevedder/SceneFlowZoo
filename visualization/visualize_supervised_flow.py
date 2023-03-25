@@ -10,11 +10,10 @@ import tqdm
 # sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
 #     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
 sequence_loader = WaymoSupervisedFlowSequenceLoader(
-    '/efs/waymo_open_preprocessed/train/')
+    '/efs/waymo_open_processed_flow/training/')
 
 sequence_id = sequence_loader.get_sequence_ids()[1]
 print("Sequence ID: ", sequence_id)
-# sequence_id = "e2e921fe-e489-3656-a0a2-5e17bd399ddf"
 sequence = sequence_loader.load_sequence(sequence_id)
 
 # make open3d visualizer
@@ -39,8 +38,6 @@ for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[1:13])):
     pose = frame_dict['relative_pose']
     flowed_pc = frame_dict['relative_flowed_pc']
     classes = frame_dict['pc_classes']
-
-
 
     # Add base point cloud
     pcd = o3d.geometry.PointCloud()

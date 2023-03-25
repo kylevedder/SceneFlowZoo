@@ -213,52 +213,22 @@ def get_car_pc_global_pc_flow_transform(
     frame: dataset_pb2.Frame
 ) -> Tuple[PointCloud, PointCloud, np.ndarray, SE3]:
 
-    car_frame_pc, global_frame_pc = get_pc(frame)
+    # Parse the frame lidar data into range images.
+    range_images, camera_projections, point_flows, range_image_top_poses = parse_range_image_and_camera_projection(
+        frame)
 
-    # Use open3d to visualize the point cloud in xyz
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(car_frame_pc)
-
-    # Use open3d to draw a 1 meter sphere at the origin
-    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
-
-    geometry_list = [pcd, sphere]
-    # Draw the geometry list
-    o3d.visualization.draw_geometries(geometry_list)
-
-    # # Parse the frame lidar data into range images.
-    # # range_images, camera_projections, point_flows, range_image_top_poses = parse_range_image_and_camera_projection(
-    # #     frame)
-
-    # range_images, camera_projections, _, range_image_top_poses = frame_utils.parse_range_image_and_camera_projection(
-    #     frame)
-
-    # # Project the range images into points.
-    # # points_lst, cp_points, flows_lst = convert_range_image_to_point_cloud(
-    # #     frame,
-    # #     range_images,
-    # #     camera_projections,
-    # #     point_flows,
-    # #     range_image_top_poses,
-    # #     keep_polar_features=True)
-
-    # points_lst, cp_points = frame_utils.convert_range_image_to_point_cloud(
-    #     frame,
-    #     range_images,
-    #     camera_projections,
-    #     range_image_top_poses,
-    #     keep_polar_features=True,
-    # )
-
-    # breakpoint()
-
-    # points_all = np.concatenate(points_lst, axis=0)
-    # # flows_all = np.concatenate(flows_lst, axis=0)
-
-    # visualize_point_cloud_flow(points_all[:, 3:], None)
+    # Project the range images into points.
+    points_lst, cp_points, flows_lst = convert_range_image_to_point_cloud(
+        frame,
+        range_images,
+        camera_projections,
+        point_flows,
+        range_image_top_poses,
+        keep_polar_features=True)
 
     car_frame_pc = points_lst[0][:, 3:]
-    car_frame_flows = flows_lst[0]
+    car_frame_flows = flows_lst[0][:, :3]
+    car_frame_labels = flows_lst[0][:, 3]
     num_points = car_frame_pc.shape[0]
 
     # Transform the points from the vehicle frame to the world frame.
@@ -275,7 +245,7 @@ def get_car_pc_global_pc_flow_transform(
     points_offset = np.array([offset.x, offset.y, offset.z])
     world_frame_pc += points_offset
     return PointCloud(car_frame_pc), PointCloud(
-        world_frame_pc), car_frame_flows, SE3.from_array(
+        world_frame_pc), car_frame_flows, car_frame_labels, SE3.from_array(
             car_to_global_transform)
 
 
@@ -366,18 +336,36 @@ def is_ground_points(raster_heightmap, global_to_raster_se2,
     return is_ground_boolean_arr
 
 
-def visualize_point_cloud_flow(point_cloud: np.ndarray, flow: np.ndarray):
+def visualize_point_cloud_flow(point_cloud: PointCloud, flow: np.ndarray):
+
+    print("Visualizing point cloud and flow")
     # Use open3d to visualize the point cloud and flow.
-    assert point_cloud.ndim == 2, f"Point cloud must be Nx3, got {point_cloud.shape}"
-    assert point_cloud.shape[
-        1] == 3, f"Point cloud must be Nx3, got {point_cloud.shape}"
-    # assert point_cloud.shape[0] == flow.shape[
-    #     0], "Point cloud and flow must have the same number of points"
+
+    flowed_point_cloud = point_cloud.flow(flow[:, :3])
+
+    geometries = []
+
+    # Make base pointcloud
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(point_cloud)
+    geometries.append(pcd)
+
+    # Add line set
+    line_set = o3d.geometry.LineSet()
+    line_set_points = np.concatenate(
+        [point_cloud.points, flowed_point_cloud.points], axis=0)
+
+    lines = np.array([[i, i + len(point_cloud)]
+                      for i in range(len(point_cloud))])
+    line_set.points = o3d.utility.Vector3dVector(line_set_points)
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+    # Line set is blue
+    line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]
+                                                  for _ in range(len(lines))])
+    geometries.append(line_set)
 
     # Visualize the pointcloud
-    o3d.visualization.draw_geometries([pcd])
+    o3d.visualization.draw_geometries(geometries)
 
 
 def build_work_queue(waymo_directory):
@@ -397,68 +385,48 @@ def build_work_queue(waymo_directory):
 def process_record(file_path: Path):
     file_path = Path(file_path)
     print("Processing", file_path)
-    # height_map_path = flow_path_to_height_map_path(file_path)
-    # save_folder = flow_path_to_save_folder(file_path)
-    # raster_heightmap, transform_se2, transform_scale = load_ground_height_raster(
-    #     height_map_path)
-
-    # import matplotlib.pyplot as plt
-    # plt.imshow(raster_heightmap)
-    # plt.colorbar()
-    # plt.show()
-
-    # breakpoint()
+    height_map_path = flow_path_to_height_map_path(file_path)
+    save_folder = flow_path_to_save_folder(file_path)
+    raster_heightmap, transform_se2, transform_scale = load_ground_height_raster(
+        height_map_path)
 
     print("LOADING FILEPATH", file_path)
 
-    FILENAME = '/efs/waymo_open_with_maps/training/segment-10017090168044687777_6380_000_6400_000_with_camera_labels.tfrecord'
-
-    dataset = tf.data.TFRecordDataset(FILENAME, compression_type='')
-    for data in dataset:
+    dataset = tf.data.TFRecordDataset(file_path, compression_type='')
+    for idx, data in enumerate(dataset):
         frame = dataset_pb2.Frame.FromString(bytearray(data.numpy()))
 
-        car_frame_pc, global_frame_pc = get_pc(frame)
+        car_frame_pc, global_frame_pc, flow, label, pose = get_car_pc_global_pc_flow_transform(
+            frame)
 
-        # Use open3d to visualize the point cloud in xyz
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(car_frame_pc)
+        if (flow == -1).all():
+            continue
 
-        # Use open3d to draw a 1 meter sphere at the origin
-        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
+        keep_points_mask = ~is_ground_points(raster_heightmap, transform_se2,
+                                             transform_scale, global_frame_pc)
 
-        geometry_list = [pcd, sphere]
-        # Draw the geometry list
-        o3d.visualization.draw_geometries(geometry_list)
+        masked_car_frame_pc = car_frame_pc.mask_points(keep_points_mask)
+        masked_flow = flow[keep_points_mask] / 10.0
+        masked_label = label[keep_points_mask]
 
+        # visualize_point_cloud_flow(masked_car_frame_pc, masked_flow)
 
-
-
-        # car_frame_pc, global_frame_pc, flow, pose = get_car_pc_global_pc_flow_transform(
-        #     frame)
-
-        # ground_points_mask = is_ground_points(raster_heightmap, transform_se2,
-        #                                       transform_scale, global_frame_pc)
-
-        # visualize_point_cloud_flow(car_frame_pc.points, flow)
-
-        # masked_car_frame_pc = car_frame_pc.mask_points(ground_points_mask)
-        # masked_flow = flow[ground_points_mask]
-
-        # save_npy(
-        #     save_folder / f"{idx:06d}.npy", {
-        #         "car_frame_pc": masked_car_frame_pc.points,
-        #         "flow": masked_flow,
-        #         "pose": pose.to_array(),
-        #     })
+        save_npy(
+            save_folder / f"{idx:06d}.npy", {
+                "car_frame_pc": masked_car_frame_pc.points,
+                "flow": masked_flow,
+                "label": masked_label,
+                "pose": pose.to_array(),
+                "fraction_kept":
+                np.sum(keep_points_mask) / len(keep_points_mask)
+            })
 
 
 work_queue = build_work_queue(args.flow_directory)
-work_queue = [
-    '/efs/waymo_open_with_maps/training/segment-10017090168044687777_6380_000_6400_000_with_camera_labels.tfrecord'
-]
 print("Work queue size:", len(work_queue))
 
-for record in work_queue:
-    process_record(record)
+# for idx, record in enumerate(work_queue):
+#     process_record(record)
 
-# Parallel(args.cpus)(delayed(process_record)(record) for record in work_queue)
+num_cores = min(args.cpus, len(work_queue))
+Parallel(num_cores)(delayed(process_record)(record) for record in work_queue)
