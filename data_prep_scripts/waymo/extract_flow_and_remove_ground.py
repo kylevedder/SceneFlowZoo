@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 import numpy as np
 from typing import Tuple, List, Dict
 from pointclouds import PointCloud, SE3, SE2
-from loader_utils import load_json, save_npy
+from loader_utils import load_json, save_pickle
 
 from waymo_open_dataset import dataset_pb2
 from waymo_open_dataset.utils import frame_utils
@@ -411,8 +411,8 @@ def process_record(file_path: Path):
 
         # visualize_point_cloud_flow(masked_car_frame_pc, masked_flow)
 
-        save_npy(
-            save_folder / f"{idx:06d}.npy", {
+        save_pickle(
+            save_folder / f"{idx:06d}.pkl", {
                 "car_frame_pc": masked_car_frame_pc.points,
                 "flow": masked_flow,
                 "label": masked_label,

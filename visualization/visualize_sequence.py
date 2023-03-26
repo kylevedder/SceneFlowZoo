@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, WaymoRawSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
@@ -26,11 +26,14 @@ def sequence_idx_to_color(idx):
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
-for idx, entry_dict in enumerate(tqdm.tqdm(sequence.load_frame_list(0))):
-    pc = entry_dict['relative_pc']
+frame_lst = sequence.load_frame_list(0)
+
+print("Frames: ", len(frame_lst))
+for idx, entry_dict in enumerate(frame_lst):
+    idx_pc = entry_dict['relative_pc']
     pose = entry_dict['relative_pose']
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc.points)
+    pcd.points = o3d.utility.Vector3dVector(idx_pc.points)
     vis.add_geometry(pcd)
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1)
     sphere.translate(pose.translation)

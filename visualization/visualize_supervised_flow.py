@@ -32,8 +32,8 @@ def sequence_idx_to_color(idx):
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
-frame_list = sequence.load_frame_list(0)
-for idx, frame_dict in enumerate(tqdm.tqdm(frame_list[1:13])):
+frame_list = sequence.load_frame_list(0)[:30]
+for idx, frame_dict in enumerate(tqdm.tqdm(frame_list)):
     pc = frame_dict['relative_pc']
     pose = frame_dict['relative_pose']
     flowed_pc = frame_dict['relative_flowed_pc']
