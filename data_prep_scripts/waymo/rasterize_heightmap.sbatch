@@ -7,7 +7,7 @@
 #SBATCH --partition=eaton-compute
 #SBATCH --cpus-per-task=200
 #SBATCH --mem-per-cpu=1200MB
-#SBATCH --container-mounts=../../datasets/:/efs/,./data_prep_scripts/waymo:/project
+#SBATCH --container-mounts=../../datasets/:/efs/,./:/project
 #SBATCH --container-image=/home/kvedder/kylevedder+offline_sceneflow_waymo+latest.sqsh
 
 ## Job Steps
