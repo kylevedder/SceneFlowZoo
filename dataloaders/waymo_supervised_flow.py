@@ -33,12 +33,22 @@ class WaymoSupervisedFlowSequence():
         pose = SE3.from_array(pkl['pose'])
         return pc, flow, labels, pose
 
+    def cleanup_flow(self, flow):
+        flow[np.isnan(flow)] = 0
+        flow[np.isinf(flow)] = 0
+        flow_speed = np.linalg.norm(flow, axis=1)
+        flow_speed[flow_speed > 30] = 0
+        return flow
+
     def load(self, idx: int, start_idx: int) -> Dict[str, Any]:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
 
         idx_pc, idx_flow, idx_labels, idx_pose = self._load_idx(idx)
+        # Unfortunatly, the flow has some artifacts that we need to clean up. These are very adhoc and will
+        # need to be updated if the flow is updated.
+        idx_flow = self.cleanup_flow(idx_flow)
         _, _, _, start_pose = self._load_idx(start_idx)
 
         relative_pose = start_pose.inverse().compose(idx_pose)

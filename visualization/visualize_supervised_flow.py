@@ -46,6 +46,8 @@ for idx, frame_dict in enumerate(tqdm.tqdm(frame_list)):
 
     # Add flowed point cloud
     if flowed_pc is not None:
+        print("Max flow magnitude:",
+              pc.matched_point_distance(flowed_pc).max())
         # flowed_pcd = o3d.geometry.PointCloud()
         # flowed_pcd.points = o3d.utility.Vector3dVector(flowed_pc.points)
         # flowed_pc_color = np.zeros_like(flowed_pc.points)

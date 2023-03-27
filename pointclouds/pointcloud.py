@@ -59,6 +59,10 @@ class PointCloud():
     def to_fixed_array(self, max_points: int) -> np.ndarray:
         return to_fixed_array(self.points, max_points)
 
+    def matched_point_distance(self, other: 'PointCloud') -> np.ndarray:
+        assert len(self) == len(other)
+        return np.linalg.norm(self.points - other.points, axis=1)
+
     @staticmethod
     def from_fixed_array(points) -> 'PointCloud':
         return PointCloud(from_fixed_array(points))
@@ -77,7 +81,9 @@ class PointCloud():
             assert mask.shape[0] == len(self)
         else:
             in_bounds = mask < len(self)
-            assert np.all(in_bounds), f"mask values must be in bounds, got {(~in_bounds).sum()} not in bounds"
+            assert np.all(
+                in_bounds
+            ), f"mask values must be in bounds, got {(~in_bounds).sum()} not in bounds"
 
         return PointCloud(self.points[mask])
 
