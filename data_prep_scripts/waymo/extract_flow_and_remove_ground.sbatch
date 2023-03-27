@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ## Resource Request
-#SBATCH --job-name=waymo_rasterize
-#SBATCH --output=waymo_rasterize.out
+#SBATCH --job-name=waymo_remove_ground
+#SBATCH --output=waymo_remove_ground.out
 #SBATCH --qos=ee-med
 #SBATCH --partition=eaton-compute
 #SBATCH --cpus-per-task=120
