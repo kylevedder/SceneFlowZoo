@@ -425,6 +425,9 @@ def process_record(file_path: Path):
 work_queue = build_work_queue(args.flow_directory)
 print("Work queue size:", len(work_queue))
 
+assert args.cpus > 0, "Must have at least 1 CPU"
+assert len(work_queue) > 0, "Work queue must have at least 1 element"
+
 # for idx, record in enumerate(work_queue):
 #     process_record(record)
 
