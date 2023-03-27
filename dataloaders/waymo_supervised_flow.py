@@ -37,7 +37,7 @@ class WaymoSupervisedFlowSequence():
         flow[np.isnan(flow)] = 0
         flow[np.isinf(flow)] = 0
         flow_speed = np.linalg.norm(flow, axis=1)
-        flow_speed[flow_speed > 30] = 0
+        flow[flow_speed > 30] = 0
         return flow
 
     def load(self, idx: int, start_idx: int) -> Dict[str, Any]:
