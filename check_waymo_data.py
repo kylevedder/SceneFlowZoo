@@ -23,6 +23,6 @@ assert len(validation_subfolders) == 202, f'Expected 202 validation subfolders, 
 for subfolder in training_subfolders:
     num_flows = sorted(subfolder.glob('*.pkl'))
     if len(num_flows) < 196:
-        print(subfolder.name, len(num_flows))
+        print(str(subfolder), len(num_flows))
 
     
