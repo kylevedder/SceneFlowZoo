@@ -54,7 +54,7 @@ def voxel_restrict_pointcloud(pc: PointCloud):
     return PointCloud.from_array(pc0_points_lst), pc0_valid_point_idxes
 
 
-def get_pc_sizes(seq):
+def get_pc_sizes(idx, seq):
     pc_sizes = []
     for idx in range(len(seq)):
         frame = seq.load(idx, idx)
@@ -64,6 +64,7 @@ def get_pc_sizes(seq):
         if num_points < 100:
             print(seq.log_id, frame['log_idx'], num_points)
         pc_sizes.append(num_points)
+    print("Finished sequence", idx, "with", len(seq), "frames", flush=True)
     return pc_sizes
 
 
@@ -76,8 +77,8 @@ seq_ids = seq_loader.get_sequence_ids()
 if args.cpus > 1:
     # Use joblib to parallelize the loading of the sequences
     pc_size_lst = joblib.Parallel(n_jobs=args.cpus)(
-        joblib.delayed(get_pc_sizes)(seq_loader.load_sequence(seq_id))
-        for seq_id in tqdm.tqdm(seq_ids))
+        joblib.delayed(get_pc_sizes)(idx, seq_loader.load_sequence(seq_id))
+        for idx, seq_id in enumerate(seq_ids))
     pc_size_lst = [item for sublist in pc_size_lst for item in sublist]
 else:
     pc_size_lst = []
