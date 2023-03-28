@@ -2,15 +2,15 @@ _base_ = "../../pseudoimage.py"
 
 train_sequence_dir = "/efs/waymo_open_processed_flow/training/"
 
-test_sequence_dir = "/efs/waymo_open_processed_flow/training/"
+test_sequence_dir = "/efs/waymo_open_processed_flow/validation/"
 
 max_train_sequence_length = 192
 max_test_sequence_length = 192
 
 epochs = 50
 learning_rate = 2e-6
-save_every = 7
-validate_every = 7
+save_every = 500
+validate_every = 500
 
 SEQUENCE_LENGTH = 2
 
@@ -29,6 +29,7 @@ dataloader = dict(
 
 dataset = dict(name="VarLenSubsequenceSupervisedFlowDataset",
                args=dict(subsequence_length=SEQUENCE_LENGTH,
+                         max_pc_points=150000,
                          origin_mode="FIRST_ENTRY"))
 
 loss_fn = dict(name="FastFlow3DSupervisedLoss", args=dict())
@@ -41,4 +42,5 @@ test_dataloader = dict(
 
 test_dataset = dict(name="VarLenSubsequenceSupervisedFlowDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
+                              max_pc_points=150000,
                               origin_mode="FIRST_ENTRY"))

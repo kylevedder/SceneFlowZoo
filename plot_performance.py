@@ -453,8 +453,8 @@ def table_epe(results: List[ResultInfo]):
     return table_rows
 
 
-def plot_validation_pointcloud_size():
-    validation_data_counts_path = args.results_folder / "validation_pointcloud_point_count.pkl"
+def plot_validation_pointcloud_size(dataset: str):
+    validation_data_counts_path = args.results_folder / f"{dataset}_validation_pointcloud_point_count.pkl"
     assert validation_data_counts_path.exists(
     ), f"Could not find {validation_data_counts_path}"
     point_cloud_counts = load_pickle(validation_data_counts_path)
@@ -466,9 +466,15 @@ def plot_validation_pointcloud_size():
     mean = np.mean(point_cloud_counts)
     std = np.std(point_cloud_counts)
     print("VVVVVVVVVVVVVVVVVVVV")
-    print(f"Mean point cloud count: {mean}, std: {std}")
+    print(f"Mean point cloud count {dataset}: {mean}, std: {std}")
     print("^^^^^^^^^^^^^^^^^^^^")
-    point_cloud_counts = point_cloud_counts[point_cloud_counts < 100000]
+    if dataset == "argo":
+        point_cloud_counts = point_cloud_counts[point_cloud_counts < 100000]
+    elif dataset == "waymo":
+        point_cloud_counts = point_cloud_counts[point_cloud_counts < 200000]
+    else:
+        raise ValueError(f"Unknown dataset {dataset}")
+
     # Make histogram of point cloud counts
     plt.hist(point_cloud_counts, bins=100, zorder=3, color=color(0, 1))
     plt.xlabel("Number of points")
@@ -636,9 +642,14 @@ savefig(f"epe_counts_v3_loose")
 ################################################################################
 
 plt.gcf().set_size_inches(5.5, 5.5 / 1.6 / 2)
-plot_validation_pointcloud_size()
+plot_validation_pointcloud_size("argo")
 grid()
-savefig(f"validation_pointcloud_size", pad=0.02)
+savefig(f"validation_pointcloud_size_argo", pad=0.02)
+
+plt.gcf().set_size_inches(5.5, 5.5 / 1.6 / 2)
+plot_validation_pointcloud_size("waymo")
+grid()
+savefig(f"validation_pointcloud_size_waymo", pad=0.02)
 
 ################################################################################
 

@@ -8,7 +8,6 @@ flow_save_folder = "/efs/waymo_open_processed_flow/train_nsfp_flow/"
 
 precision = 32
 
-
 max_test_sequence_length = 193
 
 epochs = 20
@@ -30,7 +29,8 @@ test_loader = dict(name="WaymoSupervisedFlowSequenceLoader",
 test_dataloader = dict(
     args=dict(batch_size=1, num_workers=1, shuffle=False, pin_memory=True))
 
-test_dataset = dict(name="SubsequenceRawDataset",
+test_dataset = dict(name="VarLenSubsequenceRawDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
                               max_sequence_length=max_test_sequence_length,
+                              max_pc_points=150000,
                               origin_mode="FIRST_ENTRY"))
