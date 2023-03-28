@@ -6,8 +6,8 @@ test_sequence_dir = "/efs/waymo_open_processed_flow/validation/"
 
 
 
-max_train_sequence_length = 192
-max_test_sequence_length = 192
+max_train_sequence_length = 193
+max_test_sequence_length = 193
 
 epochs = 50
 learning_rate = 2e-6
