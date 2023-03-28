@@ -9,11 +9,7 @@ flow_save_folder = "/efs/waymo_open_processed_flow/train_nsfp_flow/"
 precision = 32
 
 
-def get_max_sequence_length(sequence_dir):
-    return 193
-
-
-max_test_sequence_length = get_max_sequence_length(test_sequence_dir)
+max_test_sequence_length = 193
 
 epochs = 20
 learning_rate = 2e-6
