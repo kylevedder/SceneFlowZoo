@@ -26,7 +26,7 @@ class WaymoSupervisedFlowSequence():
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
         pickle_path = self.sequence_files[idx]
-        pkl = load_pickle(pickle_path)
+        pkl = load_pickle(pickle_path, verbose=False)
         pc = PointCloud(pkl['car_frame_pc'])
         flow = pkl['flow']
         labels = pkl['label']
