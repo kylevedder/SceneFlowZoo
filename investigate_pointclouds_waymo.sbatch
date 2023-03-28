@@ -9,6 +9,6 @@
 #SBATCH --mem-per-cpu=2GB
 #SBATCH --time=00:10:00
 #SBATCH --container-mounts=../../datasets/:/efs/,./:/project
-#SBATCH --container-image=/home/kvedder/kylevedder_offline_sceneflow_latest.sqsh
+#SBATCH --container-image=/home/kvedder/kylevedder+offline_sceneflow+latest.sqsh
 ## Job Steps
 python invesigate_pointclouds.py --cpus 120
