@@ -54,7 +54,7 @@ def voxel_restrict_pointcloud(pc: PointCloud):
     return PointCloud.from_array(pc0_points_lst), pc0_valid_point_idxes
 
 
-def get_pc_sizes(idx, seq):
+def get_pc_sizes(seq_idx, seq):
     pc_sizes = []
     for idx in range(len(seq)):
         frame = seq.load(idx, idx)
@@ -62,9 +62,9 @@ def get_pc_sizes(idx, seq):
         pc, _ = voxel_restrict_pointcloud(pc)
         num_points = len(pc)
         if num_points < 100:
-            print(seq.log_id, frame['log_idx'], num_points)
+            print("Seq idx", seq_idx, "idx", idx, "num_points", num_points)
         pc_sizes.append(num_points)
-    print("Finished sequence", idx, "with", len(seq), "frames", flush=True)
+    print("Finished sequence", seq_idx, "with", len(seq), "frames", flush=True)
     return pc_sizes
 
 
