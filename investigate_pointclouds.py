@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 import numpy as np
 import tqdm
@@ -8,9 +9,22 @@ import open3d as o3d
 from pointclouds import PointCloud
 import torch
 
-from dataloaders import ArgoverseRawSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, WaymoSupervisedFlowSequenceLoader
+
+# cli argument to pick argo or waymo
+parser = argparse.ArgumentParser()
+parser.add_argument('dataset',
+                    type=str,
+                    help='argo or waymo',
+                    choices=['argo', 'waymo'])
+parser.add_argument('--cpus',
+                    type=int,
+                    help='number of cpus to use',
+                    default=multiprocessing.cpu_count() - 1)
+args = parser.parse_args()
 
 argoverse_data = Path("/efs/argoverse2")
+waymo_data = Path("/efs/waymo_open_processed_flow")
 
 from models.embedders import DynamicVoxelizer
 
@@ -18,8 +32,6 @@ from configs.pseudoimage import POINT_CLOUD_RANGE, VOXEL_SIZE
 
 voxelizer = DynamicVoxelizer(voxel_size=VOXEL_SIZE,
                              point_cloud_range=POINT_CLOUD_RANGE)
-
-PARALLELIZE = True
 
 
 def voxel_restrict_pointcloud(pc: PointCloud):
@@ -41,6 +53,7 @@ def voxel_restrict_pointcloud(pc: PointCloud):
 
     return PointCloud.from_array(pc0_points_lst), pc0_valid_point_idxes
 
+
 def get_pc_sizes(seq):
     pc_sizes = []
     for idx in range(len(seq)):
@@ -54,12 +67,15 @@ def get_pc_sizes(seq):
     return pc_sizes
 
 
-seq_loader = ArgoverseRawSequenceLoader(argoverse_data / "val")
+if args.dataset == 'waymo':
+    seq_loader = WaymoSupervisedFlowSequenceLoader(waymo_data / "validation")
+else:
+    seq_loader = ArgoverseRawSequenceLoader(argoverse_data / "val")
 seq_ids = seq_loader.get_sequence_ids()
 
-if PARALLELIZE:
+if args.cpus > 1:
     # Use joblib to parallelize the loading of the sequences
-    pc_size_lst = joblib.Parallel(n_jobs=multiprocessing.cpu_count() - 1)(
+    pc_size_lst = joblib.Parallel(n_jobs=args.cpus)(
         joblib.delayed(get_pc_sizes)(seq_loader.load_sequence(seq_id))
         for seq_id in tqdm.tqdm(seq_ids))
     pc_size_lst = [item for sublist in pc_size_lst for item in sublist]
@@ -70,7 +86,8 @@ else:
         pc_sizes = get_pc_sizes(seq)
         pc_size_lst.extend(pc_sizes)
 
-save_pickle("validation_results/validation_pointcloud_point_count.pkl",
-            pc_size_lst)
+save_pickle(
+    f"validation_results/{args.dataset}_validation_pointcloud_point_count.pkl",
+    pc_size_lst)
 
 print(np.mean(pc_size_lst), np.std(pc_size_lst), np.median(pc_size_lst))

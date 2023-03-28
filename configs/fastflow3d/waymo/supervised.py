@@ -2,17 +2,15 @@ _base_ = "../../pseudoimage.py"
 
 train_sequence_dir = "/efs/waymo_open_processed_flow/training/"
 
-test_sequence_dir = "/efs/waymo_open_processed_flow/validation/"
-
-
+test_sequence_dir = "/efs/waymo_open_processed_flow/training/"
 
 max_train_sequence_length = 192
 max_test_sequence_length = 192
 
 epochs = 50
 learning_rate = 2e-6
-save_every = 500
-validate_every = 500
+save_every = 7
+validate_every = 7
 
 SEQUENCE_LENGTH = 2
 
@@ -29,9 +27,8 @@ loader = dict(name="WaymoSupervisedFlowSequenceLoader",
 dataloader = dict(
     args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))
 
-dataset = dict(name="SubsequenceSupervisedFlowDataset",
+dataset = dict(name="VarLenSubsequenceSupervisedFlowDataset",
                args=dict(subsequence_length=SEQUENCE_LENGTH,
-                         max_sequence_length=max_train_sequence_length,
                          origin_mode="FIRST_ENTRY"))
 
 loss_fn = dict(name="FastFlow3DSupervisedLoss", args=dict())
@@ -42,7 +39,6 @@ test_loader = dict(name="WaymoSupervisedFlowSequenceLoader",
 test_dataloader = dict(
     args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))
 
-test_dataset = dict(name="SubsequenceSupervisedFlowDataset",
+test_dataset = dict(name="VarLenSubsequenceSupervisedFlowDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
-                              max_sequence_length=max_test_sequence_length,
                               origin_mode="FIRST_ENTRY"))
