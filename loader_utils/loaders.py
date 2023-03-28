@@ -53,10 +53,11 @@ def save_npy(filepath: Path, npy):
     print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
 
 
-def load_pickle(filepath: Path):
+def load_pickle(filepath: Path, verbose: bool = True):
     filepath = Path(filepath)
     assert filepath.exists(), f'{filepath} does not exist'
-    print(f'Loading {filepath} of size {_compute_size_metric(filepath)}')
+    if verbose:
+        print(f'Loading {filepath} of size {_compute_size_metric(filepath)}')
     with open(filepath, 'rb') as f:
         return pickle.load(f)
 

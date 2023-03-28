@@ -3,8 +3,8 @@ _base_ = "../../pseudoimage.py"
 is_trainable = False
 has_labels = False
 
-test_sequence_dir = "/efs/waymo_open_preprocessed/train/"
-flow_save_folder = "/efs/waymo_open_preprocessed/train_nsfp_flow/"
+test_sequence_dir = "/efs/waymo_open_processed_flow/training/"
+flow_save_folder = "/efs/waymo_open_processed_flow/train_nsfp_flow/"
 
 precision = 32
 
@@ -28,7 +28,7 @@ model = dict(name="NSFP",
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH,
                        flow_save_folder=flow_save_folder))
 
-test_loader = dict(name="WaymoRawSequenceLoader",
+test_loader = dict(name="WaymoSupervisedFlowSequenceLoader",
                    args=dict(sequence_dir=test_sequence_dir, verbose=True))
 
 test_dataloader = dict(
