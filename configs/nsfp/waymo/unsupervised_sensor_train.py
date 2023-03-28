@@ -10,7 +10,7 @@ precision = 32
 
 
 def get_max_sequence_length(sequence_dir):
-    return 195
+    return 193
 
 
 max_test_sequence_length = get_max_sequence_length(test_sequence_dir)
