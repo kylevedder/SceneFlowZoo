@@ -100,9 +100,12 @@ def make_sbatch():
 #SBATCH --job-name={args.job_prefix}
 #SBATCH --output={configs_path}/nsfp_%a.out
 #SBATCH --error={configs_path}/nsfp_%a.err
-#SBATCH --time={get_runtime_format(args.runtime_mins)}
+#SBATCH --time={get_runtime_format(args.runtime_mins)}"""
+    if args.elevated:
+        sbatch_file_content += f"""
 #SBATCH --qos={qos}
-#SBATCH --partition={partition}
+#SBATCH --partition={partition}"""
+    sbatch_file_content += f"""
 #SBATCH --gpus=1
 #SBATCH --mem-per-gpu=12G
 #SBATCH --cpus-per-gpu=2
