@@ -53,4 +53,4 @@ missing_training_subfolders = sorted(
 print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 print("Missing training subfolders:")
 for subfolder in missing_training_subfolders:
-    print(str(subfolder))
+    print(subfolder.name)
