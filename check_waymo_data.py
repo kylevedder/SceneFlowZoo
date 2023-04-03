@@ -38,10 +38,12 @@ for subfolder in validation_subfolders:
     if len(num_flows) < 196:
         print(str(subfolder), len(num_flows))
 
+train_subfolder_names = [subfolder.name for subfolder in training_subfolders]
 for subfolder in flow_subfolders:
     num_flows = sorted(subfolder.glob('*.npz'))
     if len(num_flows) < 196:
-        print(str(subfolder), len(num_flows))
+        idx = train_subfolder_names.index(subfolder.name)
+        print(subfolder.name, len(num_flows), idx)
 
 # Get all the folders in the training subset that aren't in flow subfolders
 missing_training_subfolders = sorted(
