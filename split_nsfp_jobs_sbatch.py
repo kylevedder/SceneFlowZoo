@@ -43,8 +43,15 @@ if args.job_subset_file is not None:
     assert args.job_subset_file.is_file(
     ), f"Job subset file {args.job_subset_file} does not exist"
     print(f"Using job subset file {args.job_subset_file} to filter jobs")
+
+    def parse_line(line: str) -> str:
+        if ' ' not in line:
+            return line.strip()
+        # Get the first column
+        return line.split(' ')[0].strip()
+
     with open(args.job_subset_file, "r") as f:
-        valid_jobs = [l.strip().split(' ')[0].strip() for l in f.readlines()]
+        valid_jobs = [parse_line(l) for l in f.readlines()]
     valid_jobs = set(valid_jobs)
 
     # Filter out jobs that are not in the subset

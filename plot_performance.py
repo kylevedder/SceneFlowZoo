@@ -10,12 +10,13 @@ import shutil
 # Get path to methods from command line
 parser = argparse.ArgumentParser()
 parser.add_argument('results_folder', type=Path)
+parser.add_argument('--dataset', type=str, default="argo", choices=["argo", "waymo"])
 args = parser.parse_args()
 
 assert args.results_folder.exists(
 ), f"Results folder {args.results_folder} does not exist"
 
-save_folder = args.results_folder / "plots"
+save_folder = args.results_folder / f"plots_{args.dataset}"
 save_folder.mkdir(exist_ok=True, parents=True)
 
 
@@ -82,8 +83,26 @@ def savefig(name, pad: float = 0):
     plt.clf()
 
 
+def savetable(name, content: List[List[Any]]):
+    outfile = save_folder / f"{name}.txt"
+
+    def fmt(e):
+        if type(e) == float or type(e) == np.float64 or type(
+                e) == np.float32 or type(e) == np.float16:
+            return f"{e:.3f}"
+        return str(e)
+
+    print("Saving", outfile)
+    with open(outfile, 'w') as f:
+
+        assert type(content) == list, "Table must be a list of rows"
+        for row in content:
+            assert type(row) == list, "Table rows must be lists"
+            f.write(" & ".join([fmt(e) for e in row]) + "\\\\\n")
+
+
 def load_results(validation_folder: Path,
-                 dataset: str = "argo",
+                 dataset: str = args.dataset,
                  full_distance: str = "ALL"):
     print("Loading results from", validation_folder)
     config_folder = validation_folder / "configs"
@@ -195,6 +214,23 @@ def plot_mover_nonmover_vs_error_by_category(results: List[ResultInfo],
     grid()
 
 
+def table_speed_vs_error(results: List[ResultInfo]):
+    # for metacatagory in METACATAGORIES:
+    rows = []
+
+    for result in results:
+        row = [result.pretty_name()]
+        for metacatagory in METACATAGORIES:
+
+            metacatagory_epe_by_speed = result.get_metacatagory_epe_by_speed(
+                metacatagory)
+            print(metacatagory, metacatagory_epe_by_speed)
+            row.extend(metacatagory_epe_by_speed.tolist())
+        rows.append(row)
+
+    return rows
+
+
 def plot_nonmover_epe_overall(results: List[ResultInfo], vmax):
     for result_idx, result in enumerate(results):
         nonmover_epe = result.get_nonmover_point_epe()
@@ -227,6 +263,16 @@ def plot_mover_epe_overall(results: List[ResultInfo], vmax):
     plt.ylim(0, vmax)
     plt.legend()
     grid()
+
+
+def table_mover_nonmover_epe_overall(results: List[ResultInfo]):
+    rows = []
+    for result in results:
+        row = [result.pretty_name()]
+        row.append(result.get_nonmover_point_epe())
+        row.append(result.get_mover_point_all_epe())
+        rows.append(row)
+    return rows
 
 
 def plot_metacatagory_epe_counts(results: List[ResultInfo]):
@@ -424,10 +470,11 @@ def plot_metacatagory_epe_counts_v3(results: List[ResultInfo],
 def table_latency(results: List[ResultInfo]):
     table = []
     for result in results:
-        table.append([
+        table_row = [
             result.pretty_name(),
             f"{result.get_latency():0.4f}",
-        ])
+        ]
+        table.append(table_row)
     return table
 
 
@@ -438,6 +485,10 @@ def table_epe(results: List[ResultInfo]):
         relaxed_percentage = foreground_counts[:2].sum(
         ) / foreground_counts.sum()
         strict_percentage = foreground_counts[0] / foreground_counts.sum()
+
+        def fmt(val):
+            return f"{val:0.3f}"
+
         epe_entries = [
             result.get_mover_point_dynamic_epe(),
             result.get_mover_point_static_epe(),
@@ -446,14 +497,16 @@ def table_epe(results: List[ResultInfo]):
         average_epe = np.average(epe_entries)
 
         entries = [
-            result.pretty_name(), average_epe, *epe_entries,
-            relaxed_percentage, strict_percentage
+            result.pretty_name(),
+            fmt(average_epe), *[fmt(e) for e in epe_entries],
+            fmt(relaxed_percentage),
+            fmt(strict_percentage)
         ]
         table_rows.append(entries)
     return table_rows
 
 
-def plot_validation_pointcloud_size(dataset: str):
+def plot_validation_pointcloud_size(dataset: str, max_x = 160000):
     validation_data_counts_path = args.results_folder / f"{dataset}_validation_pointcloud_point_count.pkl"
     assert validation_data_counts_path.exists(
     ), f"Could not find {validation_data_counts_path}"
@@ -479,6 +532,7 @@ def plot_validation_pointcloud_size(dataset: str):
     plt.hist(point_cloud_counts, bins=100, zorder=3, color=color(0, 1))
     plt.xlabel("Number of points")
     plt.ylabel("Number of point clouds")
+    plt.xlim(left=0, right=max_x)
     plt.tight_layout()
 
 
@@ -561,6 +615,10 @@ for metacatagory in METACATAGORIES:
 
 ################################################################################
 
+savetable("speed_vs_error", table_speed_vs_error(results))
+
+################################################################################
+
 plt.gcf().set_size_inches(5.5, 2.5)
 plot_val_endpoint_error_distribution(use_log_scale=True)
 savefig(f"val_endpoint_error_distribution_log")
@@ -578,6 +636,12 @@ savefig(f"nonmover_epe_overall")
 plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
 plot_mover_epe_overall(results, 0.3)
 savefig(f"mover_epe_overall")
+
+################################################################################
+
+savetable("mover_nonmover_epe_overall", table_mover_nonmover_epe_overall(results))
+
+################################################################################
 
 plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6)
 plot_nonmover_epe_overall(results_close, 0.3)
@@ -641,72 +705,20 @@ savefig(f"epe_counts_v3_loose")
 
 ################################################################################
 
-plt.gcf().set_size_inches(5.5, 5.5 / 1.6 / 2)
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
 plot_validation_pointcloud_size("argo")
 grid()
 savefig(f"validation_pointcloud_size_argo", pad=0.02)
 
-plt.gcf().set_size_inches(5.5, 5.5 / 1.6 / 2)
+plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
 plot_validation_pointcloud_size("waymo")
 grid()
 savefig(f"validation_pointcloud_size_waymo", pad=0.02)
 
 ################################################################################
 
-print(table_latency(results))
+savetable("latency_table", table_latency(results))
 
 ################################################################################
 
-for row in table_epe(results_close):
-    print(" & ".join([f"${e:.3f}$" if type(e) != str else e
-                      for e in row]) + " \\\\")
-
-# def plot_meta_catagory_category_counts():
-#     fig, subplot_axes = plt.subplots(1, num_metacatagories)
-
-#     for result_idx, result in enumerate(results):
-#         metacategory_counts = process_metacategory_counts(result.results)
-
-#         for metacatagory, ax in zip(metacategory_counts, subplot_axes):
-#             category_counts = metacategory_counts[metacatagory]
-#             categories, counts = zip(*category_counts.items())
-#             ax.set_title(metacatagory)
-#             ax.bar(
-#                 np.arange(len(categories)),
-#                 counts,
-#                 label=result.name.replace("fastflow3d_", " "),
-#             )
-#             ax.set_xticks(range(len(categories)), categories, rotation=90)
-
-#     return fig
-
-# def plot_category_speed_counts():
-#     fig, axes = plt.subplots(1, len(results))
-#     for result_idx, (result, ax) in enumerate(zip(results, axes)):
-#         speed_counts_norm, speed_counts_raw = process_category_speed_counts(
-#             result.results)
-#         ax.matshow(speed_counts_norm)
-#         for (i, j), z in np.ndenumerate(speed_counts_raw):
-#             ax.text(j,
-#                     i,
-#                     '{}'.format(z),
-#                     ha='center',
-#                     va='center',
-#                     bbox=dict(boxstyle='round',
-#                               facecolor='white',
-#                               edgecolor='0.3'))
-#         ax.set_yticks(range(len(CATEGORY_NAMES)), CATEGORY_NAMES.values())
-
-#     return fig
-
-# fig = plot_meta_catagory_category_counts()
-# fig.set_size_inches(20, 10)
-# plt.tight_layout()
-# fig.savefig(args.results_folder / "category_counts.png")
-# plt.clf()
-
-# fig = plot_category_speed_counts()
-# fig.set_size_inches(10, 30)
-# plt.tight_layout()
-# fig.savefig(args.results_folder / "category_speed_counts.png")
-# plt.clf()
+savetable("epe_table", table_epe(results_close))

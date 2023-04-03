@@ -36,4 +36,5 @@ valid_flow_folder_names = sorted([e.name for e in valid_flow_folders])
 missing_folder_names = sorted(
     set(train_subfolder_names) - set(valid_flow_folder_names))
 
-print("Missing folder names", missing_folder_names)
+for folder_name in missing_folder_names:
+    print(folder_name)
