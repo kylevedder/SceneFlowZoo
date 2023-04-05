@@ -9,6 +9,7 @@ import pytorch_lightning as pl
 import torchmetrics
 from typing import Dict, List, Tuple
 from loader_utils import *
+import nntime
 
 
 class EndpointDistanceMetricRawTorch():
@@ -249,7 +250,9 @@ class ModelWrapper(pl.LightningModule):
         vis.run()
 
     def validation_step(self, input_batch, batch_idx):
+        nntime.timer_start(self, "validation_forward")
         model_res = self.model(input_batch, **self.val_forward_args)
+        nntime.timer_end(self, "validation_forward")
         output_batch = model_res["forward"]
         self.metric.to(self.device)
 
@@ -308,6 +311,8 @@ class ModelWrapper(pl.LightningModule):
 
     def _save_validation_data(self, save_dict):
         save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
+        timing_out = f"validation_results/{self.cfg.filename}_timing.csv"
+        nntime.export_timings(self, timing_out)
 
     def _log_validation_metrics(self, validation_result_dict, verbose=True):
         result_full_info = ResultInfo(Path(self.cfg.filename).stem,

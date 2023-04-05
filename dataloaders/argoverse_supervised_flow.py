@@ -121,7 +121,8 @@ class ArgoverseSupervisedFlowSequenceLoader():
     def __init__(self,
                  raw_data_path: Path,
                  flow_data_path: Path,
-                 log_subset: Optional[List[str]] = None):
+                 log_subset: Optional[List[str]] = None, 
+                 num_sequences: Optional[int] = None):
         self.raw_data_path = Path(raw_data_path)
         self.flow_data_path = Path(flow_data_path)
         assert self.raw_data_path.is_dir(
@@ -151,6 +152,9 @@ class ArgoverseSupervisedFlowSequenceLoader():
                 sequence_id for sequence_id in self.sequence_id_lst
                 if sequence_id in log_subset
             ]
+
+        if num_sequences is not None:
+            self.sequence_id_lst = self.sequence_id_lst[:num_sequences]
 
         self.last_loaded_sequence = None
         self.last_loaded_sequence_id = None

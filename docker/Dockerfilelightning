@@ -27,6 +27,7 @@ RUN pip install mmcv-full==1.7.1 -f https://download.openmmlab.com/mmcv/dist/cu1
 RUN pip install pyarrow pyquaternion open3d
 RUN pip install tensorboard
 RUN pip install pytorch-lightning==1.9.4
+RUN pip install nntime
 
 ENV PYTHONPATH=/project:${PYTHONPATH}
 COPY bashrc /root/.bashrc

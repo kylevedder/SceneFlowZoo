@@ -11,7 +11,11 @@ GROUND_HEIGHT_THRESHOLD = 0.4  # 40 centimeters
 
 class ArgoverseRawSequence():
 
-    def __init__(self, log_id: str, dataset_dir: Path, verbose: bool = False):
+    def __init__(self,
+                 log_id: str,
+                 dataset_dir: Path,
+                 verbose: bool = False,
+                 sample_every: Optional[int] = None):
         self.log_id = log_id
 
         self.dataset_dir = Path(dataset_dir)
@@ -38,6 +42,9 @@ class ArgoverseRawSequence():
             file_timestamps.intersection(info_timestamps))
         assert len(self.timestamp_list
                    ) > 0, f'no timestamps found in {self.dataset_dir}'
+
+        if sample_every is not None:
+            self.timestamp_list = self.timestamp_list[::sample_every]
 
         self.raster_heightmap, self.global_to_raster_se2, self.global_to_raster_scale = self._load_ground_height_raster(
         )
@@ -190,9 +197,12 @@ class ArgoverseRawSequenceLoader():
     def __init__(self,
                  sequence_dir: Path,
                  log_subset: Optional[List[str]] = None,
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 num_sequences: Optional[int] = None,
+                 per_sequence_sample_every: Optional[int] = None):
         self.dataset_dir = Path(sequence_dir)
         self.verbose = verbose
+        self.per_sequence_sample_every = per_sequence_sample_every
         assert self.dataset_dir.is_dir(
         ), f'dataset_dir {sequence_dir} does not exist'
         self.log_lookup = {e.name: e for e in self.dataset_dir.glob('*/')}
@@ -205,6 +215,13 @@ class ArgoverseRawSequenceLoader():
             self.log_lookup = {
                 k: v
                 for k, v in self.log_lookup.items() if k in log_subset
+            }
+
+        if num_sequences is not None:
+            self.log_lookup = {
+                k: v
+                for idx, (k, v) in enumerate(self.log_lookup.items())
+                if idx < num_sequences
             }
 
         if self.verbose:
@@ -220,7 +237,11 @@ class ArgoverseRawSequenceLoader():
         assert log_id in self.log_lookup, f'log_id {log_id} does not exist'
         log_dir = self.log_lookup[log_id]
         assert log_dir.is_dir(), f'log_id {log_id} does not exist'
-        return ArgoverseRawSequence(log_id, log_dir, verbose=self.verbose)
+        return ArgoverseRawSequence(
+            log_id,
+            log_dir,
+            verbose=self.verbose,
+            sample_every=self.per_sequence_sample_every)
 
     def load_sequence(self, log_id: str) -> ArgoverseRawSequence:
         # Basic caching mechanism for repeated loads of the same sequence
