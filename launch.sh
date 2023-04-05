@@ -13,7 +13,3 @@ docker run --gpus=all --rm -it \
  -h $HOSTNAME \
  --privileged \
  offline_sceneflow:latest
- #offline_sceneflow_cuda117lightning:latest
-#  offline_sceneflow:latest
- #offline_sceneflow_cuda117:latest
- #offline_sceneflow:latest
