@@ -19,12 +19,14 @@ parser.add_argument('--dataset_type',
                     type=str,
                     default='val',
                     choices=['train', 'val'])
-# select every nth frame, default to 1
+parser.add_argument('--dataset_source',
+                    type=str,
+                    default='nsfp',
+                    choices=['nsfp', 'odom'])
 parser.add_argument('--step_size',
                     type=int,
                     default=5,
                     help='select every nth frame')
-# num workers
 parser.add_argument('--num_workers',
                     type=int,
                     default=multiprocessing.cpu_count(),
@@ -88,13 +90,16 @@ def get_pcs_flows_pose(unsupervised_frame_dict, supervised_frame_dict):
 def accumulate_flow_scatter(supervised_flow,
                             unsupervised_flow,
                             classes,
-                            grid_radius_meters=2,
-                            cells_per_meter=100):
+                            grid_radius_meters=1.5,
+                            cells_per_meter=50):
     # import matplotlib.pyplot as plt
     not_background_mask = (classes >= 0)
+    moving_points_mask = np.linalg.norm(supervised_flow, axis=1) > 0.05
 
-    supervised_flow = supervised_flow[not_background_mask][:, :2]
-    unsupervised_flow = unsupervised_flow[not_background_mask][:, :2]
+    valid_mask = not_background_mask & moving_points_mask
+
+    supervised_flow = supervised_flow[valid_mask][:, :2]
+    unsupervised_flow = unsupervised_flow[valid_mask][:, :2]
 
     # Canonocalize the supervised flows so that ground truth is all pointing in the positive X direction
     supervised_norm = np.linalg.norm(supervised_flow, axis=1)
@@ -126,18 +131,18 @@ def accumulate_flow_scatter(supervised_flow,
 
     # Create the grid
     accumulation_grid = np.zeros(
-        (grid_radius_meters * 2 * cells_per_meter + 1,
-         grid_radius_meters * 2 * cells_per_meter + 1))
+        (int(grid_radius_meters * 2 * cells_per_meter + 1),
+         int(grid_radius_meters * 2 * cells_per_meter + 1)))
 
     # Compute the grid indices for flow_error_xy using np digitize
     grid_indices_x = np.digitize(
         flow_error_xy[:, 0],
         bins=np.linspace(-grid_radius_meters, grid_radius_meters,
-                         grid_radius_meters * 2 * cells_per_meter + 1)) - 1
+                         int(grid_radius_meters * 2 * cells_per_meter) + 1)) - 1
     grid_indices_y = np.digitize(
         flow_error_xy[:, 1],
         bins=np.linspace(-grid_radius_meters, grid_radius_meters,
-                         grid_radius_meters * 2 * cells_per_meter + 1)) - 1
+                         int(grid_radius_meters * 2 * cells_per_meter) + 1)) - 1
 
     grid_indices = np.array([grid_indices_x, grid_indices_y]).T
     unique_grid_indices, unique_counts = np.unique(grid_indices,
@@ -147,6 +152,7 @@ def accumulate_flow_scatter(supervised_flow,
     accumulation_grid[unique_grid_indices[:, 0],
                       unique_grid_indices[:, 1]] = unique_counts
 
+    # import matplotlib.pyplot as plt
     # plt.matshow(accumulation_grid)
     # plt.xticks(
     #     np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
@@ -183,8 +189,14 @@ def process_sequence(sequence_id):
               supervised_frame_dict) in enumerate(zipped_frame_list):
 
         step_idx = idx * args.step_size
-        unsupervised_flowed_pc, unsupervised_flow, supervised_flowed_pc, supervised_flow, pc_classes = get_pcs_flows_pose(
-            unsupervised_frame_dict, supervised_frame_dict)
+        try:
+            unsupervised_flowed_pc, unsupervised_flow, supervised_flowed_pc, supervised_flow, pc_classes = get_pcs_flows_pose(
+                unsupervised_frame_dict, supervised_frame_dict)
+        except AssertionError as e:
+            print("Error processing sequence: ", sequence_id, " step: ",
+                  step_idx)
+            print(e)
+            # raise e
 
         accumulation_grid_lst.append(
             accumulate_flow_scatter(supervised_flow, unsupervised_flow,
@@ -200,13 +212,13 @@ data_root = Path('/efs/argoverse2/')
 
 unsupervised_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
     data_root / args.dataset_type,
-    data_root / f'{args.dataset_type}_nsfp_flow/')
+    data_root / f'{args.dataset_type}_{args.dataset_source}_flow/')
 
 supervised_sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
     data_root / args.dataset_type,
     data_root / f'{args.dataset_type}_sceneflow/')
 
-save_dir = data_root / f'{args.dataset_type}_unsupervised_vs_supervised_flow'
+save_dir = data_root / f'{args.dataset_type}_{args.dataset_source}_unsupervised_vs_supervised_flow'
 
 unsupervised_sequences = set(unsupervised_sequence_loader.get_sequence_ids())
 supervised_sequences = set(supervised_sequence_loader.get_sequence_ids())
@@ -217,9 +229,11 @@ overlapping_sequences = unsupervised_sequences.intersection(
 print("Number of overlapping sequences: ", len(overlapping_sequences))
 
 # Use joblib to parallelize the processing of each sequence
-joblib.Parallel(n_jobs=args.num_workers, verbose=10)(
-    joblib.delayed(process_sequence)(sequence_id)
-    for sequence_id in tqdm.tqdm(sorted(overlapping_sequences)))
 
-# for sequence_id in sorted(overlapping_sequences):
-#     process_sequence(sequence_id)
+if args.num_workers <= 1:
+    for sequence_id in tqdm.tqdm(sorted(overlapping_sequences)):
+        process_sequence(sequence_id)
+else:
+    joblib.Parallel(n_jobs=args.num_workers, verbose=10)(
+        joblib.delayed(process_sequence)(sequence_id)
+        for sequence_id in tqdm.tqdm(sorted(overlapping_sequences)))

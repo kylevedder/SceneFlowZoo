@@ -10,7 +10,10 @@ import shutil
 # Get path to methods from command line
 parser = argparse.ArgumentParser()
 parser.add_argument('results_folder', type=Path)
-parser.add_argument('--dataset', type=str, default="argo", choices=["argo", "waymo"])
+parser.add_argument('--dataset',
+                    type=str,
+                    default="argo",
+                    choices=["argo", "waymo"])
 args = parser.parse_args()
 
 assert args.results_folder.exists(
@@ -506,7 +509,7 @@ def table_epe(results: List[ResultInfo]):
     return table_rows
 
 
-def plot_validation_pointcloud_size(dataset: str, max_x = 160000):
+def plot_validation_pointcloud_size(dataset: str, max_x=160000):
     validation_data_counts_path = args.results_folder / f"{dataset}_validation_pointcloud_point_count.pkl"
     assert validation_data_counts_path.exists(
     ), f"Could not find {validation_data_counts_path}"
@@ -536,12 +539,13 @@ def plot_validation_pointcloud_size(dataset: str, max_x = 160000):
     plt.tight_layout()
 
 
-def plot_val_endpoint_error_distribution(use_log_scale: bool = False):
+def plot_val_endpoint_error_distribution(source: str,
+                                         use_log_scale: bool = False):
     error_distribution_files = sorted(
-        Path("/efs/argoverse2/val_unsupervised_vs_supervised_flow/").glob(
-            "*_error_distribution.npy"))
+        Path(f"/efs/argoverse2/val_{source}_unsupervised_vs_supervised_flow/").
+        glob("*_error_distribution.npy"))
     npy_file_arr = np.array([
-        load_npy(error_distribution_file)
+        load_npy(error_distribution_file, verbose=False)
         for error_distribution_file in error_distribution_files
     ])
     distribution = np.sum(npy_file_arr, axis=0)
@@ -555,30 +559,37 @@ def plot_val_endpoint_error_distribution(use_log_scale: bool = False):
                            weights=distribution_y)
 
     print("VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
-    print(f"Average x: {average_x}, average y: {average_y}")
+    print(f"{source} Average x: {average_x}, average y: {average_y}")
     print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
     plot_mat = np.flip(distribution, axis=1).T
     if use_log_scale:
         plot_mat = np.log(plot_mat)
+        print("++++++++++++++++++++++++++++")
+
+        print("Num finite cells:", np.isfinite(plot_mat).sum())
+        print(plot_mat[np.isfinite(plot_mat)].max(),
+              plot_mat[np.isfinite(plot_mat)].min())
+        plot_mat[~np.isfinite(plot_mat)] = -2
+        print("++++++++++++++++++++++++++++")
     plt.imshow(plot_mat, cmap=color_map())
-    grid_radius_meters = 2
-    cells_per_meter = 100
+    grid_radius_meters = 1.5
+    cells_per_meter = 50
     plt.xticks(
         np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
-                    grid_radius_meters * 2 + 1),
+                    int(grid_radius_meters * 2 + 1)),
         [
             f"{e}m"
             for e in np.linspace(-grid_radius_meters, grid_radius_meters,
-                                 grid_radius_meters * 2 + 1)
+                                 int(grid_radius_meters * 2 + 1))
         ])
     plt.yticks(
         np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
-                    grid_radius_meters * 2 + 1),
+                    int(grid_radius_meters * 2 + 1)),
         [
             f"{-e}m"
             for e in np.linspace(-grid_radius_meters, grid_radius_meters,
-                                 grid_radius_meters * 2 + 1)
+                                 int(grid_radius_meters * 2 + 1))
         ])
 
 
@@ -620,12 +631,20 @@ savetable("speed_vs_error", table_speed_vs_error(results))
 ################################################################################
 
 plt.gcf().set_size_inches(5.5, 2.5)
-plot_val_endpoint_error_distribution(use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log")
+plot_val_endpoint_error_distribution('nsfp', use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log_nsfp")
 
 plt.gcf().set_size_inches(5.5, 2.5)
-plot_val_endpoint_error_distribution(use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute")
+plot_val_endpoint_error_distribution('nsfp', use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute_nsfp")
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_val_endpoint_error_distribution('odom', use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log_odom")
+
+plt.gcf().set_size_inches(5.5, 2.5)
+plot_val_endpoint_error_distribution('odom', use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute_odom")
 
 ################################################################################
 
@@ -639,7 +658,8 @@ savefig(f"mover_epe_overall")
 
 ################################################################################
 
-savetable("mover_nonmover_epe_overall", table_mover_nonmover_epe_overall(results))
+savetable("mover_nonmover_epe_overall",
+          table_mover_nonmover_epe_overall(results))
 
 ################################################################################
 

@@ -25,14 +25,16 @@ def load_npz(filepath: Path, verbose: bool = True):
     return np.load(filepath, allow_pickle=True)
 
 
-def save_npz(filepath: Path, npz):
+def save_npz(filepath: Path, npz, verbose: bool = True):
     filepath = Path(filepath)
-    print(f'Saving {filepath}', end='')
+    if verbose:
+        print(f'Saving {filepath}', end='')
     if filepath.exists():
         filepath.unlink()
     filepath.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(filepath, **npz)
-    print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
+    if verbose:
+        print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
 
 
 def load_npy(filepath: Path, verbose: bool = True):

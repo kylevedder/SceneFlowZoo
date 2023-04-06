@@ -121,7 +121,7 @@ class ArgoverseSupervisedFlowSequenceLoader():
     def __init__(self,
                  raw_data_path: Path,
                  flow_data_path: Path,
-                 log_subset: Optional[List[str]] = None, 
+                 log_subset: Optional[List[str]] = None,
                  num_sequences: Optional[int] = None):
         self.raw_data_path = Path(raw_data_path)
         self.flow_data_path = Path(flow_data_path)

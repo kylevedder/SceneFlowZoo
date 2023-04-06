@@ -4,6 +4,7 @@ from tqdm import tqdm
 import enum
 from typing import Union, List, Tuple, Dict, Optional, Any
 from pointclouds import to_fixed_array
+from pathlib import Path
 
 
 class OriginMode(enum.Enum):
@@ -160,6 +161,67 @@ class SubsequenceSupervisedFlowDataset(SubsequenceRawDataset):
             "log_ids": log_ids,
             "log_idxes": log_idxes
         }
+
+
+class SubsequenceSupervisedFlowSpecificSubsetDataset(
+        SubsequenceSupervisedFlowDataset):
+
+    def __init__(self,
+                 sequence_loader,
+                 subsequence_length: int,
+                 max_sequence_length: int,
+                 origin_mode: Union[OriginMode, str],
+                 subset_file: Path,
+                 max_pc_points: int = 90000):
+        super().__init__(sequence_loader, subsequence_length,
+                         max_sequence_length, origin_mode, max_pc_points)
+        subset_file = Path(subset_file)
+        assert subset_file.exists(
+        ), f"subset file {self.subset_file} does not exist"
+        self.subset_list = self._parse_subset_file(subset_file)
+
+    def _parse_subset_file(self, subset_file) -> List[Tuple[str, int]]:
+        # Load each file line by line and extract tuple of (log_id, log_idx)
+        with open(subset_file, 'r') as f:
+            lines = f.readlines()
+        res_list = []
+        for line in lines:
+            log_id, log_idx = line.split(",")
+            res_list.append((log_id, int(log_idx)))
+        return res_list
+
+    def __len__(self):
+        return len(self.subset_list)
+
+    def _get_subsequence(self, index):
+        assert index >= 0 and index < len(
+            self
+        ), f"index must be >= 0 and < len(self), got {index} and {len(self)}"
+        log_id, log_idx = self.subset_list[index]
+        sequence = self.sequence_loader.load_sequence(log_id)
+
+        if self.origin_mode == OriginMode.FIRST_ENTRY:
+            origin_idx = log_idx
+        elif self.origin_mode == OriginMode.LAST_ENTRY:
+            origin_idx = log_idx + self.subsequence_length - 1
+        else:
+            raise ValueError(f"Unknown origin mode {self.origin_mode}")
+
+        subsequence_lst = [
+            sequence.load(log_idx + i, origin_idx)
+            for i in range(self.subsequence_length)
+        ]
+
+        # Special process the last entry in the subsequence because it does not have a flow but we still
+        # want to use it for eval, so we need to shim in a flow of zeros and a pc_classes of -1
+
+        e = subsequence_lst[-1]
+        if e['relative_flowed_pc'] is None:
+            e['relative_flowed_pc'] = e['relative_pc']
+        if e['pc_classes'] is None:
+            e['pc_classes'] = np.zeros(e['relative_pc'].points.shape[0]) * -1
+
+        return subsequence_lst
 
 
 class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
