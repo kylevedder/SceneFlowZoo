@@ -59,7 +59,7 @@ class PointCloud():
     def to_fixed_array(self, max_points: int) -> np.ndarray:
         return to_fixed_array(self.points, max_points)
 
-    def matched_point_ditsance(self, other: 'PointCloud') -> np.ndarray:
+    def matched_point_distance(self, other: 'PointCloud') -> np.ndarray:
         assert len(self) == len(other)
         return np.linalg.norm(self.points - other.points, axis=1)
 

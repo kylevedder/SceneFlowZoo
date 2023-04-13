@@ -21,8 +21,12 @@ class NSFP(nn.Module):
        unseen P_1); referred to as pc0 and pc1 in the code.
     """
 
-    def __init__(self, VOXEL_SIZE, POINT_CLOUD_RANGE, SEQUENCE_LENGTH,
-                 flow_save_folder: Path) -> None:
+    def __init__(self,
+                 VOXEL_SIZE,
+                 POINT_CLOUD_RANGE,
+                 SEQUENCE_LENGTH,
+                 flow_save_folder: Path,
+                 skip_existing: bool = False) -> None:
         super().__init__()
         self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
         assert self.SEQUENCE_LENGTH == 2, "This implementation only supports a sequence length of 2."
@@ -31,6 +35,20 @@ class NSFP(nn.Module):
         self.nsfp_processor = NSFPProcessor()
         self.flow_save_folder = Path(flow_save_folder)
         self.flow_save_folder.mkdir(parents=True, exist_ok=True)
+        self.skip_existing_cache = dict()
+        self.skip_existing = skip_existing
+        if self.skip_existing:
+            self.skip_existing_cache = self._build_skip_existing_cache()
+
+    def _build_skip_existing_cache(self):
+        skip_existing_cache = dict()
+        for log_id in self.flow_save_folder.iterdir():
+            skip_existing_cache[log_id.name] = set()
+            for npz_idx, npz_file in enumerate(sorted((log_id).glob("*.npz"))):
+                npz_filename_idx = int(npz_file.stem.split('_')[0])
+                skip_existing_cache[log_id.name].add(npz_idx)
+                skip_existing_cache[log_id.name].add(npz_filename_idx)
+        return skip_existing_cache
 
     def _save_result(self, log_id: str, batch_idx: int, minibatch_idx: int,
                      delta_time: float, flow: torch.Tensor,
@@ -102,6 +120,26 @@ class NSFP(nn.Module):
                             pc0_valid_point_idx) in enumerate(
                                 zip(pc0_points_lst, pc1_points_lst,
                                     pc0_valid_point_idxes)):
+            log_id = batched_sequence['log_ids'][minibatch_idx][0]
+            batch_idx = batched_sequence['data_index'].item()
+            if self.skip_existing:
+                if log_id in self.skip_existing_cache:
+                    existing_set = self.skip_existing_cache[log_id]
+                    if batch_idx in existing_set:
+                        print(f'Skip existing flow for {log_id} {batch_idx}')
+                        continue
+                    else:
+                        print("batch_idx", batch_idx, "not in", existing_set)
+                else:
+                    print("log_id", log_id, "not in", self.skip_existing_cache.keys())
+            #     and (
+            #         log_id in self.skip_existing_cache) and (
+            #             batch_idx in self.skip_existing_cache[log_id]):
+            #     print(f'Skip existing flow for {log_id} {batch_idx}')
+            #     continue
+            # else:
+            #     print(self.skip_existing_cache.keys())
+
             pc0_points = torch.unsqueeze(pc0_points, 0)
             pc1_points = torch.unsqueeze(pc1_points, 0)
 
@@ -122,13 +160,12 @@ class NSFP(nn.Module):
             delta_time = after_time - before_time
             # self._visualize_result(pc0_points, warped_pc0_points)
             flow = warped_pc0_points - pc0_points
-            self._save_result(
-                log_id=batched_sequence['log_ids'][minibatch_idx][0],
-                batch_idx=batched_sequence['data_index'].item(),
-                minibatch_idx=minibatch_idx,
-                delta_time=delta_time,
-                flow=flow,
-                valid_idxes=pc0_valid_point_idx)
+            self._save_result(log_id=log_id,
+                              batch_idx=batch_idx,
+                              minibatch_idx=minibatch_idx,
+                              delta_time=delta_time,
+                              flow=flow,
+                              valid_idxes=pc0_valid_point_idx)
             flows.append(flow.squeeze(0))
             delta_times.append(delta_time)
 

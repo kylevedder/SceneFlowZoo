@@ -29,7 +29,7 @@ model = dict(name="NSFP",
              args=dict(VOXEL_SIZE={{_base_.VOXEL_SIZE}},
                        POINT_CLOUD_RANGE={{_base_.POINT_CLOUD_RANGE}},
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH,
-                       flow_save_folder=flow_save_folder))
+                       flow_save_folder=flow_save_folder, skip_existing=True))
 
 test_loader = dict(name="ArgoverseRawSequenceLoader",
                    args=dict(sequence_dir=test_sequence_dir, verbose=True))

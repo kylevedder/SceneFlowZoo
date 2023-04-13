@@ -136,6 +136,118 @@ assert len(
     results) > 0, f"No results found in {args.results_folder.absolute()}"
 
 
+def plot_speed_vs_performance_tradeoff():
+    runtimes = {
+        'Ours': 29.33,
+        'FastFlow3D': 29.33,
+        'NSFP': 26285.0,
+        'Chodosh': 26285.0,
+        'Gojcic': 6087.87,
+        'Sim2Real': 99.3477,
+        'EgoFlow': 2116.34,
+        'PPWC': 79.4275,
+        'FlowStep3D': 687.536,
+    }
+
+    points_processed = {
+        'Ours': 52871.6,
+        'FastFlow3D': 52871.6,
+        'NSFP': 52871.6,
+        'Chodosh': 52871.6,
+        'Gojcic': 20000,
+        'Sim2Real': 8192,
+        'EgoFlow': 8192,
+        'PPWC': 8192,
+        'FlowStep3D': 8192,
+    }
+
+    performance = {
+        'Ours': 0.089,
+        'NSFP': 0.068,
+        'Chodosh': 0.055,
+        'FastFlow3D': 0.076,
+        'PPWC': 0.130,
+        'FlowStep3D': 0.161,
+        'Sim2Real': 0.157,
+        'EgoFlow': 0.205,
+        'Gojcic': 0.083
+    }
+
+    uses_labels = {
+        'Ours': False,
+        'NSFP': False,
+        'FastFlow3D': True,
+        'PPWC': False,
+        'FlowStep3D': False,
+        'Sim2Real': False,
+        'EgoFlow': False,
+        'Gojcic': True,
+        'Chodosh': False,
+    }
+
+    keys = runtimes.keys()
+    runtimes = [runtimes[k] for k in keys]
+    performance = [performance[k] for k in keys]
+    shapes = ['s' if uses_labels[k] else 'o' for k in keys]
+    alphas = [0.2 if uses_labels[k] else 1.0 for k in keys]
+    points = [points_processed[k] for k in keys]
+
+    worst_runtime = max(runtimes)
+    worst_perf = max(performance)
+
+    for key, runtime, perf, shape, alpha, point_count in zip(
+            keys, runtimes, performance, shapes, alphas, points):
+        color = 'black' if key != 'Ours' else 'red'
+        fontweight = 'bold' if key == 'Ours' else 'normal'
+        dot_scale = (point_count / 8192)
+        alignment = 'left' if runtime < 20000 else 'right'
+        x_offset_sign = 1 if alignment == 'left' else -1
+        plt.scatter(runtime,
+                    perf,
+                    marker=shape,
+                    label=key,
+                    color=color,
+                    zorder=10,
+                    s=dot_scale**2,
+                    alpha=alpha)
+        # Annotate with name
+        plt.annotate(f"{key} ({point_count / 1000.0:0.1f}k points)",
+                     (runtime, perf),
+                     xytext=((4 + np.sqrt(dot_scale - 1)) * x_offset_sign,
+                             -2.75),
+                     textcoords='offset points',
+                     color=color,
+                     ha=alignment,
+                     fontweight=fontweight)
+    # Set x axis log scale
+    plt.xscale('log')
+    # Make vertical bar at 100 on x axis
+    plt.axvline(100, color='blue', linestyle='--', linewidth=2, zorder=0)
+    plt.xlabel("Runtime (ms)")
+    plt.ylabel("Threeway EPE (m)")
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['top'].set_visible(False)
+
+    # Draw arrow pointing from top right to bottom left
+    plt.annotate('',
+                 xy=(worst_runtime, worst_perf),
+                 xytext=(worst_runtime / 4, worst_perf - 0.04),
+                 color='gray',
+                 arrowprops=dict(arrowstyle="<-", color='gray'))
+    # Draw text along arrow
+    plt.text(worst_runtime / 2,
+             worst_perf - 0.017,
+             'Better',
+             color='gray',
+             ha='center',
+             rotation=40,
+             rotation_mode='anchor')
+
+    # plt.annotate('Worse', xy=(worst_runtime, worst_perf), color='gray')
+
+    grid()
+
+
 def process_metacategory_counts(result):
     full_error_count = result['per_class_bucketed_error_count']
     metacatagory_results = {}
@@ -742,3 +854,9 @@ savetable("latency_table", table_latency(results))
 ################################################################################
 
 savetable("epe_table", table_epe(results_close))
+
+################################################################################
+
+plt.gcf().set_size_inches(6.75, 6.75 / 1.6)
+plot_speed_vs_performance_tradeoff()
+savefig(f"speed_vs_performance_tradeoff")

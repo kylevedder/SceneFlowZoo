@@ -17,7 +17,7 @@ print("Sequence ID: ", sequence_id)
 sequence = sequence_loader.load_sequence(sequence_id)
 
 # make open3d visualizer
-vis = o3d.visualization.Visualizer()
+vis = o3d.visualization.VisualizerWithKeyCallback()
 vis.create_window()
 vis.get_render_option().point_size = 1.5
 vis.get_render_option().background_color = (0, 0, 0)
@@ -32,58 +32,66 @@ def sequence_idx_to_color(idx):
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
-frame_list = sequence.load_frame_list(0)[25:30]
-for idx, frame_dict in enumerate(tqdm.tqdm(frame_list)):
-    pc = frame_dict['relative_pc']
-    pose = frame_dict['relative_pose']
-    flowed_pc = frame_dict['relative_flowed_pc']
-    classes = frame_dict['pc_classes']
+frame_list = sequence.load_frame_list(0)[125:127]
 
-    # Add base point cloud
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc.points)
-    vis.add_geometry(pcd)
 
-    # Add flowed point cloud
-    if flowed_pc is not None:
-        print("Max flow magnitude:",
-              pc.matched_point_distance(flowed_pc).max())
-        # flowed_pcd = o3d.geometry.PointCloud()
-        # flowed_pcd.points = o3d.utility.Vector3dVector(flowed_pc.points)
-        # flowed_pc_color = np.zeros_like(flowed_pc.points)
-        # # Flow point cloud is blue
-        # flowed_pc_color[:, 2] = 1.0
-        # flowed_pcd.colors = o3d.utility.Vector3dVector(flowed_pc_color)
-        # vis.add_geometry(flowed_pcd)
+draw_flow_lines_color = None
 
-        # Add line set between pc0 and regressed pc1
-        line_set = o3d.geometry.LineSet()
-        assert len(pc) == len(
-            flowed_pc
-        ), f'pc and flowed_pc must have same length, but got {len(pc)} and {len(flowed_pc)}'
-        line_set_points = np.concatenate([pc, flowed_pc], axis=0)
 
-        lines = np.array([[i, i + len(pc)] for i in range(len(pc))])
-        line_set.points = o3d.utility.Vector3dVector(line_set_points)
-        line_set.lines = o3d.utility.Vector2iVector(lines)
-        # Line set is blue
-        line_set.colors = o3d.utility.Vector3dVector(
-            [[1, 0, 0] for _ in range(len(lines))])
-        vis.add_geometry(line_set)
+def toggle_flow_lines(vis ):
+    global draw_flow_lines_color
 
-        # # Add gt pc from next frame
-        # next_pc = frame_list[idx + 1]['relative_pc']
-        # next_pcd = o3d.geometry.PointCloud()
-        # next_pcd.points = o3d.utility.Vector3dVector(next_pc.points)
-        # next_pc_color = np.zeros_like(next_pc.points)
+    if draw_flow_lines_color is None:
+        draw_flow_lines_color = 'green'
+    elif draw_flow_lines_color == 'green':
+        draw_flow_lines_color = 'blue'
+    elif draw_flow_lines_color == 'blue':
+        draw_flow_lines_color = None
+    else:
+        raise ValueError(f'Invalid draw_flow_lines_color: {draw_flow_lines_color}')
+    vis.clear_geometries()
+    draw_frames(reset_view=False)
 
-        # next_pcd.colors = o3d.utility.Vector3dVector(next_pc_color)
-        # vis.add_geometry(next_pcd)
 
-    # Add center of mass
-    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1)
-    sphere.translate(pose.translation)
-    sphere.paint_uniform_color(sequence_idx_to_color(idx))
-    vis.add_geometry(sphere)
+vis.register_key_callback(ord("F"), toggle_flow_lines)
+
+
+
+def draw_frames(reset_view=False):
+    color_scalar = np.linspace(0.5, 1, len(frame_list))
+    for idx, frame_dict in enumerate(tqdm.tqdm(frame_list)):
+        pc = frame_dict['relative_pc']
+        pose = frame_dict['relative_pose']
+        flowed_pc = frame_dict['relative_flowed_pc']
+        classes = frame_dict['pc_classes']
+
+        # Add base point cloud
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pc.points)
+        pc_color = np.ones_like(pc.points) * color_scalar[idx]
+        pcd.colors = o3d.utility.Vector3dVector(pc_color)
+        vis.add_geometry(pcd, reset_bounding_box=reset_view)
+
+        # Add flowed point cloud
+        if flowed_pc is not None and idx < len(frame_list) - 1:
+            print("Max flow magnitude:",
+                pc.matched_point_distance(flowed_pc).max())
+
+            if draw_flow_lines_color is not None:
+                line_set = o3d.geometry.LineSet()
+                assert len(pc) == len(
+                    flowed_pc
+                ), f'pc and flowed_pc must have same length, but got {len(pc)} and {len(flowed_pc)}'
+                line_set_points = np.concatenate([pc, flowed_pc], axis=0)
+
+                lines = np.array([[i, i + len(pc)] for i in range(len(pc))])
+                line_set.points = o3d.utility.Vector3dVector(line_set_points)
+                line_set.lines = o3d.utility.Vector2iVector(lines)
+                draw_color = [0, 1, 0] if draw_flow_lines_color == 'green' else [0, 0, 1]
+                line_set.colors = o3d.utility.Vector3dVector(
+                    [draw_color for _ in range(len(lines))])
+                vis.add_geometry(line_set, reset_bounding_box=reset_view)
+
+draw_frames(reset_view=True)
 
 vis.run()
