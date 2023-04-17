@@ -189,40 +189,53 @@ def plot_speed_vs_performance_tradeoff():
     runtimes = [runtimes[k] for k in keys]
     performance = [performance[k] for k in keys]
     shapes = ['s' if uses_labels[k] else 'o' for k in keys]
-    alphas = [0.2 if uses_labels[k] else 1.0 for k in keys]
+    alphas = [1 if uses_labels[k] else 1.0 for k in keys]
+    gliph_colors = [
+        'red' if k == 'Ours' else
+        ((0.5, 0.5, 0.5) if uses_labels[k] else 'black') for k in keys
+    ]
+    text_colors = ['red' if k == 'Ours' else 'black' for k in keys]
     points = [points_processed[k] for k in keys]
 
     worst_runtime = max(runtimes)
     worst_perf = max(performance)
 
-    for key, runtime, perf, shape, alpha, point_count in zip(
-            keys, runtimes, performance, shapes, alphas, points):
-        color = 'black' if key != 'Ours' else 'red'
+    plt.gca().axvspan(0, 100, alpha=0.08, color='blue')
+    plt.text(46,
+             worst_perf,
+             'Real Time',
+             color='blue',
+             ha='center',
+             rotation_mode='anchor')
+
+    for key, runtime, perf, shape, alpha, point_count, gliph_color, text_color in zip(
+            keys, runtimes, performance, shapes, alphas, points, gliph_colors,
+            text_colors):
+
         fontweight = 'bold' if key == 'Ours' else 'normal'
-        dot_scale = (point_count / 8192)
+        dot_scale = (point_count / 8192) * 2
         alignment = 'left' if runtime < 20000 else 'right'
         x_offset_sign = 1 if alignment == 'left' else -1
         plt.scatter(runtime,
                     perf,
                     marker=shape,
                     label=key,
-                    color=color,
+                    color=gliph_color,
                     zorder=10,
                     s=dot_scale**2,
                     alpha=alpha)
         # Annotate with name
-        plt.annotate(f"{key} ({point_count / 1000.0:0.1f}k points)",
-                     (runtime, perf),
-                     xytext=((4 + np.sqrt(dot_scale - 1)) * x_offset_sign,
-                             -2.75),
-                     textcoords='offset points',
-                     color=color,
-                     ha=alignment,
-                     fontweight=fontweight)
+        plt.annotate(
+            f"{key} ({point_count / 1000.0:0.1f}k points)", (runtime, perf),
+            xytext=((4 + np.sqrt(dot_scale - 1) * 1.1) * x_offset_sign, -2.75),
+            textcoords='offset points',
+            color=text_color,
+            ha=alignment,
+            fontweight=fontweight)
     # Set x axis log scale
     plt.xscale('log')
     # Make vertical bar at 100 on x axis
-    plt.axvline(100, color='blue', linestyle='--', linewidth=2, zorder=0)
+    # plt.axvline(100, color='blue', linestyle='--', linewidth=2, zorder=0)
     plt.xlabel("Runtime (ms)")
     plt.ylabel("Threeway EPE (m)")
     plt.gca().spines['right'].set_visible(False)
@@ -652,10 +665,13 @@ def plot_validation_pointcloud_size(dataset: str, max_x=160000):
 
 
 def plot_val_endpoint_error_distribution(source: str,
-                                         use_log_scale: bool = False):
-    error_distribution_files = sorted(
-        Path(f"/efs/argoverse2/val_{source}_unsupervised_vs_supervised_flow/").
-        glob("*_error_distribution.npy"))
+                                         use_log_scale: bool = False,
+                                         unrotated: bool = False):
+
+    base_path = Path(
+        f"/efs/argoverse2/val_{source}_unsupervised_vs_supervised_flow/")
+    glob_str = "*_error_distribution.npy" if not unrotated else "*_error_distribution_unrotated.npy"
+    error_distribution_files = sorted(base_path.glob(glob_str))
     npy_file_arr = np.array([
         load_npy(error_distribution_file, verbose=False)
         for error_distribution_file in error_distribution_files
@@ -742,21 +758,57 @@ savetable("speed_vs_error", table_speed_vs_error(results))
 
 ################################################################################
 
-plt.gcf().set_size_inches(5.5, 2.5)
+error_dist_scalar = 0.6
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nsfp', use_log_scale=True)
 savefig(f"val_endpoint_error_distribution_log_nsfp")
 
-plt.gcf().set_size_inches(5.5, 2.5)
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nsfp', use_log_scale=False)
 savefig(f"val_endpoint_error_distribution_absolute_nsfp")
 
-plt.gcf().set_size_inches(5.5, 2.5)
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('odom', use_log_scale=True)
 savefig(f"val_endpoint_error_distribution_log_odom")
 
-plt.gcf().set_size_inches(5.5, 2.5)
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('odom', use_log_scale=False)
 savefig(f"val_endpoint_error_distribution_absolute_odom")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log_nearest_neighbor")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor")
+
+# Unrotated 
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('nsfp', use_log_scale=True, unrotated=True)
+savefig(f"val_endpoint_error_distribution_log_nsfp_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('nsfp', use_log_scale=False, unrotated=True)
+savefig(f"val_endpoint_error_distribution_absolute_nsfp_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('odom', use_log_scale=True, unrotated=True)
+savefig(f"val_endpoint_error_distribution_log_odom_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('odom', use_log_scale=False, unrotated=True)
+savefig(f"val_endpoint_error_distribution_absolute_odom_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=True, unrotated=True)
+savefig(f"val_endpoint_error_distribution_log_nearest_neighbor_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=False, unrotated=True)
+savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor_unrotated")
 
 ################################################################################
 

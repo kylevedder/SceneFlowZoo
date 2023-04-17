@@ -197,7 +197,7 @@ def preprocess(tfrecord_file, output_path, frames_per_segment = None):
         point_cloud_path = os.path.join(output_path, output_file_name)
         # Process frame and store point clouds into disk
         _, flows, pose_transform = save_point_cloud(frame, point_cloud_path)
-        flows = flows[flows[:, -1] != -1]
+        flows = flows[flows[:, -1] != -1] 
         if flows.size != 0:  # May all the flows are invalid
             min_vx, min_vy, min_vz = flows[:, :-1].min(axis=0)
             max_vx, max_vy, max_vz = flows[:, :-1].max(axis=0)

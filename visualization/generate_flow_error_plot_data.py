@@ -22,7 +22,7 @@ parser.add_argument('--dataset_type',
 parser.add_argument('--dataset_source',
                     type=str,
                     default='nsfp',
-                    choices=['nsfp', 'odom'])
+                    choices=['nsfp', 'odom', 'nearest_neighbor'])
 parser.add_argument('--step_size',
                     type=int,
                     default=5,
@@ -90,6 +90,7 @@ def get_pcs_flows_pose(unsupervised_frame_dict, supervised_frame_dict):
 def accumulate_flow_scatter(supervised_flow,
                             unsupervised_flow,
                             classes,
+                            normalize_rotation=True,
                             grid_radius_meters=1.5,
                             cells_per_meter=50):
     # import matplotlib.pyplot as plt
@@ -101,30 +102,32 @@ def accumulate_flow_scatter(supervised_flow,
     supervised_flow = supervised_flow[valid_mask][:, :2]
     unsupervised_flow = unsupervised_flow[valid_mask][:, :2]
 
-    # Canonocalize the supervised flows so that ground truth is all pointing in the positive X direction
-    supervised_norm = np.linalg.norm(supervised_flow, axis=1)
-    non_zero_mask = (supervised_norm > 0.001)
+    if normalize_rotation:
+        # Canonocalize the supervised flows so that ground truth is all pointing in the positive X direction
+        supervised_norm = np.linalg.norm(supervised_flow, axis=1)
+        non_zero_mask = (supervised_norm > 0.001)
 
-    rotatable_supervised_flow = supervised_flow[non_zero_mask]
-    rotatable_unsupervised_flow = unsupervised_flow[non_zero_mask]
+        rotatable_supervised_flow = supervised_flow[non_zero_mask]
+        rotatable_unsupervised_flow = unsupervised_flow[non_zero_mask]
 
-    # Compute the angle between the supervised flow and the positive X axis
-    supervised_angles = np.arctan2(rotatable_supervised_flow[:, 0],
-                                   rotatable_supervised_flow[:, 1])
+        # Compute the angle between the supervised flow and the positive X axis
+        supervised_angles = np.arctan2(rotatable_supervised_flow[:, 0],
+                                       rotatable_supervised_flow[:, 1])
 
-    # Compute the rotation matrix
-    rotation_matrix = np.array(
-        [[np.cos(supervised_angles), -np.sin(supervised_angles)],
-         [np.sin(supervised_angles),
-          np.cos(supervised_angles)]]).transpose(2, 0, 1)
+        # Compute the rotation matrix
+        rotation_matrix = np.array(
+            [[np.cos(supervised_angles), -np.sin(supervised_angles)],
+             [np.sin(supervised_angles),
+              np.cos(supervised_angles)]]).transpose(2, 0, 1)
 
-    # Rotate the supervised flow
-    supervised_flow[non_zero_mask] = np.einsum('ijk,ik->ij', rotation_matrix,
-                                               rotatable_supervised_flow)
+        # Rotate the supervised flow
+        supervised_flow[non_zero_mask] = np.einsum('ijk,ik->ij',
+                                                   rotation_matrix,
+                                                   rotatable_supervised_flow)
 
-    # Rotate the unsupervised flow
-    unsupervised_flow[non_zero_mask] = np.einsum('ijk,ik->ij', rotation_matrix,
-                                                 rotatable_unsupervised_flow)
+        # Rotate the unsupervised flow
+        unsupervised_flow[non_zero_mask] = np.einsum(
+            'ijk,ik->ij', rotation_matrix, rotatable_unsupervised_flow)
 
     # Compute the flow difference
     flow_error_xy = (unsupervised_flow - supervised_flow)
@@ -137,12 +140,14 @@ def accumulate_flow_scatter(supervised_flow,
     # Compute the grid indices for flow_error_xy using np digitize
     grid_indices_x = np.digitize(
         flow_error_xy[:, 0],
-        bins=np.linspace(-grid_radius_meters, grid_radius_meters,
-                         int(grid_radius_meters * 2 * cells_per_meter) + 1)) - 1
+        bins=np.linspace(
+            -grid_radius_meters, grid_radius_meters,
+            int(grid_radius_meters * 2 * cells_per_meter) + 1)) - 1
     grid_indices_y = np.digitize(
         flow_error_xy[:, 1],
-        bins=np.linspace(-grid_radius_meters, grid_radius_meters,
-                         int(grid_radius_meters * 2 * cells_per_meter) + 1)) - 1
+        bins=np.linspace(
+            -grid_radius_meters, grid_radius_meters,
+            int(grid_radius_meters * 2 * cells_per_meter) + 1)) - 1
 
     grid_indices = np.array([grid_indices_x, grid_indices_y]).T
     unique_grid_indices, unique_counts = np.unique(grid_indices,
@@ -184,7 +189,8 @@ def process_sequence(sequence_id):
         zip(unsupervised_frame_list,
             supervised_frame_list))[:-1][::args.step_size]
 
-    accumulation_grid_lst = []
+    accumulation_grid_lst_rotated = []
+    accumulation_grid_lst_unrotated = []
     for idx, (unsupervised_frame_dict,
               supervised_frame_dict) in enumerate(zipped_frame_list):
 
@@ -198,14 +204,23 @@ def process_sequence(sequence_id):
             print(e)
             # raise e
 
-        accumulation_grid_lst.append(
+        accumulation_grid_lst_rotated.append(
             accumulate_flow_scatter(supervised_flow, unsupervised_flow,
                                     pc_classes))
+        accumulation_grid_lst_unrotated.append(
+            accumulate_flow_scatter(supervised_flow,
+                                    unsupervised_flow,
+                                    pc_classes,
+                                    normalize_rotation=False))
 
-    accumulation_grid = np.sum(accumulation_grid_lst, axis=0)
+    accumulation_grid = np.sum(accumulation_grid_lst_rotated, axis=0)
+    accumulation_grid_unrotated = np.sum(accumulation_grid_lst_unrotated,
+                                         axis=0)
     save_dir.mkdir(parents=True, exist_ok=True)
     np.save(save_dir / f'{sequence_id}_error_distribution.npy',
             accumulation_grid)
+    np.save(save_dir / f'{sequence_id}_error_distribution_unrotated.npy',
+            accumulation_grid_unrotated)
 
 
 data_root = Path('/efs/argoverse2/')

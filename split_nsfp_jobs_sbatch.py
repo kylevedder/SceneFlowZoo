@@ -121,6 +121,7 @@ def make_sbatch():
 #SBATCH --container-mounts=../../datasets/:/efs/,{current_working_dir}:/project
 #SBATCH --container-image={current_working_dir / "kylevedder_offline_sceneflow_latest.sqsh"}
 
+echo "Running job $SLURM_ARRAY_TASK_ID on $HOSTNAME"
 export MY_RUN_ID=$(printf "%06d" $SLURM_ARRAY_TASK_ID)
 python test_pl.py {configs_path}/nsfp_split_$MY_RUN_ID.py; echo 'done' > {configs_path}/nsfp_$MY_RUN_ID.done
 """

@@ -13,3 +13,4 @@ docker run --gpus=all --rm -it \
  -h $HOSTNAME \
  --privileged \
  offline_sceneflow:latest
+i
