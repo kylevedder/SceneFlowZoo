@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+from collections import defaultdict
 
 # Get path to the Waymo dataset
 
@@ -23,12 +24,15 @@ assert len(
 
 train_subfolder_names = [e.name for e in training_subfolders]
 
+flow_folder_lookup_dict = defaultdict(int)
 valid_flow_folders = []
 for subfolder in flow_subfolders:
     num_flows = sorted(subfolder.glob('*.npz'))
     idx = train_subfolder_names.index(subfolder.name)
+    flow_folder_lookup_dict[subfolder.name] = len(num_flows)
     if len(num_flows) >= 196:
         valid_flow_folders.append(subfolder)
+    
 
 valid_flow_folder_names = sorted([e.name for e in valid_flow_folders])
 
@@ -37,4 +41,4 @@ missing_folder_names = sorted(
     set(train_subfolder_names) - set(valid_flow_folder_names))
 
 for folder_name in missing_folder_names:
-    print(folder_name)
+    print(folder_name, flow_folder_lookup_dict[folder_name])
