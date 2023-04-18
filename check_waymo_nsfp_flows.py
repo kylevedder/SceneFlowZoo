@@ -25,14 +25,18 @@ assert len(
 train_subfolder_names = [e.name for e in training_subfolders]
 
 flow_folder_lookup_dict = defaultdict(int)
+lidar_folder_lookup_dict = defaultdict(int)
 valid_flow_folders = []
 for subfolder in flow_subfolders:
     num_flows = sorted(subfolder.glob('*.npz'))
     idx = train_subfolder_names.index(subfolder.name)
+    train_folder = training_subfolders[idx]
+    num_lidar = len(sorted(train_folder.glob('*.pkl')))
+
     flow_folder_lookup_dict[subfolder.name] = len(num_flows)
-    if len(num_flows) >= 196:
+    lidar_folder_lookup_dict[subfolder.name] = num_lidar
+    if len(num_flows) != num_lidar - 1:
         valid_flow_folders.append(subfolder)
-    
 
 valid_flow_folder_names = sorted([e.name for e in valid_flow_folders])
 
@@ -41,4 +45,4 @@ missing_folder_names = sorted(
     set(train_subfolder_names) - set(valid_flow_folder_names))
 
 for folder_name in missing_folder_names:
-    print(folder_name, flow_folder_lookup_dict[folder_name])
+    print(folder_name, flow_folder_lookup_dict[folder_name], lidar_folder_lookup_dict[folder_name])
