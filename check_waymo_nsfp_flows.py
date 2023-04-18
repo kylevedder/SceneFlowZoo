@@ -35,7 +35,7 @@ for flow_subfolder in flow_subfolders:
 
     flow_folder_lookup_dict[flow_subfolder.name] = num_flows
     lidar_folder_lookup_dict[flow_subfolder.name] = num_lidar
-    if num_flows != (num_lidar - 1):
+    if num_flows == (num_lidar - 1):
         valid_flow_folders.append(flow_subfolder)
 
 valid_flow_folder_names = sorted([e.name for e in valid_flow_folders])
