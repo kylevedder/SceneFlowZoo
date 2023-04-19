@@ -1,16 +1,9 @@
-train_sequence_dir = "/efs/waymo_open_preprocessed/train/"
-train_flow_dir = "/efs/waymo_open_preprocessed/train_nsfp_flow/"
+_base_ = "../../pseudoimage.py"
 
-test_sequence_dir = "/efs/waymo_open_preprocessed/val/"
+train_sequence_dir = "/efs/waymo_open_processed_flow/training/"
+train_flow_dir = "/efs/waymo_open_processed_flow/train_nsfp_flow/"
 
-
-def get_max_sequence_length(sequence_dir):
-    return 145
-    
-
-
-max_train_sequence_length = get_max_sequence_length(train_sequence_dir)
-max_test_sequence_length = get_max_sequence_length(test_sequence_dir)
+test_sequence_dir = "/efs/waymo_open_processed_flow/validation/"
 
 epochs = 50
 learning_rate = 2e-6
@@ -20,9 +13,9 @@ validate_every = 5
 SEQUENCE_LENGTH = 2
 
 model = dict(name="FastFlow3D",
-             args=dict(VOXEL_SIZE=(0.2, 0.2, 4),
-                       PSEUDO_IMAGE_DIMS=(512, 512),
-                       POINT_CLOUD_RANGE=(-51.2, -51.2, -3, 51.2, 51.2, 1),
+             args=dict(VOXEL_SIZE={{_base_.VOXEL_SIZE}},
+                       PSEUDO_IMAGE_DIMS={{_base_.PSEUDO_IMAGE_DIMS}},
+                       POINT_CLOUD_RANGE={{_base_.POINT_CLOUD_RANGE}},
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
 
@@ -33,9 +26,9 @@ loader = dict(name="WaymoUnsupervisedFlowSequenceLoader",
 dataloader = dict(
     args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))
 
-dataset = dict(name="SubsequenceUnsupervisedFlowDataset",
+dataset = dict(name="VarLenSubsequenceUnsupervisedFlowDataset",
                args=dict(subsequence_length=SEQUENCE_LENGTH,
-                         max_sequence_length=max_train_sequence_length,
+                         max_pc_points=150000,
                          origin_mode="FIRST_ENTRY"))
 
 loss_fn = dict(name="FastFlow3DDistillationLoss", args=dict())
@@ -46,7 +39,7 @@ test_loader = dict(name="WaymoSupervisedFlowSequenceLoader",
 test_dataloader = dict(
     args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))
 
-test_dataset = dict(name="SubsequenceSupervisedFlowDataset",
+test_dataset = dict(name="VarLenSubsequenceSupervisedFlowDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
-                              max_sequence_length=max_test_sequence_length,
+                              max_pc_points=150000,
                               origin_mode="FIRST_ENTRY"))

@@ -56,8 +56,13 @@ def get_checkpoint_path(cfg, checkpoint_dir_name: str):
 def make_train_dataloader(cfg):
     # Handle single loader case
     if not isinstance(cfg.loader, list) and not isinstance(cfg.dataset, list):
-        train_sequence_loader = getattr(dataloaders,
-                                        cfg.loader.name)(**cfg.loader.args)
+        try:
+            train_sequence_loader = getattr(dataloaders,
+                                            cfg.loader.name)(**cfg.loader.args)
+        except Exception as e:
+            print("Error loading loader:", cfg.loader.name)
+            print("Config:", cfg.loader)
+            raise e
         train_dataset = getattr(dataloaders, cfg.dataset.name)(
             sequence_loader=train_sequence_loader, **cfg.dataset.args)
         return torch.utils.data.DataLoader(train_dataset,

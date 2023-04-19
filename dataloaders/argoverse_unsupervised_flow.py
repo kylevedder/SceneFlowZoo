@@ -1,6 +1,6 @@
 from pathlib import Path
 from collections import defaultdict
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 import pandas as pd
 from pointclouds import PointCloud, SE3, SE2
 import numpy as np
@@ -38,7 +38,7 @@ class ArgoverseUnsupervisedFlowSequence(ArgoverseRawSequence):
         flow_0_1, valid_idxes = flow_info['flow'], flow_info['valid_idxes']
         return flow_0_1, valid_idxes
 
-    def load(self, idx, relative_to_idx) -> (PointCloud, SE3):
+    def load(self, idx, relative_to_idx) -> Dict[str, Any]:
         assert idx < len(
             self
         ), f'idx {idx} out of range, len {len(self)} for {self.dataset_dir}'
