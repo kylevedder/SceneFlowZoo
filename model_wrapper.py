@@ -311,8 +311,11 @@ class ModelWrapper(pl.LightningModule):
 
     def _save_validation_data(self, save_dict):
         save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
-        timing_out = f"validation_results/{self.cfg.filename}_timing.csv"
-        nntime.export_timings(self, timing_out)
+        try:
+            timing_out = f"validation_results/{self.cfg.filename}_timing.csv"
+            nntime.export_timings(self, timing_out)
+        except AssertionError as e:
+            print(f"Could not export timings. Skipping.")
 
     def _log_validation_metrics(self, validation_result_dict, verbose=True):
         result_full_info = ResultInfo(Path(self.cfg.filename).stem,

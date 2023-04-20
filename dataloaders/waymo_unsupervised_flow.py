@@ -33,7 +33,7 @@ class WaymoUnsupervisedFlowSequence(WaymoSupervisedFlowSequence):
         pc, _, labels, pose = super()._load_idx(idx)
         flow_path = self.flow_files[idx]
         flow_dict = dict(load_npz(flow_path, verbose=False))
-        flow = flow_dict['flow'][0]
+        flow = flow_dict['flow']
         valid_idxes = flow_dict['valid_idxes']
         return pc, flow, valid_idxes, labels, pose
 
@@ -44,8 +44,6 @@ class WaymoUnsupervisedFlowSequence(WaymoSupervisedFlowSequence):
 
         idx_pc, idx_flow, idx_valid_idxes, idx_labels, idx_pose = self._load_idx(
             idx)
-        #The ground truth flow has some artifacts that we need to clean up. Might as well use the same cleanup on this.
-        idx_flow = self.cleanup_flow(idx_flow)
         _, _, _, _, start_pose = self._load_idx(start_idx)
 
         relative_pose = start_pose.inverse().compose(idx_pose)

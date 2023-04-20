@@ -3,9 +3,11 @@ from .pretrain import PretrainEmbedding
 from .fast_flow_3d import FastFlow3D, FastFlow3DSelfSupervisedLoss, FastFlow3DSupervisedLoss, FastFlow3DDistillationLoss
 from .nsfp import NSFP, NSFPCached
 from .nearest_neighbor import NearestNeighborFlow
+from .chodosh import Chodosh
 
 __all__ = [
     'JointFlow', 'NSFP', 'JointFlowLoss', 'JointFlowOptimizationLoss',
     'PretrainEmbedding', 'FastFlow3D', 'FastFlow3DSelfSupervisedLoss',
-    'FastFlow3DSupervisedLoss', 'FastFlow3DDistillationLoss', 'NearestNeighborFlow'
+    'FastFlow3DSupervisedLoss', 'FastFlow3DDistillationLoss',
+    'NearestNeighborFlow', 'NSFPCached', 'Chodosh'
 ]

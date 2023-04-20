@@ -8,7 +8,7 @@ test_sequence_dir = "/efs/waymo_open_processed_flow/validation/"
 epochs = 50
 learning_rate = 2e-6
 save_every = 500
-validate_every = 5
+validate_every = 500
 
 SEQUENCE_LENGTH = 2
 
