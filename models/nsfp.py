@@ -84,8 +84,11 @@ class NSFP(nn.Module):
     def _visualize_result(self, pc0_points: torch.Tensor,
                           warped_pc0_points: torch.Tensor):
 
-        pc0_points = pc0_points.cpu().numpy()[0]
-        warped_pc0_points = warped_pc0_points.cpu().numpy()[0]
+        # if pc0_points is torch tensor, convert to numpy
+        if isinstance(pc0_points, torch.Tensor):
+            pc0_points = pc0_points.cpu().numpy()[0]
+        if isinstance(warped_pc0_points, torch.Tensor):
+            warped_pc0_points = warped_pc0_points.cpu().numpy()[0]
 
         import open3d as o3d
 

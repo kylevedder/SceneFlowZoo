@@ -94,7 +94,7 @@ def refine_flow(pc0,
     return refined_flow
 
 
-class Chodosh(NSFPCached):
+class ChodoshDirectSolver(NSFPCached):
 
     def __init__(self, VOXEL_SIZE, POINT_CLOUD_RANGE, SEQUENCE_LENGTH,
                  nsfp_save_folder: Path, chodosh_save_folder: Path) -> None:
@@ -111,6 +111,7 @@ class Chodosh(NSFPCached):
 
         flows = []
         delta_times = []
+        refine_times = []
         for minibatch_idx, (pc0_points, pc0_valid_points_idx, log_ids,
                             log_idxes) in enumerate(
                                 zip(pc0_points_lst, pc0_valid_point_idxes,
@@ -133,17 +134,103 @@ class Chodosh(NSFPCached):
             flow = flow.squeeze(0)
             assert flow.shape == pc0_points.shape, f"{flow.shape} != {pc0_points.shape}"
 
-            breakpoint()
+            valid_pc0_points = pc0_points.detach().cpu().numpy()
 
-            flow[flow_valid_idxes] = refine_flow(
-                pc0_points[pc0_valid_point_idxes].detach().cpu().numpy(),
-                flow[flow_valid_idxes]).astype(np.float32)
-            
-            breakpoint()
+            before_time = time.time()
+            refined_flow = refine_flow(valid_pc0_points,
+                                       flow).astype(np.float32)
+            after_time = time.time()
+            refine_time = after_time - before_time
+            delta_time += refine_time
+
+            # warped_pc0_points = valid_pc0_points + refined_flow
+
+            # self._visualize_result(valid_pc0_points, warped_pc0_points)
+
+            # breakpoint()
+
+            flows.append(
+                torch.from_numpy(refined_flow).to(
+                    pc0_points.device).unsqueeze(0))
+            delta_times.append(delta_time)
+            refine_times.append(refine_time)
+        print(f"Average delta time: {np.mean(delta_times)}")
+        print(f"Average refine time: {np.mean(refine_times)}")
+        return {
+            "forward": {
+                "flow": flows,
+                "batch_delta_time": np.sum(delta_times),
+                "pc0_points_lst": pc0_points_lst,
+                "pc0_valid_point_idxes": pc0_valid_point_idxes,
+                "pc1_points_lst": pc1_points_lst,
+                "pc1_valid_point_idxes": pc1_valid_point_idxes
+            }
+        }
+
+
+class ChodoshProblemDumper(ChodoshDirectSolver):
+
+    def _dump_problem(self, log_id: str, batch_idx: int, minibatch_idx: int,
+                      pc, flow, flow_valid_idxes, nsfp_delta_time: float):
+        self.out_folder.mkdir(parents=True, exist_ok=True)
+        save_file = self.out_folder / f"{log_id}_{batch_idx}_{minibatch_idx}.npz"
+        # Delete save_file if exists
+        if save_file.exists():
+            save_file.unlink()
+        np.savez(save_file,
+                 pc=pc,
+                 flow=flow,
+                 valid_idxes=flow_valid_idxes,
+                 nsfp_delta_time=nsfp_delta_time)
+
+    def forward(self, batched_sequence: Dict[str, torch.Tensor]):
+        pc0_points_lst, pc0_valid_point_idxes, pc1_points_lst, pc1_valid_point_idxes = self._voxelize_batched_sequence(
+            batched_sequence)
+
+        log_ids_lst = self._transpose_list(batched_sequence['log_ids'])
+        log_idxes_lst = self._transpose_list(batched_sequence['log_idxes'])
+
+        flows = []
+        delta_times = []
+        for minibatch_idx, (pc0_points, pc0_valid_points_idx, log_ids,
+                            log_idxes) in enumerate(
+                                zip(pc0_points_lst, pc0_valid_point_idxes,
+                                    log_ids_lst, log_idxes_lst)):
+            log_id = batched_sequence['log_ids'][minibatch_idx][0]
+            batch_idx = batched_sequence['data_index'].item()
+
+            assert len(
+                log_ids) == 2, f"Expect 2 frames for NSFP, got {len(log_ids)}"
+            assert len(
+                log_idxes
+            ) == 2, f"Expect 2 frames for NSFP, got {len(log_idxes)}"
+
+            flow, flow_valid_idxes, delta_time = self._load_result(
+                log_ids[0], log_idxes[0])
+
+            assert flow_valid_idxes.shape == pc0_valid_points_idx.shape, f"{flow_valid_idxes.shape} != {pc0_valid_points_idx.shape}"
+            idx_equality = flow_valid_idxes == pc0_valid_points_idx.detach(
+            ).cpu().numpy()
+            assert idx_equality.all(
+            ), f"Points that disagree: {(~idx_equality).astype(int).sum()}"
+            assert flow.shape[0] == 1, f"{flow.shape[0]} != 1"
+            flow = flow.squeeze(0)
+            assert flow.shape == pc0_points.shape, f"{flow.shape} != {pc0_points.shape}"
+
+            valid_pc0_points = pc0_points.detach().cpu().numpy()
+
+            self._dump_problem(log_id, batch_idx, minibatch_idx,
+                               valid_pc0_points, flow, flow_valid_idxes,
+                               delta_time)
+
+            # warped_pc0_points = valid_pc0_points + refined_flow
+
+            # self._visualize_result(valid_pc0_points, warped_pc0_points)
+
+            # breakpoint()
 
             flows.append(torch.from_numpy(flow).to(pc0_points.device))
             delta_times.append(delta_time)
-
         return {
             "forward": {
                 "flow": flows,

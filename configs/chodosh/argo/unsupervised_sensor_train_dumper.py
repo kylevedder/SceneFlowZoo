@@ -5,7 +5,7 @@ has_labels = False
 
 test_sequence_dir = "/efs/argoverse2/train/"
 nsfp_save_folder = "/efs/argoverse2/train_nsfp_flow/"
-chodosh_save_folder = "/efs/argoverse2/train_chodosh_flow/"
+chodosh_save_folder = "/efs/argoverse2/train_chodosh_flow_problem_setup/"
 
 precision = 32
 
@@ -26,7 +26,7 @@ validate_every = 500
 
 SEQUENCE_LENGTH = 2
 
-model = dict(name="Chodosh",
+model = dict(name="ChodoshProblemDumper",
              args=dict(VOXEL_SIZE={{_base_.VOXEL_SIZE}},
                        POINT_CLOUD_RANGE={{_base_.POINT_CLOUD_RANGE}},
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH,
