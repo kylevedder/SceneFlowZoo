@@ -226,6 +226,17 @@ class SubsequenceSupervisedFlowSpecificSubsetDataset(
 
 class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
 
+    def _squeeze_flow(self, flow: np.ndarray) -> np.ndarray:
+        if flow.ndim == 3:
+            assert flow.shape[
+                0] == 1, f"Flow must have 1 channel, got {flow.shape[0]}"
+            return flow.squeeze(0)
+        elif flow.ndim == 2:
+            return flow
+        else:
+            raise ValueError(
+                f"Flow must have 2 or 3 dimensions, got {flow.ndim}")
+
     def __getitem__(self, index):
         subsequence_lst = self._get_subsequence(index)
 
@@ -236,7 +247,7 @@ class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
         pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
 
         flow_arrays = [
-            to_fixed_array(e['flow'].squeeze(0), self.max_pc_points)
+            to_fixed_array(self._squeeze_flow(e['flow']), self.max_pc_points)
             for e in subsequence_lst
         ]
         log_ids = [e['log_id'] for e in subsequence_lst]

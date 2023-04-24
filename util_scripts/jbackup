@@ -18,10 +18,11 @@ args = parser.parse_args()
 # Check that weights file exists
 assert args.weights.exists(), f"Weights file {args.weights} does not exist"
 
+dataset_name = args.weights.parent.parent.parent.name
 model_name = args.weights.parent.parent.name
 print(f"Model name: {model_name}")
 
-save_folder = args.save_folder / model_name
+save_folder = args.save_folder / dataset_name /  model_name
 # Make sure save folder exists
 save_folder.mkdir(parents=True, exist_ok=True)
 
