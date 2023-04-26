@@ -154,6 +154,7 @@ class ResultInfo():
             "fastflow3d_nsfp_distilatation_0.1x": "DRLFS 0.1x (Ours)",
             "fastflow3d_nsfp_distilatation_speed_scaled": "DRLFS (Ours, speed scaled)",
             "fastflow3d_supervised": "FastFlow3D",
+            "fastflow3d_chodosh_distilatation": "DRLFS (Chodosh et al. pseudolabels)",
             "fastflow3d_supervised_no_scale": "FastFlow3D (no scale)",
             "nsfp_unsupervised_sensor_val_cached": "NSFP",
         }

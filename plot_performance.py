@@ -141,7 +141,7 @@ def plot_speed_vs_performance_tradeoff():
         'Ours': 29.33,
         'FastFlow3D': 29.33,
         'NSFP': 26285.0,
-        'Chodosh': 26285.0,
+        'Chodosh': 26285.0 + 6500,
         'Gojcic': 6087.87,
         'Sim2Real': 99.3477,
         'EgoFlow': 2116.34,
@@ -189,10 +189,10 @@ def plot_speed_vs_performance_tradeoff():
     runtimes = [runtimes[k] for k in keys]
     performance = [performance[k] for k in keys]
     shapes = ['s' if uses_labels[k] else 'o' for k in keys]
-    alphas = [1 if uses_labels[k] else 1.0 for k in keys]
+    alphas = [1.0 if uses_labels[k] else 1.0 for k in keys]
     gliph_colors = [
-        'red' if k == 'Ours' else
-        ((0.5, 0.5, 0.5) if uses_labels[k] else 'black') for k in keys
+        'red' if k == 'Ours' else ('black' if uses_labels[k] else 'black')
+        for k in keys
     ]
     text_colors = ['red' if k == 'Ours' else 'black' for k in keys]
     points = [points_processed[k] for k in keys]
@@ -213,7 +213,7 @@ def plot_speed_vs_performance_tradeoff():
             text_colors):
 
         fontweight = 'bold' if key == 'Ours' else 'normal'
-        dot_scale = (point_count / 8192) * 2
+        dot_scale = 35
         alignment = 'left' if runtime < 20000 else 'right'
         x_offset_sign = 1 if alignment == 'left' else -1
         plt.scatter(runtime,
@@ -222,12 +222,13 @@ def plot_speed_vs_performance_tradeoff():
                     label=key,
                     color=gliph_color,
                     zorder=10,
-                    s=dot_scale**2,
-                    alpha=alpha)
+                    s=dot_scale,
+                    alpha=alpha,
+                    edgecolors='none')
         # Annotate with name
         plt.annotate(
             f"{key} ({point_count / 1000.0:0.1f}k points)", (runtime, perf),
-            xytext=((4 + np.sqrt(dot_scale - 1) * 1.1) * x_offset_sign, -2.75),
+            xytext=(6 * x_offset_sign, -2.75),
             textcoords='offset points',
             color=text_color,
             ha=alignment,
@@ -615,7 +616,7 @@ def table_epe(results: List[ResultInfo]):
         strict_percentage = foreground_counts[0] / foreground_counts.sum()
 
         def fmt(val):
-            return f"{val:0.3f}"
+            return f"${val:0.3f}$"
 
         epe_entries = [
             result.get_mover_point_dynamic_epe(),
@@ -784,30 +785,42 @@ plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=False)
 savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor")
 
-# Unrotated 
+# Unrotated
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nsfp', use_log_scale=True, unrotated=True)
+plot_val_endpoint_error_distribution('nsfp',
+                                     use_log_scale=True,
+                                     unrotated=True)
 savefig(f"val_endpoint_error_distribution_log_nsfp_unrotated")
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nsfp', use_log_scale=False, unrotated=True)
+plot_val_endpoint_error_distribution('nsfp',
+                                     use_log_scale=False,
+                                     unrotated=True)
 savefig(f"val_endpoint_error_distribution_absolute_nsfp_unrotated")
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('odom', use_log_scale=True, unrotated=True)
+plot_val_endpoint_error_distribution('odom',
+                                     use_log_scale=True,
+                                     unrotated=True)
 savefig(f"val_endpoint_error_distribution_log_odom_unrotated")
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('odom', use_log_scale=False, unrotated=True)
+plot_val_endpoint_error_distribution('odom',
+                                     use_log_scale=False,
+                                     unrotated=True)
 savefig(f"val_endpoint_error_distribution_absolute_odom_unrotated")
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=True, unrotated=True)
+plot_val_endpoint_error_distribution('nearest_neighbor',
+                                     use_log_scale=True,
+                                     unrotated=True)
 savefig(f"val_endpoint_error_distribution_log_nearest_neighbor_unrotated")
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=False, unrotated=True)
+plot_val_endpoint_error_distribution('nearest_neighbor',
+                                     use_log_scale=False,
+                                     unrotated=True)
 savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor_unrotated")
 
 ################################################################################
@@ -890,7 +903,7 @@ savefig(f"epe_counts_v3_loose")
 ################################################################################
 
 plt.gcf().set_size_inches(5.5 / 2, 5.5 / 1.6 / 2)
-plot_validation_pointcloud_size("argo")
+plot_validation_pointcloud_size("argo", max_x=90000)
 grid()
 savefig(f"validation_pointcloud_size_argo", pad=0.02)
 

@@ -176,12 +176,11 @@ class FastFlow3DDistillationLoss():
 
             importance_scale = torch.ones_like(gt_flow[:, 0])
             if self.fast_mover_scale:
-                # Compute the importance scale
-                gt_speed = torch.norm(gt_flow, dim=1, p=2)
-                mins = torch.ones_like(gt_speed)
-                maxs = torch.ones_like(gt_speed) * 10
-                importance_scale = torch.min(mins,
-                                             torch.max(gt_speed * 2, maxs))
+                # Compute the importance scale using m/s speed.
+                gt_speed = torch.norm(gt_flow, dim=1, p=2) * 10.0
+                mins = torch.ones_like(gt_speed) * 0.1
+                maxs = torch.ones_like(gt_speed)
+                importance_scale = torch.min(mins, torch.max(gt_speed, maxs))
 
             total_loss += (torch.norm(est_flow - gt_flow, dim=1, p=2) *
                            importance_scale).mean()
