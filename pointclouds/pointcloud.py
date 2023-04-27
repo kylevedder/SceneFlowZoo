@@ -35,6 +35,11 @@ class PointCloud():
         assert points.shape[1] == 3, 'points must be a Nx3 array'
         self.points = points
 
+    def __eq__(self, o: object) -> bool:
+        if not isinstance(o, PointCloud):
+            return False
+        return np.allclose(self.points, o.points)
+
     def __len__(self):
         return self.points.shape[0]
 

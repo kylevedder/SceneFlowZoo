@@ -180,7 +180,9 @@ class FastFlow3DDistillationLoss():
                 gt_speed = torch.norm(gt_flow, dim=1, p=2) * 10.0
                 mins = torch.ones_like(gt_speed) * 0.1
                 maxs = torch.ones_like(gt_speed)
-                importance_scale = torch.min(mins, torch.max(gt_speed, maxs))
+                # Plot \max\left(0.1,\min\left(1,1.8x-0.8\right)\right) in Desmos
+                importance_scale = torch.min(
+                    mins, torch.max(1.8 * gt_speed - 0.8, maxs))
 
             total_loss += (torch.norm(est_flow - gt_flow, dim=1, p=2) *
                            importance_scale).mean()
