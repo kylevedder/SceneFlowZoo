@@ -204,6 +204,7 @@ class NSFPCached(NSFP):
         assert log_idx < len(
             self.flow_folder_list), f"Log index {log_idx} is out of range"
         flow_file = self.flow_folder_list[log_idx]
+        print(f"Loading flow from {flow_file}")
         data = dict(np.load(flow_file, allow_pickle=True))
         flow = data['flow']
         valid_idxes = data['valid_idxes']
@@ -240,8 +241,8 @@ class NSFPCached(NSFP):
             ).cpu().numpy()
             assert idx_equality.all(
             ), f"Points that disagree: {(~idx_equality).astype(int).sum()}"
-            assert flow.shape[0] == 1, f"{flow.shape[0]} != 1"
-            flow = flow.squeeze(0)
+            if flow.ndim == 3 and flow.shape[0] == 1:
+                flow = flow.squeeze(0)
             assert flow.shape == pc0_points.shape, f"{flow.shape} != {pc0_points.shape}"
             flows.append(torch.from_numpy(flow).to(pc0_points.device))
             delta_times.append(delta_time)

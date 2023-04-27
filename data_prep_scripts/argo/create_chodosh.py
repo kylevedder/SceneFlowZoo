@@ -128,8 +128,10 @@ def process_npz_file(npz_path):
     # Load the data from the .npz file
     data = dict(np.load(npz_path))
     before_time = time.time()
-    refine_flow(data["pc"], data["flow"])
+    refined_flow = refine_flow(data["pc"], data["flow"])
     after_time = time.time()
+    assert refined_flow.shape == data["flow"].shape
+    data["flow"] = refined_flow
     delta_time = after_time - before_time
     data["refine_delta_time"] = delta_time
     data["delta_time"] = delta_time + data["nsfp_delta_time"]
@@ -139,9 +141,11 @@ def process_npz_file(npz_path):
     index_name = int(index_name)
     # Convert minibatch_name to int
     minibatch_name = int(minibatch_name)
-    # Convert 
+    # Convert
     output_file_path = output_folder_path / folder_name / f"{index_name:010d}_{minibatch_name:03d}.npz"
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_file_path.exists():
+        output_file_path.unlink()
     np.savez(output_file_path, **data)
 
 

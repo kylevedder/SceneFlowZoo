@@ -17,3 +17,4 @@ validation_results*/
 **.png
 job_dir/
 .pl_auto_save.ckpt
+cluster_tb_logs/
