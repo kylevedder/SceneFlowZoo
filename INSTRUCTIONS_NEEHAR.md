@@ -25,9 +25,9 @@ https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.
 
 # Pulling and running the Docker image
 
-The docker image lives prebuilt on Dockerhub, you just have to download it: https://hub.docker.com/repository/docker/kylevedder/offline_sceneflow/general
+The docker image lives prebuilt on Dockerhub, at https://hub.docker.com/repository/docker/kylevedder/offline_sceneflow/general.
 
-I have a convenience launch script to launch everything inside `launch.sh`. This *must* be run from the root of the repo. It will mount the repo and the datasets folder in the proper place. 
+I have a convenience launch script to download this image and launch everything inside `launch.sh`. This *must* be run from the root of the repo. It will mount the repo and the datasets folder in the proper place. 
 
 You must edit this script to modify the mount commands to point to your Argoverse 2 install location. The `-v` commands are these mount commands. As an example,
 

@@ -9,4 +9,4 @@ docker run --gpus=all --rm -it \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \
- offline_sceneflow:latest
+ kylevedder/offline_sceneflow:latest
