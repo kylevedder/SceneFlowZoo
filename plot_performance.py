@@ -141,7 +141,7 @@ def plot_speed_vs_performance_tradeoff():
         'Ours': 29.33,
         'FastFlow3D': 29.33,
         'NSFP': 26285.0,
-        'Chodosh': 26285.0 + 6500,
+        'Chodosh': 26285.0 + 8996.4,
         'Gojcic': 6087.87,
         'Sim2Real': 99.3477,
         'EgoFlow': 2116.34,

@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import models
 from pathlib import Path
+from pointclouds import from_fixed_array
 
 import pytorch_lightning as pl
 import torchmetrics
@@ -162,6 +163,9 @@ class ModelWrapper(pl.LightningModule):
         self.has_labels = True if not hasattr(cfg,
                                               "has_labels") else cfg.has_labels
 
+        self.save_output_folder = None if not hasattr(
+            cfg, "save_output_folder") else cfg.save_output_folder
+
         self.metric = EndpointDistanceMetricRawTorch(
             CATEGORY_ID_TO_NAME, SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
             ENDPOINT_ERROR_SPLITS_METERS)
@@ -249,12 +253,57 @@ class ModelWrapper(pl.LightningModule):
 
         vis.run()
 
+    def _save_output(self, input_batch, output_batch, batch_idx):
+
+        def _to_numpy(x):
+            if isinstance(x, torch.Tensor):
+                return x.detach().cpu().numpy()
+            if isinstance(x, dict):
+                return {k: _to_numpy(v) for k, v in x.items()}
+            if isinstance(x, list):
+                return [_to_numpy(v) for v in x]
+            return x
+
+        log_ids = np.transpose(_to_numpy(input_batch["log_ids"]))
+        log_idxes = np.transpose(_to_numpy(input_batch["log_idxes"]))
+        pc_array_stack = _to_numpy(input_batch['pc_array_stack'])
+        gt_flows = input_batch['flowed_pc_array_stack'] - input_batch[
+            'pc_array_stack']
+        est_flows = output_batch['flow']
+        est_pc1_flows_valid_idxes = output_batch['pc0_valid_point_idxes']
+        est_pc2_flows_valid_idxes = output_batch['pc1_valid_point_idxes']
+
+        for pc_arrays, log_ids, log_idxs, gt_flows, est_flow, est_pc1_flows_valid_idx, est_pc2_flows_valid_idx in zip(
+                pc_array_stack, log_ids, log_idxes, gt_flows, est_flows,
+                est_pc1_flows_valid_idxes, est_pc2_flows_valid_idxes):
+            pc1 = _to_numpy(from_fixed_array(pc_arrays[0]))
+            pc2 = _to_numpy(from_fixed_array(pc_arrays[1]))
+            log_id = log_ids[0]
+            log_idx = log_idxs[0]
+            gt_flow = _to_numpy(from_fixed_array(gt_flows[0]))
+            est_flow = _to_numpy(from_fixed_array(est_flow))
+            est_pc1_flows_valid_idx = _to_numpy(est_pc1_flows_valid_idx)
+            est_pc2_flows_valid_idx = _to_numpy(est_pc2_flows_valid_idx)
+            save_file = Path(
+                self.save_output_folder) / log_id / f"{log_idx:06d}.npy"
+            save_file.parent.mkdir(exist_ok=True, parents=True)
+            save_npy(save_file, {
+                "pc1": pc1[est_pc1_flows_valid_idx],
+                "pc2": pc2[est_pc2_flows_valid_idx],
+                "gt_flow": gt_flow[est_pc1_flows_valid_idx],
+                "est_flow": est_flow
+            },
+                     verbose=False)
+
     def validation_step(self, input_batch, batch_idx):
         nntime.timer_start(self, "validation_forward")
         model_res = self.model(input_batch, **self.val_forward_args)
         nntime.timer_end(self, "validation_forward")
         output_batch = model_res["forward"]
         self.metric.to(self.device)
+
+        if self.save_output_folder is not None:
+            self._save_output(input_batch, output_batch, batch_idx)
 
         if not self.has_labels:
             return

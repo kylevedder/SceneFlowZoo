@@ -4,6 +4,7 @@ from pathlib import Path
 import tqdm
 from multiprocessing import Pool, cpu_count
 from functools import partial
+import numpy as np
 
 parser = argparse.ArgumentParser(description='Process some folders.')
 parser.add_argument('--cpus', type=int, default=cpu_count(),
@@ -26,7 +27,7 @@ def process_file(file, key="delta_time"):
     return npz_data[key]
 
 def process_folder(path : Path):
-    delta_time = 0
+    time_list = []
 
     process_function = partial(process_file, key=args.key)
     if cpus <= 1:
@@ -35,14 +36,16 @@ def process_folder(path : Path):
         file_list = [subfolder.glob("*.npz") for subfolder in subfolders]
         file_list = [file for sublist in file_list for file in sublist]
         for file in tqdm.tqdm(file_list):
-            delta_time += process_function(file)
+            delta_time = process_function(file)
+            time_list.append(delta_time) 
+
     else:
         with Pool(processes=cpus) as pool:
             subfolders = path.iterdir()
             file_list = [subfolder.glob("*.npz") for subfolder in subfolders]
             delta_time_list = pool.map(process_function, [file for sublist in file_list for file in sublist])
-            delta_time = sum(delta_time_list)
-    return delta_time
+            time_list.extend(delta_time_list)
+    return time_list
 
 
 # waymo_train = process_folder(waymo_open_train_dir)
@@ -52,4 +55,4 @@ def process_folder(path : Path):
 # argo_val = process_folder(argoverse_val_dir)
 # print("Argo val: ", argo_val)
 argo_chodosh_train = process_folder(argoverse_chodosh_train_dir)
-print("Argo chodosh train: ", argo_chodosh_train)
+print("Argo chodosh train: ", np.sum(argo_chodosh_train), np.mean(argo_chodosh_train), np.std(argo_chodosh_train))

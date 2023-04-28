@@ -126,6 +126,9 @@ def main():
 
     if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
         raise ValueError("Config file indicates this model is not trainable.")
+    
+    if hasattr(cfg, "seed_everything"):
+        pl.seed_everything(cfg.seed_everything)
 
     resume_from_checkpoint = args.resume_from_checkpoint
 

@@ -17,6 +17,28 @@ def _compute_size_metric(filepath: Path):
         return f'{size / (1024 * 1024 * 1024):.2f} GB'
 
 
+def load_txt(filepath: Path, verbose: bool = True):
+    filepath = Path(filepath)
+    assert filepath.exists(), f'{filepath} does not exist'
+    if verbose:
+        print(f'Loading {filepath} of size {_compute_size_metric(filepath)}')
+    with open(filepath, 'r') as f:
+        return f.read()
+
+
+def save_txt(filepath: Path, txt, verbose: bool = True):
+    filepath = Path(filepath)
+    if verbose:
+        print(f'Saving {filepath}', end='')
+    if filepath.exists():
+        filepath.unlink()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with open(filepath, 'w') as f:
+        f.write(txt)
+    if verbose:
+        print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
+
+
 def load_npz(filepath: Path, verbose: bool = True):
     filepath = Path(filepath)
     assert filepath.exists(), f'{filepath} does not exist'
@@ -45,14 +67,16 @@ def load_npy(filepath: Path, verbose: bool = True):
     return np.load(filepath, allow_pickle=True)
 
 
-def save_npy(filepath: Path, npy):
+def save_npy(filepath: Path, npy, verbose: bool = True):
     filepath = Path(filepath)
-    print(f'Saving {filepath}', end='')
+    if verbose:
+        print(f'Saving {filepath}', end='')
     if filepath.exists():
         filepath.unlink()
     filepath.parent.mkdir(parents=True, exist_ok=True)
     np.save(filepath, npy)
-    print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
+    if verbose:
+        print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
 
 
 def load_pickle(filepath: Path, verbose: bool = True):
