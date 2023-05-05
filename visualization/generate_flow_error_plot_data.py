@@ -1,3 +1,8 @@
+import os
+
+# Set Open MP's num threads to 1
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import torch
 import pandas as pd
 from dataloaders import ArgoverseUnsupervisedFlowSequenceLoader, ArgoverseSupervisedFlowSequenceLoader
@@ -22,7 +27,7 @@ parser.add_argument('--dataset_type',
 parser.add_argument('--dataset_source',
                     type=str,
                     default='nsfp',
-                    choices=['nsfp', 'odom', 'nearest_neighbor'])
+                    choices=['nsfp', 'odom', 'nearest_neighbor', 'chodosh', 'distilation', 'supervised', 'chodosh_distilation'])
 parser.add_argument('--step_size',
                     type=int,
                     default=5,
@@ -66,7 +71,11 @@ def get_pcs_flows_pose(unsupervised_frame_dict, supervised_frame_dict):
 
     # pc, valid_points_pc = voxel_restrict_pointcloud(unrestricted_pc)
     pose = unsupervised_frame_dict['relative_pose']
-    unsupervised_flow = unsupervised_frame_dict['flow'][0]
+    unsupervised_flow = unsupervised_frame_dict['flow']
+    if unsupervised_flow.ndim == 3 and unsupervised_flow.shape[0] == 1:
+        unsupervised_flow = unsupervised_flow[0]
+    else:
+        assert unsupervised_flow.ndim == 2, f"unsupervised_flow must be a batch of 3D points, but got {unsupervised_flow.ndim} dimensions"
     valid_idxes = unsupervised_frame_dict['valid_idxes']
     pc = unrestricted_pc.mask_points(valid_idxes)
     assert unsupervised_flow is not None, 'flow must not be None'

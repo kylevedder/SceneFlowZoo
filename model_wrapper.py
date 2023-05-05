@@ -11,6 +11,9 @@ import torchmetrics
 from typing import Dict, List, Tuple
 from loader_utils import *
 import nntime
+import time
+import multiprocessing as mp
+from functools import partial
 
 
 class EndpointDistanceMetricRawTorch():
@@ -165,6 +168,8 @@ class ModelWrapper(pl.LightningModule):
 
         self.save_output_folder = None if not hasattr(
             cfg, "save_output_folder") else cfg.save_output_folder
+        self.save_pool = None if self.save_output_folder is None else mp.Pool(
+            mp.cpu_count())
 
         self.metric = EndpointDistanceMetricRawTorch(
             CATEGORY_ID_TO_NAME, SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
@@ -253,7 +258,7 @@ class ModelWrapper(pl.LightningModule):
 
         vis.run()
 
-    def _save_output(self, input_batch, output_batch, batch_idx):
+    def _save_output(self, input_batch, output_batch, batch_idx, delta_time):
 
         def _to_numpy(x):
             if isinstance(x, torch.Tensor):
@@ -273,6 +278,8 @@ class ModelWrapper(pl.LightningModule):
         est_pc1_flows_valid_idxes = output_batch['pc0_valid_point_idxes']
         est_pc2_flows_valid_idxes = output_batch['pc1_valid_point_idxes']
 
+        save_list = []
+
         for pc_arrays, log_ids, log_idxs, gt_flows, est_flow, est_pc1_flows_valid_idx, est_pc2_flows_valid_idx in zip(
                 pc_array_stack, log_ids, log_idxes, gt_flows, est_flows,
                 est_pc1_flows_valid_idxes, est_pc2_flows_valid_idxes):
@@ -284,26 +291,44 @@ class ModelWrapper(pl.LightningModule):
             est_flow = _to_numpy(from_fixed_array(est_flow))
             est_pc1_flows_valid_idx = _to_numpy(est_pc1_flows_valid_idx)
             est_pc2_flows_valid_idx = _to_numpy(est_pc2_flows_valid_idx)
-            save_file = Path(
+            expanded_save_file = Path(
                 self.save_output_folder) / log_id / f"{log_idx:06d}.npy"
-            save_file.parent.mkdir(exist_ok=True, parents=True)
-            save_npy(save_file, {
+            standard_save_file = Path(
+                self.save_output_folder) / log_id / f"{log_idx:06d}.npz"
+
+            expanded_data_dict = {
                 "pc1": pc1[est_pc1_flows_valid_idx],
                 "pc2": pc2[est_pc2_flows_valid_idx],
                 "gt_flow": gt_flow[est_pc1_flows_valid_idx],
-                "est_flow": est_flow
-            },
-                     verbose=False)
+                "est_flow": est_flow,
+                "pc1_flows_valid_idx": est_pc1_flows_valid_idx,
+                "pc2_flows_valid_idx": est_pc2_flows_valid_idx,
+            }
+
+            standard_data_dict = {
+                'flow': est_flow,
+                'valid_idxes': est_pc1_flows_valid_idx,
+                'delta_time': delta_time
+            }
+
+            save_list.append((expanded_save_file, expanded_data_dict))
+            save_list.append((standard_save_file, standard_data_dict))
+
+        self.save_pool.starmap(partial(save_by_extension, verbose=False),
+                               save_list)
 
     def validation_step(self, input_batch, batch_idx):
         nntime.timer_start(self, "validation_forward")
+        start_time = time.time()
         model_res = self.model(input_batch, **self.val_forward_args)
+        end_time = time.time()
         nntime.timer_end(self, "validation_forward")
         output_batch = model_res["forward"]
         self.metric.to(self.device)
 
         if self.save_output_folder is not None:
-            self._save_output(input_batch, output_batch, batch_idx)
+            self._save_output(input_batch, output_batch, batch_idx,
+                              end_time - start_time)
 
         if not self.has_labels:
             return

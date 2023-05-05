@@ -78,7 +78,6 @@ def save_npy(filepath: Path, npy, verbose: bool = True):
     if verbose:
         print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
 
-
 def load_pickle(filepath: Path, verbose: bool = True):
     filepath = Path(filepath)
     assert filepath.exists(), f'{filepath} does not exist'
@@ -88,15 +87,17 @@ def load_pickle(filepath: Path, verbose: bool = True):
         return pickle.load(f)
 
 
-def save_pickle(filepath: Path, pkl):
+def save_pickle(filepath: Path, pkl, verbose: bool = True):
     filepath = Path(filepath)
-    print(f'Saving {filepath}', end='')
+    if verbose:
+        print(f'Saving {filepath}', end='')
     if filepath.exists():
         filepath.unlink()
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, 'wb') as f:
         pickle.dump(pkl, f)
-    print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
+    if verbose:
+        print(f"\rSaved {filepath} of size {_compute_size_metric(filepath)}")
 
 
 def load_json(filename: Path, verbose: bool = True):
@@ -108,16 +109,17 @@ def load_json(filename: Path, verbose: bool = True):
         return json.load(f)
 
 
-def save_json(filename: Path, contents, indent=None):
-    print(f'Saving {filename}', end='')
+def save_json(filename: Path, contents, indent=None, verbose: bool = True):
+    if verbose:
+        print(f'Saving {filename}', end='')
     filename = Path(filename)
     if filename.exists():
         filename.unlink()
     filename.parent.mkdir(parents=True, exist_ok=True)
     with open(filename, 'w') as f:
         json.dump(contents, f, indent=indent)
-
-    print(f"\rSaved {filename} of size {_compute_size_metric(filename)}")
+    if verbose:
+        print(f"\rSaved {filename} of size {_compute_size_metric(filename)}")
 
 
 def load_csv(filename: Path, dtype=str):
@@ -127,16 +129,37 @@ def load_csv(filename: Path, dtype=str):
                 for line in f.readlines()]
 
 
-def save_csv(filename: Path, contents: list):
-    print(f'Saving {filename}', end='')
+def save_csv(filename: Path, contents: list, verbose: bool = True):
+    filename = Path(filename)
+    if verbose:
+        print(f'Saving {filename}', end='')
     if filename.exists():
         filename.unlink()
     filename.parent.mkdir(parents=True, exist_ok=True)
     with open(filename, 'w') as f:
         for line in contents:
             f.write(f'{",".join([str(e) for e in line])}\n')
-    print(f"\rSaved {filename} of size {_compute_size_metric(filename)}")
+    if verbose:
+        print(f"\rSaved {filename} of size {_compute_size_metric(filename)}")
 
+def save_by_extension(filename: Path, contents, verbose : bool =True):
+    filename = Path(filename)
+    # Make parents if they don't exist
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    if filename.suffix == '.txt':
+        save_txt(filename, contents, verbose=verbose)
+    elif filename.suffix == '.npz':
+        save_npz(filename, contents, verbose=verbose)
+    elif filename.suffix == '.npy':
+        save_npy(filename, contents, verbose=verbose)
+    elif filename.suffix == '.pkl':
+        save_pickle(filename, contents, verbose=verbose)
+    elif filename.suffix == '.json':
+        save_json(filename, contents, verbose=verbose)
+    elif filename.suffix == '.csv':
+        save_csv(filename, contents, verbose=verbose)
+    else:
+        raise ValueError(f'Unknown file extension: {filename.suffix}')
 
 def symlink_files(old_dir: Path, new_dir: Path, file_name_list: list):
     old_dir = Path(old_dir)

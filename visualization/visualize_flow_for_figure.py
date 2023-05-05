@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, ArgoverseUnsupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
@@ -13,42 +13,55 @@ import time
 # sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
 #     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
 supervised_sequence_loader = WaymoSupervisedFlowSequenceLoader(
-    '/efs/waymo_open_processed_flow/training/')
-unsupervised_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
-    '/efs/waymo_open_processed_flow/training/',
-    '/efs/waymo_open_processed_flow/train_nsfp_flow/')
+    '/efs/waymo_open_processed_flow/validation/')
+our_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
+    '/efs/waymo_open_processed_flow/validation/',
+    '/bigdata/waymo_open_processed_flow/val_distillation_out/')
+sup_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
+    '/efs/waymo_open_processed_flow/validation/',
+    '/bigdata/waymo_open_processed_flow/val_supervised_out/')
+
+# supervised_sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
+#     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
+# unsupervised_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
+#     '/efs/argoverse2/val/', '/efs/argoverse2/val_distilation_flow/')
 
 camera_params_path = Path() / 'camera_params.pkl'
 screenshot_path = Path() / 'screenshots'
 screenshot_path.mkdir(exist_ok=True)
 
-sequence_id = supervised_sequence_loader.get_sequence_ids()[1]
-assert sequence_id in set(
-    unsupervised_sequence_loader.get_sequence_ids()
-), f"sequence_id {sequence_id} not in unsupervised_sequence_loader.get_sequence_ids() {unsupervised_sequence_loader.get_sequence_ids()}"
-print("Sequence ID: ", sequence_id)
-supervised_sequence = supervised_sequence_loader.load_sequence(sequence_id)
-unsupervised_sequence = unsupervised_sequence_loader.load_sequence(sequence_id)
+
+def load_sequence(sequence_idx: int):
+    sequence_id = supervised_sequence_loader.get_sequence_ids()[sequence_idx]
+    assert sequence_id in set(
+        our_sequence_loader.get_sequence_ids()
+    ), f"sequence_id {sequence_id} not in unsupervised_sequence_loader.get_sequence_ids() {our_sequence_loader.get_sequence_ids()}"
+    print("Sequence ID: ", sequence_id, "Sequence idx: ", sequence_idx)
+    supervised_sequence = supervised_sequence_loader.load_sequence(sequence_id)
+    our_sequence = our_sequence_loader.load_sequence(sequence_id)
+    sup_sequence = sup_sequence_loader.load_sequence(sequence_id)
+
+    before_human_load = time.time()
+    supervised_frame_list = supervised_sequence.load_frame_list(0)
+    before_our_load = time.time()
+    print(f"Time to load human: {before_our_load - before_human_load}")
+    our_frame_list = our_sequence.load_frame_list(0)
+    before_sup_load = time.time()
+    print(f"Time to load our: {before_sup_load - before_our_load}")
+    sup_frame_list = sup_sequence.load_frame_list(0)
+    after_sup_load = time.time()
+    print(f"Time to load sup: {after_sup_load - before_sup_load}")
+
+    return supervised_frame_list, our_frame_list, sup_frame_list
+
 
 # make open3d visualizer
 vis = o3d.visualization.VisualizerWithKeyCallback()
 vis.create_window()
-vis.get_render_option().point_size = 0.5
-vis.get_render_option().background_color = (0, 0, 0)
+vis.get_render_option().point_size = 2
+vis.get_render_option().background_color = (1, 1, 1)
 vis.get_render_option().show_coordinate_frame = False
 # Set camera parameters
-
-
-def load_camera_params(view_control: o3d.visualization.ViewControl):
-    if not camera_params_path.exists():
-        return None
-    param_dict = load_pickle(camera_params_path)
-    intrinsics = param_dict['intrinsics']
-    extrinsics = param_dict['extrinsics']
-    pinhole_camera_params = view_control.convert_to_pinhole_camera_parameters()
-    pinhole_camera_params.intrinsic.intrinsic_matrix = intrinsics
-    pinhole_camera_params.extrinsic = extrinsics
-    return pinhole_camera_params
 
 
 def save_camera_params(camera_params: o3d.camera.PinholeCameraParameters):
@@ -59,41 +72,30 @@ def save_camera_params(camera_params: o3d.camera.PinholeCameraParameters):
 
 
 ctr = vis.get_view_control()
-camera_params = load_camera_params(ctr)
-if camera_params is not None:
-    ctr.convert_from_pinhole_camera_parameters(camera_params,
-                                               allow_arbitrary=True)
-else:
-    print("No camera params found, using default view")
-# ctr.look_at([0, 0, 0])
 
-sequence_length = len(supervised_sequence)
-
-
-def sequence_idx_to_color(idx):
-    return [1 - idx / sequence_length, idx / sequence_length, 0]
-
-
-supervised_frame_list = supervised_sequence.load_frame_list(0)
-unsupervised_frame_list = unsupervised_sequence.load_frame_list(0)
+sequence_idx = 1
+# sequence_idx = 7
 
 draw_flow_lines_color = None
 
-use_gt_flow = True
+flow_type = 'gt'
 
-starter_idx = 164
+starter_idx = 122
+
+supervised_frame_list, our_frame_list, sup_frame_list = load_sequence(
+    sequence_idx)
 
 
 def toggle_flow_lines(vis):
     global draw_flow_lines_color
 
     if draw_flow_lines_color is None:
-        draw_flow_lines_color = 'green'
-    elif draw_flow_lines_color == 'green':
-        draw_flow_lines_color = 'blue'
-    elif draw_flow_lines_color == 'blue':
         draw_flow_lines_color = 'red'
     elif draw_flow_lines_color == 'red':
+        draw_flow_lines_color = 'blue'
+    elif draw_flow_lines_color == 'blue':
+        draw_flow_lines_color = 'green'
+    elif draw_flow_lines_color == 'green':
         draw_flow_lines_color = 'purple'
     elif draw_flow_lines_color == 'purple':
         draw_flow_lines_color = 'yellow'
@@ -108,9 +110,16 @@ def toggle_flow_lines(vis):
     draw_frames(reset_view=False)
 
 
-def toggle_gt_flow(vis):
-    global use_gt_flow
-    use_gt_flow = not use_gt_flow
+def toggle_flow_type(vis):
+    global flow_type
+    if flow_type == 'gt':
+        flow_type = 'ours'
+    elif flow_type == 'ours':
+        flow_type = 'sup'
+    elif flow_type == 'sup':
+        flow_type = 'gt'
+    else:
+        raise ValueError(f'Invalid flow_type: {flow_type}')
     vis.clear_geometries()
     draw_frames(reset_view=False)
 
@@ -118,6 +127,8 @@ def toggle_gt_flow(vis):
 def increase_starter_idx(vis):
     global starter_idx
     starter_idx += 1
+    if starter_idx >= min(len(supervised_frame_list), len(our_frame_list)) - 1:
+        starter_idx = 0
     print(starter_idx)
     vis.clear_geometries()
     draw_frames(reset_view=False)
@@ -126,28 +137,72 @@ def increase_starter_idx(vis):
 def decrease_starter_idx(vis):
     global starter_idx
     starter_idx -= 1
+    if starter_idx < 0:
+        starter_idx = min(len(supervised_frame_list), len(our_frame_list)) - 2
     print(starter_idx)
     vis.clear_geometries()
     draw_frames(reset_view=False)
 
 
-def save_camera_params_callback(vis):
-    params = vis.get_view_control().convert_to_pinhole_camera_parameters()
-    save_camera_params(params)
+def starter_idx_beginning(vis):
+    global starter_idx
+    starter_idx = 0
+    print(starter_idx)
+    vis.clear_geometries()
+    draw_frames(reset_view=False)
+
+
+def starter_idx_end(vis):
+    global starter_idx
+    starter_idx = min(len(supervised_frame_list), len(our_frame_list)) - 2
+    print(starter_idx)
+    vis.clear_geometries()
+    draw_frames(reset_view=False)
 
 
 def save_screenshot(vis):
-    save_name = screenshot_path / f'{sequence_id}_{starter_idx}_{time.time():03f}.png'
+    save_name = screenshot_path / f'{supervised_sequence_loader.get_sequence_ids()[sequence_idx]}_{starter_idx}_{time.time():03f}.png'
     vis.capture_screen_image(str(save_name))
 
 
+def decrease_sequence_idx(vis):
+    global sequence_idx
+    global supervised_frame_list
+    global our_frame_list
+    global sup_frame_list
+    sequence_idx -= 1
+    supervised_frame_list, our_frame_list, sup_frame_list = load_sequence(
+        sequence_idx)
+    vis.clear_geometries()
+    draw_frames(reset_view=True)
+
+
+def increase_sequence_idx(vis):
+    global sequence_idx
+    global supervised_frame_list
+    global our_frame_list
+    global sup_frame_list
+    sequence_idx += 1
+    supervised_frame_list, our_frame_list, sup_frame_list = load_sequence(
+        sequence_idx)
+    vis.clear_geometries()
+    draw_frames(reset_view=True)
+
+
 vis.register_key_callback(ord("F"), toggle_flow_lines)
-vis.register_key_callback(ord("G"), toggle_gt_flow)
+vis.register_key_callback(ord("G"), toggle_flow_type)
 # left arrow decrease starter_idx
 vis.register_key_callback(263, decrease_starter_idx)
 # # right arrow increase starter_idx
 vis.register_key_callback(262, increase_starter_idx)
-vis.register_key_callback(ord("C"), save_camera_params_callback)
+# Up arrow for next sequence
+vis.register_key_callback(265, increase_sequence_idx)
+# Down arrow for prior sequence
+vis.register_key_callback(264, decrease_sequence_idx)
+# Home key for beginning of sequence
+vis.register_key_callback(268, starter_idx_beginning)
+# End key for end of sequence
+vis.register_key_callback(269, starter_idx_end)
 vis.register_key_callback(ord("S"), save_screenshot)
 
 
@@ -183,25 +238,26 @@ def limit_frames(frame_lst):
 
 def draw_frames(reset_view=False):
     limited_supervised_frame_list = limit_frames(supervised_frame_list)
-    limited_unsupervised_frame_list = limit_frames(unsupervised_frame_list)
+    limited_our_frame_list = limit_frames(our_frame_list)
+    limited_sup_frame_list = limit_frames(sup_frame_list)
     #color_scalar = np.linspace(0.5, 1, len(limited_supervised_frame_list))
     # Green then blue
     color_scalar = [[0, 1, 0], [0, 0, 1]]
     frame_dict_list = list(
-        zip(limited_supervised_frame_list, limited_unsupervised_frame_list))
-    for idx, (supervised_frame_dict, unsupervised_frame_dict) in enumerate(
-            tqdm.tqdm(frame_dict_list)):
+        zip(limited_supervised_frame_list, limited_our_frame_list,
+            limited_sup_frame_list))
+    for idx, (supervised_frame_dict, our_frame_dict,
+              sup_frame_dict) in enumerate(tqdm.tqdm(frame_dict_list)):
         supervised_pc = supervised_frame_dict['relative_pc']
         pose = supervised_frame_dict['relative_pose']
         supervised_flowed_pc = supervised_frame_dict['relative_flowed_pc']
         classes = supervised_frame_dict['pc_classes']
 
-        unsupervised_pc_valid_idxes = unsupervised_frame_dict['valid_idxes']
-        unsupervised_pc = unsupervised_frame_dict['relative_pc'][
-            unsupervised_pc_valid_idxes]
+        our_pc_valid_idxes = our_frame_dict['valid_idxes']
+        our_pc = our_frame_dict['relative_pc'][our_pc_valid_idxes]
 
-        unsupervised_flow = unsupervised_frame_dict['flow'].squeeze(0)
-        unsupervised_flowed_pc = unsupervised_pc + unsupervised_flow
+        sup_pc_valid_idxes = sup_frame_dict['valid_idxes']
+        sup_pc = sup_frame_dict['relative_pc'][sup_pc_valid_idxes]
 
         # Add base point cloud
         pcd = o3d.geometry.PointCloud()
@@ -210,24 +266,39 @@ def draw_frames(reset_view=False):
         pcd.colors = o3d.utility.Vector3dVector(pc_color)
         vis.add_geometry(pcd, reset_bounding_box=reset_view)
 
+        our_flow = our_frame_dict['flow']
+        if our_flow is None:
+            continue
+        if our_flow.ndim == 3:
+            our_flow = our_flow.squeeze(0)
+        our_flowed_pc = our_pc + our_flow
+
+        sup_flow = sup_frame_dict['flow']
+        if sup_flow is None:
+            continue
+        if sup_flow.ndim == 3:
+            sup_flow = sup_flow.squeeze(0)
+        sup_flowed_pc = sup_pc + sup_flow
+
         # Add flowed point cloud
-        if supervised_flowed_pc is not None and idx < len(
-                supervised_frame_list) - 1:
-            print(
-                "Max flow magnitude:",
-                supervised_pc.matched_point_distance(
-                    supervised_flowed_pc).max())
+        if supervised_flowed_pc is not None and idx < len(frame_dict_list) - 1:
+            print("sequence_idx", sequence_idx, "starter_idx:", starter_idx,
+                  "Flow type: ", flow_type)
 
             if draw_flow_lines_color is not None:
 
-                if use_gt_flow:
+                if flow_type == 'gt':
                     line_set = make_lineset(supervised_pc.points,
                                             supervised_flowed_pc.points,
                                             draw_flow_lines_color)
-                else:
-                    line_set = make_lineset(unsupervised_pc,
-                                            unsupervised_flowed_pc,
+                elif flow_type == 'ours':
+                    line_set = make_lineset(our_pc, our_flowed_pc,
                                             draw_flow_lines_color)
+                elif flow_type == 'sup':
+                    line_set = make_lineset(sup_pc, sup_flowed_pc,
+                                            draw_flow_lines_color)
+                else:
+                    raise ValueError(f'Unknown flow_type {flow_type}')
                 vis.add_geometry(line_set, reset_bounding_box=reset_view)
 
 

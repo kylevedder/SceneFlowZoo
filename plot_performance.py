@@ -36,8 +36,10 @@ def set_font(size):
                             })
 
 
-def color_map():
+def color_map(rev : bool = False):
     # return 'gist_earth'
+    if rev:
+        return 'magma_r'
     return 'magma'
 
 
@@ -136,7 +138,8 @@ assert len(
     results) > 0, f"No results found in {args.results_folder.absolute()}"
 
 
-def plot_speed_vs_performance_tradeoff():
+def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
+                                       runtime_error_bar: bool = True):
     runtimes = {
         'Ours': 29.33,
         'FastFlow3D': 29.33,
@@ -147,6 +150,24 @@ def plot_speed_vs_performance_tradeoff():
         'EgoFlow': 2116.34,
         'PPWC': 79.4275,
         'FlowStep3D': 687.536,
+        'ICP': 523.11,
+    }
+
+    runtimes_error_bar = {
+        'Ours': 2.38,
+        'FastFlow3D': 2.38,
+        'NSFP': 18139.3,
+        'Chodosh': 20247.7,
+        'Gojcic': 1690.56,
+        'Sim2Real': 13.88,
+        'EgoFlow': 292.32,
+        'PPWC': 2.20,
+        'FlowStep3D': 3.13,
+        'ICP': 169.34,
+    }
+
+    perf_error_bar_dims = {
+        'Ours': (0.003, 0.003),
     }
 
     points_processed = {
@@ -159,10 +180,11 @@ def plot_speed_vs_performance_tradeoff():
         'EgoFlow': 8192,
         'PPWC': 8192,
         'FlowStep3D': 8192,
+        'ICP': 8192,
     }
 
     performance = {
-        'Ours': 0.089,
+        'Ours': 0.092,
         'NSFP': 0.068,
         'Chodosh': 0.055,
         'FastFlow3D': 0.076,
@@ -170,7 +192,8 @@ def plot_speed_vs_performance_tradeoff():
         'FlowStep3D': 0.161,
         'Sim2Real': 0.157,
         'EgoFlow': 0.205,
-        'Gojcic': 0.083
+        'Gojcic': 0.083,
+        'ICP': 0.204,
     }
 
     uses_labels = {
@@ -183,6 +206,12 @@ def plot_speed_vs_performance_tradeoff():
         'EgoFlow': False,
         'Gojcic': True,
         'Chodosh': False,
+        'ICP': False,
+    }
+
+    label_offset = {
+        'ICP': (-2.5, -6.5),
+        'Sim2Real': (-2.5, -6.5),
     }
 
     keys = runtimes.keys()
@@ -201,9 +230,9 @@ def plot_speed_vs_performance_tradeoff():
     worst_perf = max(performance)
 
     plt.gca().axvspan(0, 100, alpha=0.08, color='blue')
-    plt.text(46,
+    plt.text(43,
              worst_perf,
-             'Real Time',
+             'Real Time at 10Hz',
              color='blue',
              ha='center',
              rotation_mode='anchor')
@@ -225,14 +254,33 @@ def plot_speed_vs_performance_tradeoff():
                     s=dot_scale,
                     alpha=alpha,
                     edgecolors='none')
+        if perf_error_bar:
+            if key in perf_error_bar_dims:
+                plt.errorbar(runtime,
+                             perf,
+                             yerr=np.array([perf_error_bar_dims[key]]).T,
+                             color=gliph_color,
+                             capsize=1.5,
+                             zorder=0,
+                             alpha=0.2)
+        if runtime_error_bar:
+            plt.errorbar(runtime,
+                         perf,
+                         xerr=runtimes_error_bar[key],
+                         color=gliph_color,
+                         capsize=1.5,
+                         zorder=0,
+                         alpha=0.2)
         # Annotate with name
-        plt.annotate(
-            f"{key} ({point_count / 1000.0:0.1f}k points)", (runtime, perf),
-            xytext=(6 * x_offset_sign, -2.75),
-            textcoords='offset points',
-            color=text_color,
-            ha=alignment,
-            fontweight=fontweight)
+        plt.annotate(f"{key} ({point_count / 1000.0:0.1f}k points)",
+                     (runtime, perf),
+                     xytext=(6 * x_offset_sign + label_offset.get(key,
+                                                                  (0, 0))[0],
+                             -2.75 + label_offset.get(key, (0, 0))[1]),
+                     textcoords='offset points',
+                     color=text_color,
+                     ha=alignment,
+                     fontweight=fontweight)
     # Set x axis log scale
     plt.xscale('log')
     # Make vertical bar at 100 on x axis
@@ -662,12 +710,17 @@ def plot_validation_pointcloud_size(dataset: str, max_x=160000):
     plt.xlabel("Number of points")
     plt.ylabel("Number of point clouds")
     plt.xlim(left=0, right=max_x)
+    plt.gca().xaxis.set_major_formatter(
+        matplotlib.ticker.StrMethodFormatter('{x:,.0f}'))
+    plt.gca().yaxis.set_major_formatter(
+        matplotlib.ticker.StrMethodFormatter('{x:,.0f}'))
     plt.tight_layout()
 
 
 def plot_val_endpoint_error_distribution(source: str,
                                          use_log_scale: bool = False,
-                                         unrotated: bool = False):
+                                         unrotated: bool = False,
+                                         ticks: bool = False):
 
     base_path = Path(
         f"/efs/argoverse2/val_{source}_unsupervised_vs_supervised_flow/")
@@ -687,9 +740,12 @@ def plot_val_endpoint_error_distribution(source: str,
     average_y = np.average(np.arange(distribution_y.shape[0]),
                            weights=distribution_y)
 
-    print("VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
-    print(f"{source} Average x: {average_x}, average y: {average_y}")
-    print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+    if (not unrotated) and (not use_log_scale):
+        print("VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
+        print(
+            f"{source} Average x: {average_x}, average y: {average_y} is log scale: {use_log_scale} is rotated {not unrotated}"
+        )
+        print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
     plot_mat = np.flip(distribution, axis=1).T
     if use_log_scale:
@@ -708,7 +764,7 @@ def plot_val_endpoint_error_distribution(source: str,
         np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
                     int(grid_radius_meters * 2 + 1)),
         [
-            f"{e}m"
+            f"{e}m" if ticks else ""
             for e in np.linspace(-grid_radius_meters, grid_radius_meters,
                                  int(grid_radius_meters * 2 + 1))
         ])
@@ -716,7 +772,7 @@ def plot_val_endpoint_error_distribution(source: str,
         np.linspace(0, grid_radius_meters * 2 * cells_per_meter,
                     int(grid_radius_meters * 2 + 1)),
         [
-            f"{-e}m"
+            f"{-e}m" if ticks else ""
             for e in np.linspace(-grid_radius_meters, grid_radius_meters,
                                  int(grid_radius_meters * 2 + 1))
         ])
@@ -755,11 +811,23 @@ for metacatagory in METACATAGORIES:
 
 ################################################################################
 
+savetable("epe_table", table_epe(results_close))
+
+################################################################################
+
+plt.gcf().set_size_inches(6.5, 6.5 / 1.6)
+plot_speed_vs_performance_tradeoff()
+savefig(f"speed_vs_performance_tradeoff")
+
+################################################################################
+
 savetable("speed_vs_error", table_speed_vs_error(results))
 
 ################################################################################
 
 error_dist_scalar = 0.6
+
+# nsfp
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nsfp', use_log_scale=True)
@@ -769,6 +837,8 @@ plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nsfp', use_log_scale=False)
 savefig(f"val_endpoint_error_distribution_absolute_nsfp")
 
+# Odom
+
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('odom', use_log_scale=True)
 savefig(f"val_endpoint_error_distribution_log_odom")
@@ -776,6 +846,8 @@ savefig(f"val_endpoint_error_distribution_log_odom")
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('odom', use_log_scale=False)
 savefig(f"val_endpoint_error_distribution_absolute_odom")
+
+# Nearest neighbor
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=True)
@@ -785,7 +857,50 @@ plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=False)
 savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor")
 
-# Unrotated
+# Chodosh
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh', use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log_chodosh")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh', use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute_chodosh")
+
+# Supervised
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('supervised', use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log_supervised")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('supervised', use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute_supervised")
+
+# Distilation
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('distilation', use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log_distilation")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('distilation', use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute_distilation")
+
+# Chodosh distilation
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh_distilation', use_log_scale=True)
+savefig(f"val_endpoint_error_distribution_log_chodosh_distilation")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh_distilation',
+                                     use_log_scale=False)
+savefig(f"val_endpoint_error_distribution_absolute_chodosh_distilation")
+
+##### Unrotated
+
+# nsfp
 
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nsfp',
@@ -799,6 +914,8 @@ plot_val_endpoint_error_distribution('nsfp',
                                      unrotated=True)
 savefig(f"val_endpoint_error_distribution_absolute_nsfp_unrotated")
 
+# Odom
+
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('odom',
                                      use_log_scale=True,
@@ -811,6 +928,8 @@ plot_val_endpoint_error_distribution('odom',
                                      unrotated=True)
 savefig(f"val_endpoint_error_distribution_absolute_odom_unrotated")
 
+# Nearest neighbor
+
 plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
 plot_val_endpoint_error_distribution('nearest_neighbor',
                                      use_log_scale=True,
@@ -822,6 +941,63 @@ plot_val_endpoint_error_distribution('nearest_neighbor',
                                      use_log_scale=False,
                                      unrotated=True)
 savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor_unrotated")
+
+# Chodosh
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh',
+                                     use_log_scale=True,
+                                     unrotated=True)
+savefig(f"val_endpoint_error_distribution_log_chodosh_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh',
+                                     use_log_scale=False,
+                                     unrotated=True)
+savefig(f"val_endpoint_error_distribution_absolute_chodosh_unrotated")
+
+# Supervised
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('supervised',
+                                     use_log_scale=True,
+                                     unrotated=True)
+savefig(f"val_endpoint_error_distribution_log_supervised_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('supervised',
+                                     use_log_scale=False,
+                                     unrotated=True)
+savefig(f"val_endpoint_error_distribution_absolute_supervised_unrotated")
+
+# Distilation
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('distilation',
+                                     use_log_scale=True,
+                                     unrotated=True)
+savefig(f"val_endpoint_error_distribution_log_distilation_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('distilation',
+                                     use_log_scale=False,
+                                     unrotated=True)
+savefig(f"val_endpoint_error_distribution_absolute_distilation_unrotated")
+
+# Chodosh distilation
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh_distilation',
+                                     use_log_scale=True,
+                                     unrotated=True)
+savefig(f"val_endpoint_error_distribution_log_chodosh_distilation_unrotated")
+
+plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+plot_val_endpoint_error_distribution('chodosh_distilation',
+                                     use_log_scale=False,
+                                     unrotated=True)
+savefig(
+    f"val_endpoint_error_distribution_absolute_chodosh_distilation_unrotated")
 
 ################################################################################
 
@@ -915,13 +1091,3 @@ savefig(f"validation_pointcloud_size_waymo", pad=0.02)
 ################################################################################
 
 savetable("latency_table", table_latency(results))
-
-################################################################################
-
-savetable("epe_table", table_epe(results_close))
-
-################################################################################
-
-plt.gcf().set_size_inches(6.75, 6.75 / 1.6)
-plot_speed_vs_performance_tradeoff()
-savefig(f"speed_vs_performance_tradeoff")

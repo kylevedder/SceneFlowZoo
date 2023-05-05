@@ -7,10 +7,10 @@ import numpy as np
 import tqdm
 
 # sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
-# sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
-#     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
-sequence_loader = WaymoSupervisedFlowSequenceLoader(
-    '/efs/waymo_open_processed_flow/training/')
+sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
+    '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
+# sequence_loader = WaymoSupervisedFlowSequenceLoader(
+#     '/efs/waymo_open_processed_flow/training/')
 
 sequence_id = sequence_loader.get_sequence_ids()[1]
 print("Sequence ID: ", sequence_id)
