@@ -21,7 +21,12 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
                  origin_mode: Union[OriginMode, str],
                  max_pc_points: int = 90000,
                  subset_fraction: float = 1.0,
+                 subset_mode='random',
                  shuffle=False):
+        assert subset_mode in [
+            'random', 'sequential'
+        ], f"subset_mode must be 'random' or 'sequential', got {subset_mode}"
+        assert 1.0 >= subset_fraction > 0.0, f"subset_fraction must be in (0.0, 1.0], got {subset_fraction}"
         self.sequence_loader = sequence_loader
         assert subsequence_length > 0, f"subsequence_length must be > 0, got {subsequence_length}"
         assert max_sequence_length > 0, f"max_sequence_length must be > 0, got {max_sequence_length}"
@@ -35,9 +40,7 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
         self.max_pc_points = max_pc_points
 
         self.subsequence_id_begin_index = []
-        for id in tqdm(sequence_loader.get_sequence_ids(),
-                       desc="Preprocessing sequences",
-                       leave=False):
+        for id in sequence_loader.get_sequence_ids():
             num_subsequences = max_sequence_length - subsequence_length + 1
             assert num_subsequences > 0, f"num_subsequences must be > 0, got {num_subsequences}"
             self.subsequence_id_begin_index.extend([
@@ -46,20 +49,28 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
 
         self.subsequence_id_shuffled_index = list(
             range(len(self.subsequence_id_begin_index)))
+
+        subsequence_max_index = int(
+            len(self.subsequence_id_shuffled_index) * subset_fraction)
+
+        if subset_fraction < 1.0 and subset_mode == 'sequential':
+            print(
+                f"Using only {subsequence_max_index} of {len(self.subsequence_id_shuffled_index)} sequences."
+            )
+            self.subsequence_id_shuffled_index = self.subsequence_id_shuffled_index[:
+                                                                                    subsequence_max_index]
+
         if shuffle:
             random_state = np.random.RandomState(
                 len(self.subsequence_id_begin_index))
             random_state.shuffle(self.subsequence_id_shuffled_index)
 
-        assert 1.0 >= subset_fraction > 0.0, f"subset_fraction must be in (0.0, 1.0], got {subset_fraction}"
-        if subset_fraction < 1.0:
-            max_index = int(
-                len(self.subsequence_id_shuffled_index) * subset_fraction)
+        if subset_fraction < 1.0 and subset_mode == 'random':
             print(
-                f"Using only {max_index} of {len(self.subsequence_id_shuffled_index)} sequences."
+                f"Using only {subsequence_max_index} of {len(self.subsequence_id_shuffled_index)} sequences."
             )
             self.subsequence_id_shuffled_index = self.subsequence_id_shuffled_index[:
-                                                                                    max_index]
+                                                                                    subsequence_max_index]
 
     def __len__(self):
         return len(self.subsequence_id_shuffled_index)
