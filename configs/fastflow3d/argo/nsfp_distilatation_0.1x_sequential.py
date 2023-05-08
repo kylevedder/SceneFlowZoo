@@ -1,3 +1,6 @@
-_base_ = "./nsfp_distilatation_0.1x.py"
+_base_ = "./nsfp_distilatation.py"
 
-dataset = dict(args=dict(subset_mode='sequential'))
+epochs = 500
+check_val_every_n_epoch = 10
+validate_every = None
+dataset = dict(args=dict(subset_fraction=0.1, subset_mode='sequential'))

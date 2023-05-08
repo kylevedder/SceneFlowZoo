@@ -1,3 +1,5 @@
-_base_ = "./supervised_0.1x.py"
+_base_ = "./supervised.py"
 
-dataset = dict(args=dict(subset_mode='sequential'))
+epochs = 500
+validate_every = 158  # Number of training batches
+dataset = dict(args=dict(subset_fraction=0.1, subset_mode='sequential'))
