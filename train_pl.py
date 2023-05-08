@@ -167,6 +167,8 @@ def main():
                          num_sanity_val_steps=2,
                          log_every_n_steps=2,
                          val_check_interval=cfg.validate_every,
+                         check_val_every_n_epoch=cfg.check_val_every_n_epoch if hasattr(
+                                cfg, "check_val_every_n_epoch") else 1,
                          max_epochs=cfg.epochs,
                          resume_from_checkpoint=resume_from_checkpoint,
                          accumulate_grad_batches=cfg.accumulate_grad_batches
