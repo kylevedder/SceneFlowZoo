@@ -167,7 +167,8 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     }
 
     perf_error_bar_dims = {
-        'Ours': (0.003, 0.003),
+        'Ours': (0.00, 0.002),
+        'FastFlow3D': (0.002, 0.003),
     }
 
     points_processed = {
@@ -184,7 +185,7 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     }
 
     performance = {
-        'Ours': 0.092,
+        'Ours': 0.087,
         'NSFP': 0.068,
         'Chodosh': 0.055,
         'FastFlow3D': 0.076,
