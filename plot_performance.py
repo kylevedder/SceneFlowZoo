@@ -36,7 +36,7 @@ def set_font(size):
                             })
 
 
-def color_map(rev : bool = False):
+def color_map(rev: bool = False):
     # return 'gist_earth'
     if rev:
         return 'magma_r'
@@ -210,9 +210,15 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
         'ICP': False,
     }
 
+    horiz_offset = 2.5
+    vert_offset = 5.5
+
     label_offset = {
-        'ICP': (-2.5, -6.5),
-        'Sim2Real': (-2.5, -6.5),
+        'ICP': (-horiz_offset, -vert_offset),
+        'Sim2Real': (-horiz_offset, -vert_offset),
+        'NSFP': (horiz_offset, -vert_offset),
+        'Gojcic': (-horiz_offset, -vert_offset),
+        'Chodosh': (horiz_offset, -vert_offset),
     }
 
     keys = runtimes.keys()
