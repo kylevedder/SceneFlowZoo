@@ -187,7 +187,7 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     performance = {
         'Ours': 0.087,
         'NSFP': 0.068,
-        'Chodosh': 0.055,
+        'Chodosh': 0.061,
         'FastFlow3D': 0.076,
         'PPWC': 0.130,
         'FlowStep3D': 0.161,

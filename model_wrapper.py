@@ -175,9 +175,17 @@ class ModelWrapper(pl.LightningModule):
             CATEGORY_ID_TO_NAME, SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
             ENDPOINT_ERROR_SPLITS_METERS)
 
+    def on_load_checkpoint(self, checkpoint):
+        for optimizer_state_idx in range(len(checkpoint['optimizer_states'])):
+            for param_group_idx in range(
+                    len(checkpoint['optimizer_states'][optimizer_state_idx]
+                        ['param_groups'])):
+                checkpoint['optimizer_states'][optimizer_state_idx][
+                    'param_groups'][param_group_idx]['lr'] = self.lr
+
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
+        self.optimizer = optim.Adam(self.parameters(), lr=self.lr)
+        return self.optimizer
 
     def training_step(self, input_batch, batch_idx):
         model_res = self.model(input_batch, **self.train_forward_args)
