@@ -37,9 +37,6 @@ loss_fn = dict(name="FastFlow3DSupervisedLoss", args=dict())
 test_loader = dict(name="WaymoSupervisedFlowSequenceLoader",
                    args=dict(sequence_dir=test_sequence_dir))
 
-test_dataloader = dict(
-    args=dict(batch_size=16, num_workers=16, shuffle=False, pin_memory=True))
-
 test_dataset = dict(name="VarLenSubsequenceSupervisedFlowDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
                               max_pc_points=150000,
