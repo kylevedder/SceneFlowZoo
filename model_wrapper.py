@@ -176,12 +176,26 @@ class ModelWrapper(pl.LightningModule):
             ENDPOINT_ERROR_SPLITS_METERS)
 
     def on_load_checkpoint(self, checkpoint):
+        checkpoint_lrs = set()
+
         for optimizer_state_idx in range(len(checkpoint['optimizer_states'])):
             for param_group_idx in range(
                     len(checkpoint['optimizer_states'][optimizer_state_idx]
                         ['param_groups'])):
-                checkpoint['optimizer_states'][optimizer_state_idx][
-                    'param_groups'][param_group_idx]['lr'] = self.lr
+                checkpoint_lrs.add(
+                    checkpoint['optimizer_states'][optimizer_state_idx]
+                    ['param_groups'][param_group_idx]['lr'])
+
+        # If there are multiple learning rates, or if the learning rate is not the same as the one in the config, reset the optimizer.
+        # This is to handle the case where we want to resume training with a different learning rate.
+
+        reset_learning_rate = (len(set(checkpoint_lrs)) !=
+                               1) or (self.lr != list(checkpoint_lrs)[0])
+        
+        if reset_learning_rate:
+            print("Resetting learning rate to the one in the config.")
+            checkpoint.pop('optimizer_states')
+            checkpoint.pop('lr_schedulers')
 
     def configure_optimizers(self):
         self.optimizer = optim.Adam(self.parameters(), lr=self.lr)

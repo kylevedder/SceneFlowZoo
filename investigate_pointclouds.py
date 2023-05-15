@@ -101,9 +101,9 @@ def get_pc_infos(seq_idx, supervised_seq, unsupervised_seq):
 
 if args.dataset == 'waymo':
     supervised_seq_loader = WaymoSupervisedFlowSequenceLoader(waymo_data /
-                                                              "validation")
+                                                              "training")
     unsupervised_seq_loader = WaymoUnsupervisedFlowSequenceLoader(
-        waymo_data / "val_nsfp_flow")
+        waymo_data / "training", waymo_data / "train_nsfp_flow")
 else:
     supervised_seq_loader = ArgoverseSupervisedFlowSequenceLoader(
         argoverse_data / "val", argoverse_data / "val_sceneflow")

@@ -69,15 +69,16 @@ linewidth = 0.5
 minor_tick_color = (0.9, 0.9, 0.9)
 
 
-def grid():
-    plt.grid(linewidth=linewidth / 2)
-    plt.grid(which='minor',
-             color=minor_tick_color,
-             linestyle='--',
-             alpha=0.7,
-             clip_on=True,
-             linewidth=linewidth / 4,
-             zorder=0)
+def grid(minor=True, axis='both'):
+    plt.grid(linewidth=linewidth / 2, axis=axis)
+    if minor:
+        plt.grid(which='minor',
+                color=minor_tick_color,
+                linestyle='--',
+                alpha=0.7,
+                clip_on=True,
+                linewidth=linewidth / 4,
+                zorder=0)
 
 
 def savefig(name, pad: float = 0):
@@ -211,13 +212,13 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     }
 
     horiz_offset = 2.5
-    vert_offset = 5.5
+    vert_offset = 6.0
 
     label_offset = {
         'ICP': (-horiz_offset, -vert_offset),
         'Sim2Real': (-horiz_offset, -vert_offset),
-        'NSFP': (horiz_offset, -vert_offset),
-        'Gojcic': (-horiz_offset, -vert_offset),
+        'NSFP': (horiz_offset, vert_offset),
+        'Gojcic': (-horiz_offset, vert_offset),
         'Chodosh': (horiz_offset, -vert_offset),
     }
 
@@ -309,12 +310,15 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
              'Better',
              color='gray',
              ha='center',
-             rotation=40,
+             rotation=43,
              rotation_mode='anchor')
+    
+    # Set plt y axis min to 0.05
+    plt.ylim(bottom=0.05)
 
     # plt.annotate('Worse', xy=(worst_runtime, worst_perf), color='gray')
 
-    grid()
+    # grid(minor=False, axis='x')
 
 
 def process_metacategory_counts(result):

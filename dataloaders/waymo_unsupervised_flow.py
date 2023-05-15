@@ -67,8 +67,12 @@ class WaymoUnsupervisedFlowSequenceLoader(WaymoSupervisedFlowSequenceLoader):
                  verbose: bool = False):
         super().__init__(raw_data_path, verbose=verbose)
         self.flow_data_path = Path(flow_data_path)
+        assert self.flow_data_path.is_dir(
+        ), f"flow_data_path {self.flow_data_path} is not a directory"
         # Load list of flows from flow_data_path
         flow_dir_list = sorted(self.flow_data_path.glob("*/"))
+        assert len(flow_dir_list
+                   ) > 0, f"flow_data_path {self.flow_data_path} is empty"
         self.flow_lookup = {e.name: e for e in flow_dir_list}
 
         # Intersect the flow_lookup keys with log_lookup
