@@ -73,12 +73,12 @@ def grid(minor=True, axis='both'):
     plt.grid(linewidth=linewidth / 2, axis=axis)
     if minor:
         plt.grid(which='minor',
-                color=minor_tick_color,
-                linestyle='--',
-                alpha=0.7,
-                clip_on=True,
-                linewidth=linewidth / 4,
-                zorder=0)
+                 color=minor_tick_color,
+                 linestyle='--',
+                 alpha=0.7,
+                 clip_on=True,
+                 linewidth=linewidth / 4,
+                 zorder=0)
 
 
 def savefig(name, pad: float = 0):
@@ -139,8 +139,37 @@ assert len(
     results) > 0, f"No results found in {args.results_folder.absolute()}"
 
 
+def plot_scaling():
+
+    ours_results = [
+        (1.0, 0.087),
+        (0.5, 0.101),
+        (0.2, 0.116),
+        (0.1, 0.139),
+        (0.01, 0.216),
+    ]
+
+    fastflow_results = [
+        (1.0, 0.076),
+        (0.5, 0.091),
+        (0.2, 0.104),
+        (0.1, 0.125),
+    ]
+
+    plt.plot(*zip(*ours_results), label="Ours", color='red', marker='o')
+    plt.plot(*zip(*fastflow_results), label="FastFlow3D", color='black', marker='o')
+    plt.xlabel("Dataset Fraction")
+    plt.ylabel("Threeway EPE (m)")
+
+    # Set x ticks
+    plt.xticks([0.01, 0.1, 0.2, 0.5, 1.0], ["1%", "10%", "20%", "50%", "100%"])
+
+    plt.legend()
+
+
 def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
-                                       runtime_error_bar: bool = True):
+                                       runtime_error_bar: bool = True,
+                                       gradient_bg: bool = True):
     runtimes = {
         'Ours': 29.33,
         'FastFlow3D': 29.33,
@@ -225,7 +254,7 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     keys = runtimes.keys()
     runtimes = [runtimes[k] for k in keys]
     performance = [performance[k] for k in keys]
-    shapes = ['s' if uses_labels[k] else 'o' for k in keys]
+    shapes = ['x' if uses_labels[k] else 'o' for k in keys]
     alphas = [1.0 if uses_labels[k] else 1.0 for k in keys]
     gliph_colors = [
         'red' if k == 'Ours' else ('black' if uses_labels[k] else 'black')
@@ -235,9 +264,55 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     points = [points_processed[k] for k in keys]
 
     worst_runtime = max(runtimes)
+    best_runtime = min(runtimes)
     worst_perf = max(performance)
+    best_perf = min(performance)
+    print(worst_runtime, best_runtime, worst_perf, best_perf)
+    # breakpoint()
 
-    plt.gca().axvspan(0, 100, alpha=0.08, color='blue')
+    plt.gca().axvspan(0, 100, alpha=0.08, facecolor='blue')
+
+    def gradient_image(ax, direction=0.3, cmap_range=(0, 1), **kwargs):
+        """
+        Draw a gradient image based on a colormap.
+
+        Parameters
+        ----------
+        ax : Axes
+            The axes to draw on.
+        direction : float
+            The direction of the gradient. This is a number in
+            range 0 (=vertical) to 1 (=horizontal).
+        cmap_range : float, float
+            The fraction (cmin, cmax) of the colormap that should be
+            used for the gradient, where the complete colormap is (0, 1).
+        **kwargs
+            Other parameters are passed on to `.Axes.imshow()`.
+            In particular, *cmap*, *extent*, and *transform* may be useful.
+        """
+        phi = direction * np.pi / 2
+        v = np.array([np.cos(phi), np.sin(phi)])
+        X = np.array([[v @ [1, 0], v @ [1, 1]], [v @ [0, 0], v @ [0, 1]]])
+        a, b = cmap_range
+        X = a + (b - a) / X.max() * X
+        im = ax.imshow(X,
+                       interpolation='bicubic',
+                       clim=(0, 1),
+                       aspect='auto',
+                       **kwargs)
+        return im
+
+    if gradient_bg:
+        gradient_image(plt.gca(),
+                       direction=0.65,
+                       extent=(0.0, 1, 0, 1),
+                       transform=plt.gca().transAxes,
+                       cmap=plt.get_cmap('Greys'),
+                       alpha=0.35)
+
+    plt.ylim(bottom=best_perf - 0.014, top=worst_perf + 0.008)
+    plt.xlim(left=18, right=worst_runtime * 1.7)
+
     plt.text(43,
              worst_perf,
              'Real Time at 10Hz',
@@ -295,6 +370,7 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     # plt.axvline(100, color='blue', linestyle='--', linewidth=2, zorder=0)
     plt.xlabel("Runtime (ms)")
     plt.ylabel("Threeway EPE (m)")
+
     plt.gca().spines['right'].set_visible(False)
     plt.gca().spines['top'].set_visible(False)
 
@@ -310,11 +386,10 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
              'Better',
              color='gray',
              ha='center',
-             rotation=43,
+             rotation=35,
              rotation_mode='anchor')
-    
+
     # Set plt y axis min to 0.05
-    plt.ylim(bottom=0.05)
 
     # plt.annotate('Worse', xy=(worst_runtime, worst_perf), color='gray')
 
@@ -826,9 +901,19 @@ savetable("epe_table", table_epe(results_close))
 
 ################################################################################
 
-plt.gcf().set_size_inches(6.5, 6.5 / 1.6)
-plot_speed_vs_performance_tradeoff()
+plt.gcf().set_size_inches(6.5, 6.5 / 2.2)
+plot_speed_vs_performance_tradeoff(gradient_bg=False)
 savefig(f"speed_vs_performance_tradeoff")
+
+plt.gcf().set_size_inches(6.5, 6.5 / 2.2)
+plot_speed_vs_performance_tradeoff(gradient_bg=True)
+savefig(f"speed_vs_performance_tradeoff_gradient")
+
+################################################################################
+
+plt.gcf().set_size_inches(6.5, 6.5 / 2.2)
+plot_scaling()
+savefig(f"scaling")
 
 ################################################################################
 
