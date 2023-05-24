@@ -139,7 +139,7 @@ assert len(
     results) > 0, f"No results found in {args.results_folder.absolute()}"
 
 
-def plot_scaling():
+def plot_scaling(x_label: bool = True, log_scale: bool = False):
 
     ours_results = [
         (1.0, 0.087),
@@ -154,17 +154,68 @@ def plot_scaling():
         (0.5, 0.091),
         (0.2, 0.104),
         (0.1, 0.125),
+        (0.01, 0.202),
     ]
 
     plt.plot(*zip(*ours_results), label="Ours", color='red', marker='o')
-    plt.plot(*zip(*fastflow_results), label="FastFlow3D", color='black', marker='o')
-    plt.xlabel("Dataset Fraction")
+    plt.plot(*zip(*fastflow_results),
+             label="FastFlow3D",
+             color='black',
+             marker='o')
+    if x_label:
+        plt.xlabel("Dataset Fraction")
     plt.ylabel("Threeway EPE (m)")
 
     # Set x ticks
     plt.xticks([0.01, 0.1, 0.2, 0.5, 1.0], ["1%", "10%", "20%", "50%", "100%"])
+    # Horizontal line
+    plt.axhline(y=0.087,
+                color='black',
+                linestyle='--',
+                linewidth=linewidth / 2)
 
     plt.legend()
+
+    # Draw arrow pointing from top right to bottom left
+    plt.annotate('',
+                 xy=(0.01, 0.19),
+                 xytext=(0.01, 0.10),
+                 color='gray',
+                 arrowprops=dict(arrowstyle="<-", color='gray'))
+    
+
+    if log_scale:
+        plt.yscale('log')
+        plt.xscale('log')
+        # plt.yticks([
+        #     0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18,
+        #     0.19, 0.20
+        # ], [
+        #     "0.08", "", "0.10", "", "0.12", "", "0.14", "", "0.16", "", "0.18",
+        #     "", "0.20"
+        # ])
+        plt.yticks(
+            [0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22],
+            ["0.08", "0.10", "0.12", "0.14", "0.16", "0.18", "0.20", "0.22"])
+        plt.xticks([0.01, 0.1, 0.2, 0.5, 1.0],
+                   ["1%", "10%", "20%", "50%", "100%"])
+        # Draw text along arrow
+        plt.text(0.0096,
+                0.14,
+                'Better',
+                color='gray',
+                ha='center',
+                rotation=90,
+                rotation_mode='anchor')
+    else:
+        # Draw text along arrow
+        plt.text(0,
+                0.15,
+                'Better',
+                color='gray',
+                ha='center',
+                rotation=90,
+                rotation_mode='anchor')
 
 
 def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
@@ -914,6 +965,10 @@ savefig(f"speed_vs_performance_tradeoff_gradient")
 plt.gcf().set_size_inches(6.5, 6.5 / 2.2)
 plot_scaling()
 savefig(f"scaling")
+
+plt.gcf().set_size_inches(6.5, 6.5 / 2.2)
+plot_scaling(log_scale=True)
+savefig(f"scaling_log")
 
 ################################################################################
 
