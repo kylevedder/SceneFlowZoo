@@ -2,10 +2,10 @@ _base_ = "./nsfp_distilatation.py"
 
 has_labels = False
 
-test_sequence_dir = "/efs/argoverse2/val/"
-test_flow_dir = "/efs/argoverse2/val_sceneflow/"
+test_sequence_dir = "/efs/argoverse2/test/"
+test_flow_dir = "/efs/argoverse2/test_sceneflow/"
 
-save_output_folder = "/efs/argoverse2/val_distilation_out/"
+save_output_folder = "/efs/argoverse2/test_distilation_out/"
 SEQUENCE_LENGTH = 2
 
 test_loader = dict(_delete_=True,

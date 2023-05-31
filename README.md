@@ -58,3 +58,10 @@ python train_pl.py configs/fastflow3d/argo/supervised_batch8_train.py --gpus 8
 ```
 
 and training should start. It will start by verifying the val dataloader works, and then launch the train job. Assuming things are sized correctly, there should be `3600` steps per epoch.
+
+# Submitting to the AV2 Scene Flow competition
+
+1. Dump the outputs of the model
+    a. `configs/fastflow3d/argo/nsfp_distilatation_dump_output.py` to dump the `val` set result
+    b. `configs/fastflow3d/argo/nsfp_distilatation_dump_output_test.py` to dump the `test` set result
+2. Convert to the competition submission format (`competition_submit.py`)

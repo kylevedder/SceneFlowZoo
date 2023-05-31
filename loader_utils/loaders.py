@@ -160,6 +160,23 @@ def save_by_extension(filename: Path, contents, verbose : bool =True):
         save_csv(filename, contents, verbose=verbose)
     else:
         raise ValueError(f'Unknown file extension: {filename.suffix}')
+    
+def load_by_extension(filename: Path, verbose : bool =True):
+    filename = Path(filename)
+    if filename.suffix == '.txt':
+        return load_txt(filename, verbose=verbose)
+    elif filename.suffix == '.npz':
+        return load_npz(filename, verbose=verbose)
+    elif filename.suffix == '.npy':
+        return load_npy(filename, verbose=verbose)
+    elif filename.suffix == '.pkl':
+        return load_pickle(filename, verbose=verbose)
+    elif filename.suffix == '.json':
+        return load_json(filename, verbose=verbose)
+    elif filename.suffix == '.csv':
+        return load_csv(filename, verbose=verbose)
+    else:
+        raise ValueError(f'Unknown file extension: {filename.suffix}')
 
 def symlink_files(old_dir: Path, new_dir: Path, file_name_list: list):
     old_dir = Path(old_dir)

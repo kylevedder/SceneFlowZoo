@@ -191,7 +191,7 @@ class ModelWrapper(pl.LightningModule):
 
         reset_learning_rate = (len(set(checkpoint_lrs)) !=
                                1) or (self.lr != list(checkpoint_lrs)[0])
-        
+
         if reset_learning_rate:
             print("Resetting learning rate to the one in the config.")
             checkpoint.pop('optimizer_states')
@@ -294,11 +294,15 @@ class ModelWrapper(pl.LightningModule):
         log_ids = np.transpose(_to_numpy(input_batch["log_ids"]))
         log_idxes = np.transpose(_to_numpy(input_batch["log_idxes"]))
         pc_array_stack = _to_numpy(input_batch['pc_array_stack'])
-        gt_flows = input_batch['flowed_pc_array_stack'] - input_batch[
-            'pc_array_stack']
         est_flows = output_batch['flow']
         est_pc1_flows_valid_idxes = output_batch['pc0_valid_point_idxes']
         est_pc2_flows_valid_idxes = output_batch['pc1_valid_point_idxes']
+
+        if self.has_labels:
+            gt_flows = input_batch['flowed_pc_array_stack'] - input_batch[
+                'pc_array_stack']
+        else:
+            gt_flows = [None] * len(pc_array_stack)
 
         save_list = []
 
@@ -309,23 +313,14 @@ class ModelWrapper(pl.LightningModule):
             pc2 = _to_numpy(from_fixed_array(pc_arrays[1]))
             log_id = log_ids[0]
             log_idx = log_idxs[0]
-            gt_flow = _to_numpy(from_fixed_array(gt_flows[0]))
             est_flow = _to_numpy(from_fixed_array(est_flow))
             est_pc1_flows_valid_idx = _to_numpy(est_pc1_flows_valid_idx)
             est_pc2_flows_valid_idx = _to_numpy(est_pc2_flows_valid_idx)
-            expanded_save_file = Path(
-                self.save_output_folder) / log_id / f"{log_idx:06d}.npy"
+
             standard_save_file = Path(
                 self.save_output_folder) / log_id / f"{log_idx:06d}.npz"
-
-            expanded_data_dict = {
-                "pc1": pc1[est_pc1_flows_valid_idx],
-                "pc2": pc2[est_pc2_flows_valid_idx],
-                "gt_flow": gt_flow[est_pc1_flows_valid_idx],
-                "est_flow": est_flow,
-                "pc1_flows_valid_idx": est_pc1_flows_valid_idx,
-                "pc2_flows_valid_idx": est_pc2_flows_valid_idx,
-            }
+            expanded_save_file = Path(
+                self.save_output_folder) / log_id / f"{log_idx:06d}.npy"
 
             standard_data_dict = {
                 'flow': est_flow,
@@ -333,8 +328,21 @@ class ModelWrapper(pl.LightningModule):
                 'delta_time': delta_time
             }
 
-            save_list.append((expanded_save_file, expanded_data_dict))
             save_list.append((standard_save_file, standard_data_dict))
+
+            if self.has_labels:
+                gt_flow = _to_numpy(from_fixed_array(gt_flows[0]))
+
+                expanded_data_dict = {
+                    "pc1": pc1[est_pc1_flows_valid_idx],
+                    "pc2": pc2[est_pc2_flows_valid_idx],
+                    "gt_flow": gt_flow[est_pc1_flows_valid_idx],
+                    "est_flow": est_flow,
+                    "pc1_flows_valid_idx": est_pc1_flows_valid_idx,
+                    "pc2_flows_valid_idx": est_pc2_flows_valid_idx,
+                }
+
+                save_list.append((expanded_save_file, expanded_data_dict))
 
         self.save_pool.starmap(partial(save_by_extension, verbose=False),
                                save_list)
