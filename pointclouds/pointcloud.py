@@ -19,11 +19,23 @@ def to_fixed_array(array: np.ndarray,
 
 def from_fixed_array(array: np.ndarray) -> np.ndarray:
     if isinstance(array, np.ndarray):
-        are_valid_points = np.logical_not(np.isnan(array[:, 0]))
+        if len(array.shape) == 2:
+            check_array = array[:, 0]
+        elif len(array.shape) == 1:
+            check_array = array
+        else:
+            raise ValueError(f'unknown array shape {array.shape}')
+        are_valid_points = np.logical_not(np.isnan(check_array))
         are_valid_points = are_valid_points.astype(bool)
     else:
         import torch
-        are_valid_points = torch.logical_not(torch.isnan(array[:, 0]))
+        if len(array.shape) == 2:
+            check_array = array[:, 0]
+        elif len(array.shape) == 1:
+            check_array = array
+        else:
+            raise ValueError(f'unknown array shape {array.shape}')
+        are_valid_points = torch.logical_not(torch.isnan(check_array))
         are_valid_points = are_valid_points.bool()
     return array[are_valid_points]
 
