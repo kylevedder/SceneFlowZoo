@@ -15,7 +15,8 @@ test_loader = dict(_delete_=True,
 test_dataset = dict(name="VarLenSubsequenceRawDataset",
                     args=dict(_delete_=True,
                               subsequence_length=SEQUENCE_LENGTH,
-                              origin_mode="FIRST_ENTRY"))
+                              origin_mode="FIRST_ENTRY",
+                              max_pc_points=120000))
 
 test_dataloader = dict(
     args=dict(batch_size=16, num_workers=16, shuffle=False, pin_memory=True))
