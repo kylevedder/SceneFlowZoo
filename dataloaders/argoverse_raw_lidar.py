@@ -173,11 +173,14 @@ class ArgoverseRawSequence():
         relative_pose = start_pose.inverse().compose(idx_pose)
         absolute_global_frame_pc = pc.transform(idx_pose)
         is_ground_points = self.is_ground_points(absolute_global_frame_pc)
-        pc = pc.mask_points(~is_ground_points)
-        relative_global_frame_pc = pc.transform(relative_pose)
+        relative_global_frame_pc_with_ground = pc.transform(relative_pose)
+        relative_global_frame_pc_no_ground = relative_global_frame_pc_with_ground.mask_points(
+            ~is_ground_points)
         return {
-            "relative_pc": relative_global_frame_pc,
+            "relative_pc": relative_global_frame_pc_no_ground,
+            "relative_pc_with_ground": relative_global_frame_pc_with_ground,
             "relative_pose": relative_pose,
+            "is_ground_points": is_ground_points,
             "log_id": self.log_id,
             "log_idx": idx,
         }
@@ -234,7 +237,7 @@ class ArgoverseRawSequenceLoader():
         return sorted(self.log_lookup.keys())
 
     def _raw_load_sequence(self, log_id: str) -> ArgoverseRawSequence:
-        assert log_id in self.log_lookup, f'log_id {log_id} does not exist'
+        assert log_id in self.log_lookup, f'log_id {log_id} is not in the {len(self.log_lookup)}'
         log_dir = self.log_lookup[log_id]
         assert log_dir.is_dir(), f'log_id {log_id} does not exist'
         return ArgoverseRawSequence(

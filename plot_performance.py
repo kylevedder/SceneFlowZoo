@@ -978,177 +978,177 @@ savetable("speed_vs_error", table_speed_vs_error(results))
 
 error_dist_scalar = 0.6
 
-# nsfp
+# # nsfp
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nsfp', use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log_nsfp")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nsfp', use_log_scale=True)
+# savefig(f"val_endpoint_error_distribution_log_nsfp")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nsfp', use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute_nsfp")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nsfp', use_log_scale=False)
+# savefig(f"val_endpoint_error_distribution_absolute_nsfp")
 
-# Odom
+# # Odom
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('odom', use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log_odom")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('odom', use_log_scale=True)
+# savefig(f"val_endpoint_error_distribution_log_odom")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('odom', use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute_odom")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('odom', use_log_scale=False)
+# savefig(f"val_endpoint_error_distribution_absolute_odom")
 
-# Nearest neighbor
+# # Nearest neighbor
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log_nearest_neighbor")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=True)
+# savefig(f"val_endpoint_error_distribution_log_nearest_neighbor")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nearest_neighbor', use_log_scale=False)
+# savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor")
 
-# Chodosh
+# # Chodosh
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh', use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log_chodosh")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh', use_log_scale=True)
+# savefig(f"val_endpoint_error_distribution_log_chodosh")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh', use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute_chodosh")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh', use_log_scale=False)
+# savefig(f"val_endpoint_error_distribution_absolute_chodosh")
 
-# Supervised
+# # Supervised
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('supervised', use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log_supervised")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('supervised', use_log_scale=True)
+# savefig(f"val_endpoint_error_distribution_log_supervised")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('supervised', use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute_supervised")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('supervised', use_log_scale=False)
+# savefig(f"val_endpoint_error_distribution_absolute_supervised")
 
-# Distilation
+# # Distilation
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('distilation', use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log_distilation")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('distilation', use_log_scale=True)
+# savefig(f"val_endpoint_error_distribution_log_distilation")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('distilation', use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute_distilation")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('distilation', use_log_scale=False)
+# savefig(f"val_endpoint_error_distribution_absolute_distilation")
 
-# Chodosh distilation
+# # Chodosh distilation
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh_distilation', use_log_scale=True)
-savefig(f"val_endpoint_error_distribution_log_chodosh_distilation")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh_distilation', use_log_scale=True)
+# savefig(f"val_endpoint_error_distribution_log_chodosh_distilation")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh_distilation',
-                                     use_log_scale=False)
-savefig(f"val_endpoint_error_distribution_absolute_chodosh_distilation")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh_distilation',
+#                                      use_log_scale=False)
+# savefig(f"val_endpoint_error_distribution_absolute_chodosh_distilation")
 
-##### Unrotated
+# ##### Unrotated
 
-# nsfp
+# # nsfp
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nsfp',
-                                     use_log_scale=True,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_log_nsfp_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nsfp',
+#                                      use_log_scale=True,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_log_nsfp_unrotated")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nsfp',
-                                     use_log_scale=False,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_absolute_nsfp_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nsfp',
+#                                      use_log_scale=False,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_absolute_nsfp_unrotated")
 
-# Odom
+# # Odom
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('odom',
-                                     use_log_scale=True,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_log_odom_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('odom',
+#                                      use_log_scale=True,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_log_odom_unrotated")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('odom',
-                                     use_log_scale=False,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_absolute_odom_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('odom',
+#                                      use_log_scale=False,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_absolute_odom_unrotated")
 
-# Nearest neighbor
+# # Nearest neighbor
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nearest_neighbor',
-                                     use_log_scale=True,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_log_nearest_neighbor_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nearest_neighbor',
+#                                      use_log_scale=True,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_log_nearest_neighbor_unrotated")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('nearest_neighbor',
-                                     use_log_scale=False,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('nearest_neighbor',
+#                                      use_log_scale=False,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_absolute_nearest_neighbor_unrotated")
 
-# Chodosh
+# # Chodosh
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh',
-                                     use_log_scale=True,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_log_chodosh_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh',
+#                                      use_log_scale=True,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_log_chodosh_unrotated")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh',
-                                     use_log_scale=False,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_absolute_chodosh_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh',
+#                                      use_log_scale=False,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_absolute_chodosh_unrotated")
 
-# Supervised
+# # Supervised
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('supervised',
-                                     use_log_scale=True,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_log_supervised_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('supervised',
+#                                      use_log_scale=True,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_log_supervised_unrotated")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('supervised',
-                                     use_log_scale=False,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_absolute_supervised_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('supervised',
+#                                      use_log_scale=False,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_absolute_supervised_unrotated")
 
-# Distilation
+# # Distilation
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('distilation',
-                                     use_log_scale=True,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_log_distilation_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('distilation',
+#                                      use_log_scale=True,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_log_distilation_unrotated")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('distilation',
-                                     use_log_scale=False,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_absolute_distilation_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('distilation',
+#                                      use_log_scale=False,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_absolute_distilation_unrotated")
 
-# Chodosh distilation
+# # Chodosh distilation
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh_distilation',
-                                     use_log_scale=True,
-                                     unrotated=True)
-savefig(f"val_endpoint_error_distribution_log_chodosh_distilation_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh_distilation',
+#                                      use_log_scale=True,
+#                                      unrotated=True)
+# savefig(f"val_endpoint_error_distribution_log_chodosh_distilation_unrotated")
 
-plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
-plot_val_endpoint_error_distribution('chodosh_distilation',
-                                     use_log_scale=False,
-                                     unrotated=True)
-savefig(
-    f"val_endpoint_error_distribution_absolute_chodosh_distilation_unrotated")
+# plt.gcf().set_size_inches(2.5 * error_dist_scalar, 2.5 * error_dist_scalar)
+# plot_val_endpoint_error_distribution('chodosh_distilation',
+#                                      use_log_scale=False,
+#                                      unrotated=True)
+# savefig(
+#     f"val_endpoint_error_distribution_absolute_chodosh_distilation_unrotated")
 
 ################################################################################
 

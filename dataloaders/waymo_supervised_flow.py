@@ -59,6 +59,8 @@ class WaymoSupervisedFlowSequence():
 
         return {
             "relative_pc": relative_global_frame_pc,
+            "relative_pc_with_ground": relative_global_frame_pc,
+            "is_ground_points": np.zeros(len(relative_global_frame_pc), dtype=bool),
             "relative_pose": relative_pose,
             "relative_flowed_pc": relative_global_frame_flowed_pc,
             "pc_classes": idx_labels,

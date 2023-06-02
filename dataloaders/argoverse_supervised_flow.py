@@ -91,8 +91,9 @@ class ArgoverseSupervisedFlowSequence(ArgoverseRawSequence):
         absolute_global_frame_pc = raw_pc.transform(idx_pose)
         is_ground_points = self.is_ground_points(absolute_global_frame_pc)
 
-        pc = raw_pc.mask_points(~is_ground_points)
-        relative_global_frame_pc = pc.transform(relative_pose)
+        relative_global_frame_pc_with_ground = raw_pc.transform(relative_pose)
+        relative_global_frame_pc = relative_global_frame_pc_with_ground.mask_points(
+            ~is_ground_points)
         if flow_0_1 is not None:
             ix_plus_one_pose = self._load_pose(idx + 1)
             relative_pose_plus_one = start_pose.inverse().compose(
@@ -107,6 +108,8 @@ class ArgoverseSupervisedFlowSequence(ArgoverseRawSequence):
             relative_global_frame_flowed_pc = None
         return {
             "relative_pc": relative_global_frame_pc,
+            "relative_pc_with_ground": relative_global_frame_pc_with_ground,
+            "is_ground_points": is_ground_points,
             "relative_pose": relative_pose,
             "relative_flowed_pc": relative_global_frame_flowed_pc,
             "pc_classes": classes_0,

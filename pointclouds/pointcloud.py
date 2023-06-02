@@ -43,8 +43,8 @@ def from_fixed_array(array: np.ndarray) -> np.ndarray:
 class PointCloud():
 
     def __init__(self, points: np.ndarray) -> None:
-        assert points.ndim == 2, 'points must be a 2D array'
-        assert points.shape[1] == 3, 'points must be a Nx3 array'
+        assert points.ndim == 2, f'points must be a 2D array, got {points.ndim}'
+        assert points.shape[1] == 3, f'points must be a Nx3 array, got {points.shape}'
         self.points = points
 
     def __eq__(self, o: object) -> bool:
@@ -75,6 +75,10 @@ class PointCloud():
 
     def to_fixed_array(self, max_points: int) -> np.ndarray:
         return to_fixed_array(self.points, max_points)
+    
+    def matched_point_diffs(self, other: 'PointCloud') -> np.ndarray:
+        assert len(self) == len(other)
+        return self.points - other.points
 
     def matched_point_distance(self, other: 'PointCloud') -> np.ndarray:
         assert len(self) == len(other)

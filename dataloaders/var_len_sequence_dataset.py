@@ -3,16 +3,13 @@ import numpy as np
 from tqdm import tqdm
 import enum
 from typing import Union, List, Tuple, Dict, Optional, Any
-from pointclouds import to_fixed_array
+from dataloaders.sequence_dataset import OriginMode
 from pathlib import Path
+from .sequence_dataset import SubsequenceRawDataset, SubsequenceSupervisedFlowDataset, SubsequenceUnsupervisedFlowDataset
+from functools import partial
 
 
-class OriginMode(enum.Enum):
-    FIRST_ENTRY = 0
-    LAST_ENTRY = 1
-
-
-class VarLenSubsequenceRawDataset(torch.utils.data.Dataset):
+class VarLenSubsequenceRawDataset(SubsequenceRawDataset):
 
     def __init__(self,
                  sequence_loader,
@@ -118,72 +115,13 @@ class VarLenSubsequenceRawDataset(torch.utils.data.Dataset):
         ]
         return subsequence_lst
 
-    def __getitem__(self, index):
-        assert index >= 0 and index < len(
-            self
-        ), f"index must be >= 0 and < len(self), got {index} and {len(self)}"
-
-        subsequence_lst = self._get_subsequence(index)
-
-        pc_arrays = [
-            e['relative_pc'].to_fixed_array(self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
-        log_ids = [e['log_id'] for e in subsequence_lst]
-        log_idxes = [e['log_idx'] for e in subsequence_lst]
-        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
-        pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
-
-        return {
-            "pc_array_stack": pc_array_stack,
-            "pose_array_stack": pose_array_stack,
-            "data_index": index,
-            "log_ids": log_ids,
-            "log_idxes": log_idxes,
-        }
-
 
 class VarLenSubsequenceSupervisedFlowDataset(VarLenSubsequenceRawDataset):
 
-    def __getitem__(self, index):
-        subsequence_lst = self._get_subsequence(index)
-
-        pc_arrays = [
-            e['relative_pc'].to_fixed_array(self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
-        for e in subsequence_lst:
-            assert e[
-                'relative_flowed_pc'] is not None, f"relative_flowed_pc must not be None for supervised flow dataset requested for data index {index}\n\n\n{e}"
-        flowed_pc_arrays = [
-            e['relative_flowed_pc'].to_fixed_array(self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        pc_class_masks = [
-            to_fixed_array(e['pc_classes'].astype(np.float32),
-                           self.max_pc_points) for e in subsequence_lst
-        ]
-        log_ids = [e['log_id'] for e in subsequence_lst]
-        log_idxes = [e['log_idx'] for e in subsequence_lst]
-
-        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
-        pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
-        flowed_pc_array_stack = np.stack(flowed_pc_arrays,
-                                         axis=0).astype(np.float32)
-        pc_class_mask_stack = np.stack(pc_class_masks,
-                                       axis=0).astype(np.float32)
-
-        return {
-            "pc_array_stack": pc_array_stack,
-            "pose_array_stack": pose_array_stack,
-            "flowed_pc_array_stack": flowed_pc_array_stack,
-            "pc_class_mask_stack": pc_class_mask_stack,
-            "data_index": index,
-            "log_ids": log_ids,
-            "log_idxes": log_idxes
-        }
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__getitem__ = partial(
+            SubsequenceSupervisedFlowDataset.__getitem__, self=self)
 
 
 class VarLenSubsequenceSupervisedFlowSpecificSubsetDataset(
@@ -247,31 +185,7 @@ class VarLenSubsequenceSupervisedFlowSpecificSubsetDataset(
 
 class VarLenSubsequenceUnsupervisedFlowDataset(VarLenSubsequenceRawDataset):
 
-    def __getitem__(self, index):
-        subsequence_lst = self._get_subsequence(index)
-
-        pc_arrays = [
-            e['relative_pc'].to_fixed_array(self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
-
-        flow_arrays = [
-            to_fixed_array(e['flow'].squeeze(0), self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        log_ids = [e['log_id'] for e in subsequence_lst]
-        log_idxes = [e['log_idx'] for e in subsequence_lst]
-
-        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
-        pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
-        flow_array_stack = np.stack(flow_arrays, axis=0).astype(np.float32)
-
-        return {
-            "pc_array_stack": pc_array_stack,
-            "pose_array_stack": pose_array_stack,
-            "flow_array_stack": flow_array_stack,
-            "data_index": index,
-            "log_ids": log_ids,
-            "log_idxes": log_idxes
-        }
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__getitem__ = partial(
+            SubsequenceUnsupervisedFlowDataset.__getitem__, self=self)

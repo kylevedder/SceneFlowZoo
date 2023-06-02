@@ -109,6 +109,39 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
         ]
         return subsequence_lst
 
+    def _subsequence_lst_to_output_dict(self,
+                                        subsequence_lst) -> Dict[str, Any]:
+        pc_arrays = [
+            e['relative_pc'].to_fixed_array(self.max_pc_points)
+            for e in subsequence_lst
+        ]
+        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
+        pc_with_ground_arrays = [
+            e['relative_pc_with_ground'].to_fixed_array(self.max_pc_points)
+            for e in subsequence_lst
+        ]
+        is_ground_arrays = [
+            to_fixed_array(e['is_ground_points'].astype(np.float32),
+                           self.max_pc_points) for e in subsequence_lst
+        ]
+        log_ids = [e['log_id'] for e in subsequence_lst]
+        log_idxes = [e['log_idx'] for e in subsequence_lst]
+        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
+        pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
+        pc_with_ground_array_stack = np.stack(pc_with_ground_arrays,
+                                              axis=0).astype(np.float32)
+        is_ground_array_stack = np.stack(is_ground_arrays,
+                                         axis=0).astype(np.float32)
+
+        return {
+            "pc_array_stack": pc_array_stack,
+            "pose_array_stack": pose_array_stack,
+            "pc_with_ground_array_stack": pc_with_ground_array_stack,
+            "is_ground_array_stack": is_ground_array_stack,
+            "log_ids": log_ids,
+            "log_idxes": log_idxes,
+        }
+
     def __getitem__(self, index):
         assert index >= 0 and index < len(
             self
@@ -116,35 +149,16 @@ class SubsequenceRawDataset(torch.utils.data.Dataset):
 
         subsequence_lst = self._get_subsequence(index)
 
-        pc_arrays = [
-            e['relative_pc'].to_fixed_array(self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
-        log_ids = [e['log_id'] for e in subsequence_lst]
-        log_idxes = [e['log_idx'] for e in subsequence_lst]
-        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
-        pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
-
-        return {
-            "pc_array_stack": pc_array_stack,
-            "pose_array_stack": pose_array_stack,
-            "data_index": index,
-            "log_ids": log_ids,
-            "log_idxes": log_idxes,
-        }
+        ret_dict = self._subsequence_lst_to_output_dict(subsequence_lst)
+        ret_dict['data_index'] = index
+        return ret_dict
 
 
 class SubsequenceSupervisedFlowDataset(SubsequenceRawDataset):
 
-    def __getitem__(self, index):
-        subsequence_lst = self._get_subsequence(index)
-
-        pc_arrays = [
-            e['relative_pc'].to_fixed_array(self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
+    def _subsequence_lst_to_output_dict(self,
+                                        subsequence_lst) -> Dict[str, Any]:
+        ret_dict = super()._subsequence_lst_to_output_dict(subsequence_lst)
         flowed_pc_arrays = [
             e['relative_flowed_pc'].to_fixed_array(self.max_pc_points)
             for e in subsequence_lst
@@ -153,25 +167,13 @@ class SubsequenceSupervisedFlowDataset(SubsequenceRawDataset):
             to_fixed_array(e['pc_classes'].astype(np.float32),
                            self.max_pc_points) for e in subsequence_lst
         ]
-        log_ids = [e['log_id'] for e in subsequence_lst]
-        log_idxes = [e['log_idx'] for e in subsequence_lst]
-
-        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
-        pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
         flowed_pc_array_stack = np.stack(flowed_pc_arrays,
                                          axis=0).astype(np.float32)
         pc_class_mask_stack = np.stack(pc_class_masks,
                                        axis=0).astype(np.float32)
-
-        return {
-            "pc_array_stack": pc_array_stack,
-            "pose_array_stack": pose_array_stack,
-            "flowed_pc_array_stack": flowed_pc_array_stack,
-            "pc_class_mask_stack": pc_class_mask_stack,
-            "data_index": index,
-            "log_ids": log_ids,
-            "log_idxes": log_idxes
-        }
+        ret_dict['flowed_pc_array_stack'] = flowed_pc_array_stack
+        ret_dict['pc_class_mask_stack'] = pc_class_mask_stack
+        return ret_dict
 
 
 class SubsequenceSupervisedFlowSpecificSubsetDataset(
@@ -237,45 +239,28 @@ class SubsequenceSupervisedFlowSpecificSubsetDataset(
 
 class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
 
-    def _squeeze_flow(self, flow: np.ndarray) -> np.ndarray:
-        if flow.ndim == 3:
-            assert flow.shape[
-                0] == 1, f"Flow must have 1 channel, got {flow.shape[0]}"
-            return flow.squeeze(0)
-        elif flow.ndim == 2:
-            return flow
-        else:
-            raise ValueError(
-                f"Flow must have 2 or 3 dimensions, got {flow.ndim}")
+    def _subsequence_lst_to_output_dict(self,
+                                        subsequence_lst) -> Dict[str, Any]:
+        ret_dict = super()._subsequence_lst_to_output_dict(subsequence_lst)
 
-    def __getitem__(self, index):
-        subsequence_lst = self._get_subsequence(index)
-
-        pc_arrays = [
-            e['relative_pc'].to_fixed_array(self.max_pc_points)
-            for e in subsequence_lst
-        ]
-        pose_arrays = [e['relative_pose'].to_array() for e in subsequence_lst]
+        def _squeeze_flow(flow: np.ndarray) -> np.ndarray:
+            if flow.ndim == 3:
+                assert flow.shape[
+                    0] == 1, f"Flow must have 1 channel, got {flow.shape[0]}"
+                return flow.squeeze(0)
+            elif flow.ndim == 2:
+                return flow
+            else:
+                raise ValueError(
+                    f"Flow must have 2 or 3 dimensions, got {flow.ndim}")
 
         flow_arrays = [
-            to_fixed_array(self._squeeze_flow(e['flow']), self.max_pc_points)
+            to_fixed_array(_squeeze_flow(e['flow']), self.max_pc_points)
             for e in subsequence_lst
         ]
-        log_ids = [e['log_id'] for e in subsequence_lst]
-        log_idxes = [e['log_idx'] for e in subsequence_lst]
-
-        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
-        pose_array_stack = np.stack(pose_arrays, axis=0).astype(np.float32)
         flow_array_stack = np.stack(flow_arrays, axis=0).astype(np.float32)
-
-        return {
-            "pc_array_stack": pc_array_stack,
-            "pose_array_stack": pose_array_stack,
-            "flow_array_stack": flow_array_stack,
-            "data_index": index,
-            "log_ids": log_ids,
-            "log_idxes": log_idxes
-        }
+        ret_dict['flow_array_stack'] = flow_array_stack
+        return ret_dict
 
 
 class ConcatDataset(torch.utils.data.Dataset):

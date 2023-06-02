@@ -8,7 +8,10 @@ from pathlib import Path
 from loader_utils import load_npz
 import multiprocessing as mp
 import tqdm
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List, Union
+import open3d as o3d
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseRawSequence
+from pointclouds import PointCloud
 
 # Parse arguments from command line for scene flow masks and scene flow outputs
 parser = argparse.ArgumentParser()
@@ -27,6 +30,13 @@ parser.add_argument("--num_cpus",
                     type=int,
                     default=mp.cpu_count(),
                     help="Number of cpus to use for multiprocessing")
+# bool flag for subset of data to use
+parser.add_argument("--subset",
+                    action="store_true",
+                    help="Whether to use a subset of the data")
+parser.add_argument("--visualize",
+                    action="store_true",
+                    help="Whether to visualize the data")
 args = parser.parse_args()
 
 assert args.scene_flow_mask_dir.is_dir(
@@ -44,31 +54,37 @@ def load_feather(filepath: Path):
     return pd.read_feather(filepath)
 
 
-def load_scene_flow_mask_from_folder(sequence_folder: Path):
+def load_scene_flow_mask_from_folder(sequence_folder: Path) -> Dict[int, Any]:
     files = sorted(sequence_folder.glob("*.feather"))
     masks = [load_feather(file)['mask'].to_numpy() for file in files]
     return sequence_folder.stem, {
-        file.stem: mask
+        int(file.stem): mask
         for file, mask in zip(files, masks)
     }
 
 
-def load_scene_flow_output_from_folder(sequence_folder: Path):
+def load_scene_flow_predictions_from_folder(
+        sequence_folder: Path) -> List[Any]:
     files = sorted(sequence_folder.glob("*.npz"))
-    outputs = [dict(load_npz(file, verbose=False)) for file in files]
-    return sequence_folder.stem, {
-        file.stem: output
-        for file, output in zip(files, outputs)
-    }
+    return sequence_folder.stem, [
+        dict(load_npz(file, verbose=False)) for file in files
+    ]
 
 
-def multiprocess_load(folder: Path, worker_fn):
+def multiprocess_load(folder: Path, worker_fn) -> Dict[str, Any]:
     sequence_folders = sorted(e for e in folder.glob("*") if e.is_dir())
-    # sequence_folders = sequence_folders[:5]
+    if args.subset:
+        sequence_folders = sequence_folders[4:5]
     sequence_lookup = {}
-    with mp.Pool(processes=args.num_cpus) as pool:
-        for k, v in tqdm.tqdm(pool.imap_unordered(worker_fn, sequence_folders),
-                              total=len(sequence_folders)):
+    if args.num_cpus > 1:
+        with mp.Pool(processes=args.num_cpus) as pool:
+            for k, v in tqdm.tqdm(pool.imap_unordered(worker_fn,
+                                                      sequence_folders),
+                                  total=len(sequence_folders)):
+                sequence_lookup[k] = v
+    else:
+        for sequence_folder in tqdm.tqdm(sequence_folders):
+            k, v = worker_fn(sequence_folder)
             sequence_lookup[k] = v
     return sequence_lookup
 
@@ -77,86 +93,214 @@ print("Loading scene flow masks...")
 sequence_mask_lookup = multiprocess_load(args.scene_flow_mask_dir,
                                          load_scene_flow_mask_from_folder)
 print("Loading scene flow outputs...")
-sequence_output_lookup = multiprocess_load(args.scene_flow_output_dir,
-                                           load_scene_flow_output_from_folder)
+sequence_prediction_lookup = multiprocess_load(
+    args.scene_flow_output_dir, load_scene_flow_predictions_from_folder)
 print("Done loading scene flow masks and outputs")
 
+sequence_loader = ArgoverseRawSequenceLoader(args.argoverse_dir)
 mask_keys = set(sequence_mask_lookup.keys())
-output_keys = set(sequence_output_lookup.keys())
+output_keys = set(sequence_prediction_lookup.keys())
 assert mask_keys == output_keys, f"Mask keys {mask_keys} != output keys {output_keys}"
 
 
-def merge_output_and_mask_data(scene_flow_mask_dir: Path, sequence_name: str,
-                               timestamp_to_mask: Dict[str, Any],
-                               id_to_output: Dict[str, Any]) -> Dict[str, Any]:
-    # Access the argoverse lidar files to get the timestamps.
-    argoverse_lidar_path = args.argoverse_dir / scene_flow_mask_dir.stem / sequence_name / "sensors" / "lidar"
-    assert argoverse_lidar_path.exists(
-    ), f"{argoverse_lidar_path} does not exist"
-    argoverse_lidar_files = sorted(argoverse_lidar_path.glob("*.feather"))
+def make_lineset(pc, flowed_pc, draw_color):
+    line_set = o3d.geometry.LineSet()
+    assert len(pc) == len(
+        flowed_pc
+    ), f'pc and flowed_pc must have same length, but got {len(pc)} and {len(flowed_pc)}'
+    line_set_points = np.concatenate([pc, flowed_pc], axis=0)
 
-    # Should cover all frame *pairs*, hence the -1
-    assert len(id_to_output) == len(
-        argoverse_lidar_files
-    ) - 1, f"for {sequence_name}: output length {len(id_to_output)} != lidar length {len(argoverse_lidar_files)} - 1"
+    lines = np.array([[i, i + len(pc)] for i in range(len(pc))])
+    line_set.points = o3d.utility.Vector3dVector(line_set_points)
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+    draw_color = {
+        'green': [0, 1, 0],
+        'blue': [0, 0, 1],
+        'red': [1, 0, 0],
+        'yellow': [1, 1, 0],
+        'orange': [1, 0.5, 0],
+        'purple': [0.5, 0, 1],
+        'pink': [1, 0, 1],
+        'cyan': [0, 1, 1],
+        'white': [1, 1, 1],
+    }[draw_color]
+    line_set.colors = o3d.utility.Vector3dVector(
+        [draw_color for _ in range(len(lines))])
+    return line_set
 
-    timestamp_to_lidar_file = {e.stem: e for e in argoverse_lidar_files}
 
-    timestamp_to_output = {
-        f.stem: v
-        for f, v in zip(argoverse_lidar_files, id_to_output.values())
+def merge_predictions_and_mask_data(sequence: ArgoverseRawSequence,
+                                    timestamp_to_mask: Dict[int, Any],
+                                    predictions: List[Any]) -> Dict[int, Any]:
+
+    # Predictions are over frame pairs, so there are N - 1 predictions for N frames in a sequence.
+    assert len(predictions) == len(
+        sequence
+    ) - 1, f"len(id_to_output) {len(predictions)} != len(sequence) - 1 {len(sequence) - 1}"
+
+    timestamp_to_sequence_frame_idx = {
+        timestamp: idx
+        for idx, timestamp in enumerate(sequence.timestamp_list)
+    }
+
+    timestamp_to_prediction = {
+        t: v
+        for t, v in zip(sequence.timestamp_list, predictions)
     }
 
     timestamp_to_masked_output = {}
 
     # Check that the masks are corresponding to the lidar files.
     for mask_timestamp in timestamp_to_mask:
-        lidar_data = load_feather(timestamp_to_lidar_file[mask_timestamp])
-        mask_data = timestamp_to_mask[mask_timestamp]
-        assert len(lidar_data) == len(
-            mask_data
-        ), f"for {sequence_name}: lidar data length {len(lidar_data)} != mask data length {len(mask_data)}"
-        output_data = timestamp_to_output[mask_timestamp]
-        output_data['submission_idxes'] = np.nonzero(mask_data)[0]
-        timestamp_to_masked_output[mask_timestamp] = output_data
+        frame_idx = timestamp_to_sequence_frame_idx[mask_timestamp]
+        frame_dict = sequence.load(frame_idx, frame_idx)
+        next_frame_ego_dict = sequence.load(frame_idx + 1, frame_idx + 1)
+        next_frame_curr_dict = sequence.load(frame_idx + 1, frame_idx)
+        submission_mask_data = timestamp_to_mask[mask_timestamp]
+        prediction_data = timestamp_to_prediction[mask_timestamp]
+
+        assert len(frame_dict['relative_pc_with_ground']) == len(
+            submission_mask_data
+        ), f"len(frame_dict['relative_pc_with_ground']) {len(frame_dict['relative_pc_with_ground'])} != len(submission_mask_data) {len(submission_mask_data)}"
+
+        prediction_data['pc'] = frame_dict['relative_pc']
+        prediction_data['pc_with_ground'] = frame_dict[
+            'relative_pc_with_ground']
+        prediction_data['pc_with_ground_is_ground_points'] = frame_dict[
+            'is_ground_points']
+        prediction_data[
+            'pc_with_ground_is_submission_points'] = submission_mask_data
+        prediction_data['next_pc'] = next_frame_ego_dict['relative_pc']
+        prediction_data['next_pc_with_ground'] = next_frame_ego_dict[
+            'relative_pc_with_ground']
+        prediction_data[
+            'next_pc_with_ground_is_ground_points'] = next_frame_ego_dict[
+                'is_ground_points']
+        prediction_data['relative_pose'] = next_frame_curr_dict[
+            'relative_pose']
+
+        timestamp_to_masked_output[mask_timestamp] = prediction_data
 
     return timestamp_to_masked_output
 
 
-merged_sequences = [
-    (sequence_name,
-     merge_output_and_mask_data(args.scene_flow_mask_dir, sequence_name,
-                                sequence_mask_lookup[sequence_name],
-                                sequence_output_lookup[sequence_name]))
-    for sequence_name in sorted(sequence_mask_lookup)
-]
-
-
-def save_sequence(input: Tuple[str, Dict[str, Dict[str, Any]]]):
-    sequence_name, timestamp_to_masked_output = input
+def save_sequence(sequence: ArgoverseRawSequence,
+                  timestamp_to_mask: Dict[int, Any], predictions: List[Any]):
+    sequence_name = sequence.log_id
+    timestamp_to_masked_output = merge_predictions_and_mask_data(
+        sequence, timestamp_to_mask, predictions)
     # print(f"Saving sequence {sequence_name}")
     for timestamp, data in sorted(timestamp_to_masked_output.items()):
         save_path = args.output_dir / sequence_name / f"{timestamp}.feather"
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        # We size an output array to be the max of the submission idxes and the valid idxes. This way,
-        # we can directly index the flow valid_idxes into the scratch array, and then use the submission_idxes
-        # to index into the scratch array to get the submission flow.
-        max_scratch_array_size = max(max(data['submission_idxes']),
-                                     max(data['valid_idxes'])) + 1
-        scratch_flow_array = np.zeros((max_scratch_array_size, 3),
-                                      dtype=data['flow'].dtype)
-        scratch_flow_array[data['valid_idxes']] = data['flow']
-        output_flow_array = scratch_flow_array[data["submission_idxes"]]
-        flow_magnitudes = np.linalg.norm(output_flow_array, axis=1)
-        is_dynamic = flow_magnitudes > 0.05
-        output_flow_array = output_flow_array.astype(np.float16)
+
+        # Sized to the full point cloud, including ground points.
+        full_size_flow_array = np.zeros((len(data['pc_with_ground']), 3),
+                                        dtype=data['flow'].dtype)
+        no_ground_flow_array = np.zeros((len(data['pc']), 3),
+                                        dtype=data['flow'].dtype)
+
+        # Assign the flow to the non-ground and valid flow points.
+        no_ground_flow_array[data['valid_idxes']] = data['flow']
+        full_size_flow_array[
+            ~data['pc_with_ground_is_ground_points']] = no_ground_flow_array
+        full_size_is_dynamic = (np.linalg.norm(full_size_flow_array, axis=1) >
+                                0.05)
+
+        # Add ego motion to the flow -- evaluation is performed on uncompenstated flow.
+        # This is done by taking the point cloud and transforming it with the relative pose, and then computing the point differences.
+
+        # Transform the point cloud with the relative pose from t to t+1.
+        pc_with_ground_transformed = data['pc_with_ground'].transform(
+            data['relative_pose'].inverse())
+        point_diffs = pc_with_ground_transformed.matched_point_diffs(
+            data['pc_with_ground'])
+        # Add the point differences to the flow.
+        full_size_flow_array += point_diffs
+
+        # Extract the submission mask points from scratch array.
+        output_flow_array = full_size_flow_array[
+            data["pc_with_ground_is_submission_points"]]
+        output_is_dynamic = full_size_is_dynamic[
+            data["pc_with_ground_is_submission_points"]]
+
+        output_pc = data['pc_with_ground'][
+            data["pc_with_ground_is_submission_points"]]
+
+        def resize_output_pc_next():
+            output_pc_next = data['next_pc_with_ground'].points
+            if len(output_pc_next) > len(output_pc):
+                return output_pc_next[:len(output_pc)]
+            else:
+                output_scratch = np.zeros_like(output_pc)
+                output_scratch[:len(output_pc_next)] = output_pc_next
+                return output_scratch
+
+        output_pc_next = resize_output_pc_next()
+
         df = pd.DataFrame(output_flow_array,
                           columns=['flow_tx_m', 'flow_ty_m', 'flow_tz_m'])
-        df['is_dynamic'] = is_dynamic
+        df['is_dynamic'] = output_is_dynamic
+        df[['point_x', 'point_y', 'point_z']] = output_pc
+        df[['point_x_next', 'point_y_next', 'point_z_next']] = output_pc_next
+        if save_path.exists():
+            save_path.unlink()
         df.to_feather(save_path)
 
+        if args.visualize:
 
-with mp.Pool(processes=args.num_cpus) as pool:
-    for _ in tqdm.tqdm(pool.imap_unordered(save_sequence, merged_sequences),
-                       total=len(merged_sequences)):
-        pass
+            def get_gt_flow():
+                gt_path = Path("/efs/argoverse2/val_official_sceneflow/"
+                               ) / sequence.log_id / f"{timestamp}.feather"
+                assert gt_path.exists(), f"gt_path {gt_path} does not exist"
+                gt_df = pd.read_feather(gt_path)
+                gt_flow = gt_df[['flow_tx_m', 'flow_ty_m',
+                                 'flow_tz_m']].to_numpy()
+                return gt_flow
+
+            # Visualize the lidar data and the flow data with Open3D
+            pc = o3d.geometry.PointCloud()
+            pc.points = o3d.utility.Vector3dVector(output_pc)
+            pc.paint_uniform_color([0.1, 0, 0])
+
+            next_pc = o3d.geometry.PointCloud()
+            next_pc.points = o3d.utility.Vector3dVector(
+                data['next_pc_with_ground'])
+            next_pc.paint_uniform_color([0, 0, 1])
+
+            pred_flow_lineset = make_lineset(output_pc,
+                                             output_pc + output_flow_array,
+                                             'red')
+            gt_flow_lineset = make_lineset(output_pc,
+                                           output_pc + get_gt_flow(), 'green')
+
+            print("Num dynamic points", output_is_dynamic.sum(),
+                  "Percent dynamic",
+                  output_is_dynamic.sum() / len(output_is_dynamic))
+
+            # visualize
+            o3d.visualization.draw_geometries(
+                [pc, next_pc, pred_flow_lineset, gt_flow_lineset])
+
+
+def save_wrapper(args):
+    save_sequence(*args)
+
+
+print("Preparing args...")
+
+save_args = [(sequence_loader.load_sequence(sequence_name),
+              sequence_mask_lookup[sequence_name],
+              sequence_prediction_lookup[sequence_name])
+             for sequence_name in tqdm.tqdm(sorted(sequence_mask_lookup))]
+
+print("Saving sequences...")
+
+if args.num_cpus > 1:
+    with mp.Pool(processes=args.num_cpus) as pool:
+        for _ in tqdm.tqdm(pool.imap_unordered(save_wrapper, save_args),
+                           total=len(save_args)):
+            pass
+else:
+    for arg in tqdm.tqdm(save_args):
+        save_wrapper(arg)
