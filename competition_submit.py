@@ -12,6 +12,7 @@ from typing import Dict, Any, Tuple, List, Union
 import open3d as o3d
 from dataloaders import ArgoverseRawSequenceLoader, ArgoverseRawSequence
 from pointclouds import PointCloud
+import copy
 
 # Parse arguments from command line for scene flow masks and scene flow outputs
 parser = argparse.ArgumentParser()
@@ -74,7 +75,7 @@ def load_scene_flow_predictions_from_folder(
 def multiprocess_load(folder: Path, worker_fn) -> Dict[str, Any]:
     sequence_folders = sorted(e for e in folder.glob("*") if e.is_dir())
     if args.subset:
-        sequence_folders = sequence_folders[4:5]
+        sequence_folders = sequence_folders[1:2]
     sequence_lookup = {}
     if args.num_cpus > 1:
         with mp.Pool(processes=args.num_cpus) as pool:
@@ -157,7 +158,7 @@ def merge_predictions_and_mask_data(sequence: ArgoverseRawSequence,
         next_frame_ego_dict = sequence.load(frame_idx + 1, frame_idx + 1)
         next_frame_curr_dict = sequence.load(frame_idx + 1, frame_idx)
         submission_mask_data = timestamp_to_mask[mask_timestamp]
-        prediction_data = timestamp_to_prediction[mask_timestamp]
+        prediction_data = copy.deepcopy(timestamp_to_prediction[mask_timestamp])
 
         assert len(frame_dict['relative_pc_with_ground']) == len(
             submission_mask_data
@@ -202,6 +203,13 @@ def save_sequence(sequence: ArgoverseRawSequence,
 
         # Assign the flow to the non-ground and valid flow points.
         no_ground_flow_array[data['valid_idxes']] = data['flow']
+
+        # Transform the flow from being in second frame to being in first frame.
+        # The relative pose describes the transform from first to second frame,
+        # so we need to rotate by the inverse of the relative pose.
+        no_ground_flow_array = (data['relative_pose'].inverse(
+        ).rotation_matrix @ no_ground_flow_array.T).T
+
         full_size_flow_array[
             ~data['pc_with_ground_is_ground_points']] = no_ground_flow_array
         full_size_is_dynamic = (np.linalg.norm(full_size_flow_array, axis=1) >
@@ -238,16 +246,18 @@ def save_sequence(sequence: ArgoverseRawSequence,
 
         output_pc_next = resize_output_pc_next()
 
-        df = pd.DataFrame(output_flow_array,
+        df = pd.DataFrame(output_flow_array.astype(np.float16),
                           columns=['flow_tx_m', 'flow_ty_m', 'flow_tz_m'])
         df['is_dynamic'] = output_is_dynamic
-        df[['point_x', 'point_y', 'point_z']] = output_pc
-        df[['point_x_next', 'point_y_next', 'point_z_next']] = output_pc_next
+        # Debug info not needed for final submission
+        # df[['point_x', 'point_y', 'point_z']] = output_pc
+        # df[['point_x_next', 'point_y_next', 'point_z_next']] = output_pc_next
         if save_path.exists():
             save_path.unlink()
         df.to_feather(save_path)
 
         if args.visualize:
+            print("Sequence", sequence_name, "Timestamp", timestamp)
 
             def get_gt_flow():
                 gt_path = Path("/efs/argoverse2/val_official_sceneflow/"

@@ -6,9 +6,13 @@ from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
 
-sequence_loader = WaymoSupervisedFlowSequenceLoader(
-    '/efs/waymo_open_processed_flow/training/')
-sequence = sequence_loader.load_sequence(sequence_loader.get_sequence_ids()[1])
+sequence_loader = ArgoverseRawSequenceLoader('/efs/argoverse2/val/')
+
+sequence_idx = 1
+sequence_id = sequence_loader.get_sequence_ids()[sequence_idx]
+sequence = sequence_loader.load_sequence(sequence_id)
+
+print("Sequence idx", sequence_idx, "Sequence ID: ", sequence_id)
 
 # make open3d visualizer
 vis = o3d.visualization.Visualizer()
@@ -23,6 +27,8 @@ sequence_length = len(sequence)
 
 
 def sequence_idx_to_color(idx):
+    if idx == 50:
+        return [1, 1, 1]
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
@@ -30,6 +36,8 @@ frame_lst = sequence.load_frame_list(0)
 
 print("Frames: ", len(frame_lst))
 for idx, entry_dict in enumerate(frame_lst):
+    timestamp = sequence.timestamp_list[idx]
+    print("idx:", idx, "Timestamp: ", timestamp)
     idx_pc = entry_dict['relative_pc']
     pose = entry_dict['relative_pose']
     pcd = o3d.geometry.PointCloud()
