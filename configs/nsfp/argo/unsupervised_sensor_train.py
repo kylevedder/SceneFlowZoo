@@ -37,7 +37,7 @@ test_loader = dict(name="ArgoverseRawSequenceLoader",
 test_dataloader = dict(
     args=dict(batch_size=1, num_workers=1, shuffle=False, pin_memory=True))
 
-test_dataset = dict(name="SubsequenceRawDataset",
+test_dataset = dict(name="VarLenSubsequenceRawDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
                               max_sequence_length=max_test_sequence_length,
                               origin_mode="FIRST_ENTRY"))
