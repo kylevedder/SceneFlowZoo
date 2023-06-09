@@ -9,15 +9,6 @@ flow_save_folder = "/efs/argoverse2/train_nsfp_flow/"
 precision = 32
 
 
-def get_max_sequence_length(sequence_dir):
-    if "argoverse2" in sequence_dir:
-        return 146
-    else:
-        return 296
-
-
-max_test_sequence_length = get_max_sequence_length(test_sequence_dir)
-
 epochs = 20
 learning_rate = 2e-6
 save_every = 500
@@ -39,5 +30,4 @@ test_dataloader = dict(
 
 test_dataset = dict(name="VarLenSubsequenceRawDataset",
                     args=dict(subsequence_length=SEQUENCE_LENGTH,
-                              max_sequence_length=max_test_sequence_length,
                               origin_mode="FIRST_ENTRY"))
