@@ -12,14 +12,6 @@ import time
 
 
 class NSFP(nn.Module):
-    """
-    FastFlow3D based on the paper:
-    https://arxiv.org/abs/2103.01306v5
-
-    Note that there are several small differences between this implementation and the paper:
-     - We use a different loss function (predict flow for P_-1 to P_0 instead of P_0 to and 
-       unseen P_1); referred to as pc0 and pc1 in the code.
-    """
 
     def __init__(self,
                  VOXEL_SIZE,

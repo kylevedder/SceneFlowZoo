@@ -1,10 +1,41 @@
-# Scene flow label generation
+# ZeroFlow
 
-Use: https://github.com/nchodosh/argoverse2-sf
+Official repository for _ZeroFlow: Fast Zero Label Scene Flow via Distillation_
 
-# Filesystem assumptions
+[Project webpage](vedder.io/zeroflow)
 
-For some containing folder, have an `argoverse2/` folder so that the downloaded files live inside
+Citation:
+
+```
+@article{Vedder2023zeroflow,
+    author    = {Kyle Vedder and Neehar Peri and Nathaniel Chodosh and Ishan Khatri and Eric Eaton and Dinesh Jayaraman and Yang Liu Deva Ramanan and James Hays},
+    title     = {{ZeroFlow: Fast Zero Label Scene Flow via Distillation}},
+    journal   = {arXiv},
+    year      = {2023},
+}
+```
+
+# Docker Images
+
+This project has three different docker images for different functions.
+
+## Main image: 
+
+Built with `docker/Dockerfile` [[dockerhub](https://hub.docker.com/repository/docker/kylevedder/zeroflow)]/
+
+## Waymo preprocessing image:
+
+Built with `docker/Dockerfilewaymo` [[dockerhub](https://hub.docker.com/repository/docker/kylevedder/zeroflow_waymo)]. Includes Tensorflow and other dependencies to preprocess the raw Waymo Open format and convert it to a standard format readable in the main image.
+
+## AV2 challenge submission image:
+
+Built with `docker/Dockerav2` [[dockerhub](https://hub.docker.com/repository/docker/kylevedder/zeroflow_av2)]. Based on the main image, but includes the [AV2 API](https://github.com/argoverse/av2-api).
+
+# File system assumptions
+
+## Argoverse 2
+
+Somewhere on disk, have an `argoverse2/` folder so that the downloaded files live inside
 
 ```
 argoverse2/train
@@ -18,6 +49,17 @@ and generate the train and val supervision labels to
 argoverse2/train_sceneflow
 argoverse2/val_sceneflow
 ```
+
+
+The [Argoverse 2 Scene Flow generation script](https://github.com/nchodosh/argoverse2-sf) to compute ground truth flows for both `train/` and `val/`.
+
+## Waymo Open
+
+Download the Scene Flow labels contributed by _Scalable Scene Flow from Point Clouds in the Real World_. We preprocess these files, both to convert them from an annoying proto file format to a standard Python format and to remove the ground points.
+
+Do this using the `data_prep_scripts/waymo/extract_flow_and_remove_ground.py` file.
+
+Preprocess these files, run 
 
 # Install Nvidia Docker 
 

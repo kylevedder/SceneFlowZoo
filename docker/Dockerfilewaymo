@@ -20,11 +20,16 @@ RUN apt install -y apt-utils
 ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
 ENV FORCE_CUDA="1"
 RUN conda update -y conda
-RUN conda install numpy python=3.9 pip -y
-RUN pip install waymo-open-dataset-tf-2-6-0
-RUN pip install protobuf==3.20
+
+RUN conda install python=3.9 pip -y
+RUN pip install --upgrade pip
+# ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/
+
+RUN apt install -y openexr libopenexr-dev
+RUN pip install waymo-open-dataset-tf-2.11.0==1.5.0
 RUN pip install pytorch-lightning
 RUN pip install opencv-python
+RUN pip install open3d
 
 ENV PYTHONPATH=/project/data_prep_scripts/waymo:/project/:${PYTHONPATH}
 COPY bashrc /root/.bashrc

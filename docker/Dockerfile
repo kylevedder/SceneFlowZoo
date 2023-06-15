@@ -20,13 +20,14 @@ RUN apt install -y apt-utils
 ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
 ENV FORCE_CUDA="1"
 RUN conda update -y conda
-RUN conda install numpy python=3.10 pytorch==1.12 torchvision torchaudio cudatoolkit=11.3 -c pytorch -y
+RUN conda install numpy python=3.10 pytorch==1.12.1 torchvision torchaudio cudatoolkit=11.3 -c pytorch -y
 RUN conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y
 RUN pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu113_pyt1121/download.html
 RUN pip install mmcv-full==1.7.1 -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.12.0/index.html
 RUN pip install pyarrow pyquaternion open3d
 RUN pip install tensorboard
-RUN pip install accelerate
+RUN pip install pytorch-lightning==1.9.4
+RUN pip install nntime
 
 ENV PYTHONPATH=/project:${PYTHONPATH}
 COPY bashrc /root/.bashrc

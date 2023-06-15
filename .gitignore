@@ -19,3 +19,4 @@ job_dir/
 .pl_auto_save.ckpt
 cluster_tb_logs/
 *_tb_logs/
+**.zip
