@@ -11,4 +11,4 @@
 #SBATCH --container-mounts=../../datasets/:/efs/,./:/project
 #SBATCH --container-image=/home/kvedder/kylevedder+offline_sceneflow+latest.sqsh
 ## Job Steps
-python investigate_pointclouds.py waymo --cpus 120 
+python data_prep_scripts/investigate_pointclouds.py waymo --cpus 120 

@@ -1,2 +1,0 @@
-/efs/argoverse2/val_distilation_out/04994d08-156c-3018-9717-ba0e29be8153/000014.npy
-/efs/argoverse2/val_distilation_out/04994d08-156c-3018-9717-ba0e29be8153/000014.npy
