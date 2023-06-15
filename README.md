@@ -39,7 +39,11 @@ Inside the main  (`./launch.sh`), run the `train_pl.py` with a path to a config 
 python test_pl.py <my config path> <my checkpoint path> --gpus <num gpus>
 ```
 
-# Submitting to the AV2 Scene Flow competition
+## Generating paper plots
+
+After all relevant checkpoints have been tested, thus generating result files in `validation_results/configs/...`, run `plot_performance.py` to generate the figures and tables used in the paper.
+
+## Submitting to the AV2 Scene Flow competition
 
 1. Dump the outputs of the model
     a. `configs/fastflow3d/argo/nsfp_distilatation_dump_output.py` to dump the `val` set result
