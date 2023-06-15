@@ -1,10 +1,8 @@
 # ZeroFlow
 
-Official repository for _ZeroFlow: Fast Zero Label Scene Flow via Distillation_
+Official repository for _ZeroFlow: Fast Zero Label Scene Flow via Distillation_. [Project webpage](vedder.io/zeroflow)
 
-[Project webpage](vedder.io/zeroflow)
-
-Citation:
+**Citation:**
 
 ```
 @article{Vedder2023zeroflow,
