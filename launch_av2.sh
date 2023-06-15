@@ -10,4 +10,4 @@ docker run --gpus=all --rm -it \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \
- offline_sceneflow_av2_eval
+ kylevedder/zeroflow_av2:latest

@@ -12,5 +12,4 @@ docker run --gpus=all --rm -it \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \
- offline_sceneflow_waymo_150:latest
- #offline_sceneflow_waymo:latest
+ kylevedder/zeroflow_waymo:latest
