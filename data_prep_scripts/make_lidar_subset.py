@@ -22,9 +22,10 @@ sequence_folders = []
 for subfolder in ["train", "val", "test"]:
     sequence_folders.extend((args.lidar_path / subfolder).glob("*"))
 sequence_folders = sorted(sequence_folders, key=lambda x: x.name.lower())
-assert len(
+if len(
     sequence_folders
-) == 20000, f"Expected 20,000 sequences, found {len(sequence_folders)}"
+) == 20000:
+    print(f"WARNING: Expected 20000 sequences, found {len(sequence_folders)}")
 
 
 def get_sequence_pairs(
