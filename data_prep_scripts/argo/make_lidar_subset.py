@@ -5,7 +5,6 @@ from typing import Tuple, List
 import tqdm
 import shutil
 
-
 # Argoverse 2 has 700 * 15 * 10 = 105,000 frames
 # Argoverse Lidar has 20,000 * 30 * 10 = 6,000,000 frames
 # Therefore we need ~6 frame pairs per trajectory.
@@ -14,7 +13,10 @@ import shutil
 parser = argparse.ArgumentParser()
 parser.add_argument('lidar_path', type=Path)
 parser.add_argument('output_folder', type=Path)
+parser.add_argument('--num_pairs', type=int, default=12)
 args = parser.parse_args()
+
+assert args.num_pairs > 0, f"Number of pairs must be positive (got {args.num_pairs})"
 
 assert args.lidar_path.is_dir(), f"Path {args.lidar_path} is not a directory"
 # Check that the directory contains the expected number of sequences
@@ -22,15 +24,14 @@ sequence_folders = []
 for subfolder in ["train", "val", "test"]:
     sequence_folders.extend((args.lidar_path / subfolder).glob("*"))
 sequence_folders = sorted(sequence_folders, key=lambda x: x.name.lower())
-if len(
-    sequence_folders
-) == 20000:
+if len(sequence_folders) == 20000:
     print(f"WARNING: Expected 20000 sequences, found {len(sequence_folders)}")
 
 
 def get_sequence_pairs(
         sequence_folder: Path,
-        num_pairs: int = 6) -> List[Tuple[Path, Tuple[Path, Path]]]:
+        num_pairs: int = args.num_pairs
+) -> List[Tuple[Path, Tuple[Path, Path]]]:
     """Get all pairs of frames in a sequence"""
 
     lidar_files = sorted(sequence_folder.glob("sensors/lidar/*.feather"))
@@ -84,4 +85,6 @@ folder_frame_lst = [item for sublist in folder_frame_lst for item in sublist]
 print("Saving sequence pairs...")
 with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
     # pool.starmap(save_sequence_pair, folder_frame_lst)
-    list(tqdm.tqdm(pool.imap_unordered(save_sequence_pair, folder_frame_lst), total=len(folder_frame_lst)))
+    list(
+        tqdm.tqdm(pool.imap_unordered(save_sequence_pair, folder_frame_lst),
+                  total=len(folder_frame_lst)))
