@@ -168,7 +168,7 @@ def build_work_queue(root_path: Path):
     root_path = Path(root_path)
     root_folders = [
         e for e in root_path.glob("*/")
-        if e.is_dir() and e.name in ["train", "val"]
+        if e.is_dir() and e.name in ["train", "val", "test"]
     ]
     work_queue = []
     for rf in root_folders:
