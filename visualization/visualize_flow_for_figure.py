@@ -59,7 +59,7 @@ def load_sequence(sequence_idx: int):
 vis = o3d.visualization.VisualizerWithKeyCallback()
 vis.create_window()
 vis.get_render_option().point_size = 2
-vis.get_render_option().background_color = (1, 1, 1)
+vis.get_render_option().background_color = (0, 0, 0) #(1, 1, 1)
 vis.get_render_option().show_coordinate_frame = False
 # Set camera parameters
 

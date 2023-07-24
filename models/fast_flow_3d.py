@@ -167,6 +167,10 @@ class FastFlow3DDistillationLoss():
         # self._visualize_regressed_ground_truth_pcs(model_res,
         #                                            gt_flow_array_stack)
 
+        assert len(estimated_flows) <= len(
+            gt_flow_array_stack
+        ), f"estimated_flows {len(estimated_flows)} > gt_flow_array_stack {len(gt_flow_array_stack)}"
+
         total_loss = 0
         # Iterate through the batch
         for est_flow, gt_flow_array in zip(estimated_flows,

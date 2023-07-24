@@ -8,7 +8,7 @@ import tqdm
 
 sequence_loader = ArgoverseRawSequenceLoader('/efs/argoverse2/val/')
 
-sequence_idx = 1
+sequence_idx = 2
 sequence_id = sequence_loader.get_sequence_ids()[sequence_idx]
 sequence = sequence_loader.load_sequence(sequence_id)
 
@@ -17,7 +17,7 @@ print("Sequence idx", sequence_idx, "Sequence ID: ", sequence_id)
 # make open3d visualizer
 vis = o3d.visualization.Visualizer()
 vis.create_window()
-vis.get_render_option().point_size = 1
+vis.get_render_option().point_size = 3
 vis.get_render_option().background_color = (0, 0, 0)
 vis.get_render_option().show_coordinate_frame = True
 # set up vector
@@ -32,7 +32,7 @@ def sequence_idx_to_color(idx):
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
-frame_lst = sequence.load_frame_list(0)
+frame_lst = sequence.load_frame_list(0)[45:47]
 
 print("Frames: ", len(frame_lst))
 for idx, entry_dict in enumerate(frame_lst):

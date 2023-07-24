@@ -20,11 +20,17 @@ max_lidar_train_sequence_length = get_max_sequence_length(
     lidar_train_sequence_dir)
 
 SUBSEQUENCE_LENGTH = 2
+save_every = 4
+validate_every = 4
+
+
+dataloader = dict(
+    args=dict(batch_size=2, num_workers=0, shuffle=True, pin_memory=False))
 
 loader = [
-    dict(name="ArgoverseUnsupervisedFlowSequenceLoader",
-         args=dict(raw_data_path=sensor_train_sequence_dir,
-                   flow_data_path=sensor_train_flow_dir)),
+    # dict(name="ArgoverseUnsupervisedFlowSequenceLoader",
+    #      args=dict(raw_data_path=sensor_train_sequence_dir,
+    #                flow_data_path=sensor_train_flow_dir)),
     dict(name="ArgoverseUnsupervisedFlowSequenceLoader",
          args=dict(raw_data_path=lidar_train_sequence_dir,
                    flow_data_path=lidar_train_flow_dir))
@@ -32,10 +38,10 @@ loader = [
 
 
 dataset = [
-    dict(name="SubsequenceUnsupervisedFlowDataset",
-         args=dict(subsequence_length=SUBSEQUENCE_LENGTH,
-                   max_sequence_length=max_sensor_train_sequence_length,
-                   origin_mode="FIRST_ENTRY")),
+    # dict(name="SubsequenceUnsupervisedFlowDataset",
+    #      args=dict(subsequence_length=SUBSEQUENCE_LENGTH,
+    #                max_sequence_length=max_sensor_train_sequence_length,
+    #                origin_mode="FIRST_ENTRY")),
     dict(name="SubsequenceUnsupervisedFlowDataset",
          args=dict(subsequence_length=SUBSEQUENCE_LENGTH,
                    max_sequence_length=max_lidar_train_sequence_length,
