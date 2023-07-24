@@ -256,7 +256,7 @@ class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
 
         flow_arrays = [
             to_fixed_array(_squeeze_flow(e['flow']), self.max_pc_points)
-            for e in subsequence_lst
+            for e in subsequence_lst if e['flow'] is not None
         ]
         flow_array_stack = np.stack(flow_arrays, axis=0).astype(np.float32)
         ret_dict['flow_array_stack'] = flow_array_stack
