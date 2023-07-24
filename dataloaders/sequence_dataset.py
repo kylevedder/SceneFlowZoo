@@ -244,6 +244,8 @@ class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
         ret_dict = super()._subsequence_lst_to_output_dict(subsequence_lst)
 
         def _squeeze_flow(flow: np.ndarray) -> np.ndarray:
+            if flow is None:
+                return np.zeros((0, 3), dtype=np.float32)
             if flow.ndim == 3:
                 assert flow.shape[
                     0] == 1, f"Flow must have 1 channel, got {flow.shape[0]}"
@@ -256,7 +258,7 @@ class SubsequenceUnsupervisedFlowDataset(SubsequenceRawDataset):
 
         flow_arrays = [
             to_fixed_array(_squeeze_flow(e['flow']), self.max_pc_points)
-            for e in subsequence_lst if e['flow'] is not None
+            for e in subsequence_lst
         ]
         flow_array_stack = np.stack(flow_arrays, axis=0).astype(np.float32)
         ret_dict['flow_array_stack'] = flow_array_stack
