@@ -5,6 +5,8 @@ POINT_CLOUD_RANGE = (-51.2, -51.2, -3, 51.2, 51.2, 3)
 VOXEL_SIZE = (0.1, 0.1, POINT_CLOUD_RANGE[5] - POINT_CLOUD_RANGE[2])
 PSEUDO_IMAGE_DIMS = (1024, 1024)
 
+save_every = 500*8
+validate_every = 500*8
 
 model = dict(name="FastFlow3D",
              args=dict(VOXEL_SIZE=VOXEL_SIZE,
