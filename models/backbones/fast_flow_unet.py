@@ -145,3 +145,78 @@ class FastFlowUNet(nn.Module):
         V = self.decoder_step4(U)
 
         return V
+    
+class FastFlowUNetXL(nn.Module):
+    """
+    FastFlowUNet with a 64 channel input and another conv stepdown layer.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.encoder_step_1 = nn.Sequential(ConvWithNorms(64, 128, 3, 2, 1),
+                                            ConvWithNorms(128, 128, 3, 1, 1),
+                                            ConvWithNorms(128, 128, 3, 1, 1),
+                                            ConvWithNorms(128, 128, 3, 1, 1))
+        self.encoder_step_2 = nn.Sequential(ConvWithNorms(128, 256, 3, 2, 1),
+                                            ConvWithNorms(256, 256, 3, 1, 1),
+                                            ConvWithNorms(256, 256, 3, 1, 1),
+                                            ConvWithNorms(256, 256, 3, 1, 1),
+                                            ConvWithNorms(256, 256, 3, 1, 1),
+                                            ConvWithNorms(256, 256, 3, 1, 1))
+        self.encoder_step_3 = nn.Sequential(ConvWithNorms(256, 512, 3, 2, 1),
+                                            ConvWithNorms(512, 512, 3, 1, 1),
+                                            ConvWithNorms(512, 512, 3, 1, 1),
+                                            ConvWithNorms(512, 512, 3, 1, 1),
+                                            ConvWithNorms(512, 512, 3, 1, 1),
+                                            ConvWithNorms(512, 512, 3, 1, 1))
+        self.encoder_step_4 = nn.Sequential(ConvWithNorms(512, 1024, 3, 2, 1),
+                                            ConvWithNorms(1024, 1024, 3, 1, 1),
+                                            ConvWithNorms(1024, 1024, 3, 1, 1),
+                                            ConvWithNorms(1024, 1024, 3, 1, 1),
+                                            ConvWithNorms(1024, 1024, 3, 1, 1),
+                                            ConvWithNorms(1024, 1024, 3, 1, 1))
+        
+        self.decoder_step1 = UpsampleSkip(2048, 1024, 1024)
+        self.decoder_step2 = UpsampleSkip(1024, 512, 512)
+        self.decoder_step3 = UpsampleSkip(512, 256, 256)
+        self.decoder_step4 = UpsampleSkip(256, 128, 128)
+        self.decoder_step5 = nn.Conv2d(128, 128, 3, 1, 1)
+
+    def forward(self, pc0_B: torch.Tensor,
+                pc1_B: torch.Tensor) -> torch.Tensor:
+
+        expected_channels = 64
+        assert pc0_B.shape[
+            1] == expected_channels, f"Expected {expected_channels} channels, got {pc0_B.shape[1]}"
+        assert pc1_B.shape[
+            1] == expected_channels, f"Expected {expected_channels} channels, got {pc1_B.shape[1]}"
+
+        pc0_F = self.encoder_step_1(pc0_B)
+        pc0_L = self.encoder_step_2(pc0_F)
+        pc0_R = self.encoder_step_3(pc0_L)
+        pc0_T = self.encoder_step_4(pc0_R)
+
+        pc1_F = self.encoder_step_1(pc1_B)
+        pc1_L = self.encoder_step_2(pc1_F)
+        pc1_R = self.encoder_step_3(pc1_L)
+        pc1_T = self.encoder_step_4(pc1_R)
+
+        Tstar = torch.cat([pc0_T, pc1_T],
+                          dim=1)  # torch.Size([1, 2048, 32, 32])
+        Rstar = torch.cat([pc0_R, pc1_R],
+                          dim=1)  # torch.Size([1, 1024, 64, 64])
+        Lstar = torch.cat([pc0_L, pc1_L],
+                          dim=1)  # torch.Size([1, 512, 128, 128])
+        Fstar = torch.cat([pc0_F, pc1_F],
+                          dim=1)  # torch.Size([1, 256, 256, 256])
+        Bstar = torch.cat([pc0_B, pc1_B],
+                          dim=1)  # torch.Size([1, 128, 512, 512])
+
+        S = self.decoder_step1(Tstar, Rstar)
+        T = self.decoder_step2(S, Lstar)
+        U = self.decoder_step3(T, Fstar)
+        V = self.decoder_step4(U, Bstar)
+        W = self.decoder_step5(V)
+
+        return W
