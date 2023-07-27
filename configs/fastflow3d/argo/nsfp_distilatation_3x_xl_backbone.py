@@ -12,3 +12,8 @@ model = dict(name="FastFlow3D",
                        FEATURE_CHANNELS=64, 
                        xl_backbone=True))
 
+dataloader = dict(
+    args=dict(batch_size=2, num_workers=4, shuffle=True, pin_memory=True))
+
+test_dataloader = dict(
+    args=dict(batch_size=2, num_workers=4, shuffle=False, pin_memory=True))
