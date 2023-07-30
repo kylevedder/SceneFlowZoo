@@ -146,7 +146,7 @@ class ArgoverseSupervisedFlowSequenceLoader():
         for sequence_id in self.sequence_id_to_flow_lst.keys():
             sequence_folder = self.raw_data_path / sequence_id
             assert sequence_folder.is_dir(
-            ), f'raw_data_path {raw_data_path} does not exist'
+            ), f'sequence_folder {sequence_folder} does not exist'
             self.sequence_id_to_raw_data[sequence_id] = sequence_folder
 
         self.sequence_id_lst = sorted(self.sequence_id_to_flow_lst.keys())
