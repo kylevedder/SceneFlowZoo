@@ -141,6 +141,9 @@ assert len(
 
 def plot_scaling(x_label: bool = True, log_scale: bool = False):
 
+    ours_xl_results = [
+        (2.0, 0.056),
+    ]
     ours_results = [
         (1.0, 0.087),
         (0.5, 0.101),
@@ -158,6 +161,7 @@ def plot_scaling(x_label: bool = True, log_scale: bool = False):
     ]
 
     plt.plot(*zip(*ours_results), label="Ours", color='red', marker='o')
+    plt.plot(*zip(*ours_xl_results), label="Ours XL", color='red', marker='x')
     plt.plot(*zip(*fastflow_results),
              label="FastFlow3D",
              color='black',
@@ -167,7 +171,7 @@ def plot_scaling(x_label: bool = True, log_scale: bool = False):
     plt.ylabel("Threeway EPE (m)")
 
     # Set x ticks
-    plt.xticks([0.01, 0.1, 0.2, 0.5, 1.0], ["1%", "10%", "20%", "50%", "100%"])
+    plt.xticks([0.01, 0.1, 0.2, 0.5, 1.0, 2.0], ["1%", "10%", "20%", "50%", "100%", "200%"])
     # Horizontal line
     plt.axhline(y=0.087,
                 color='black',
@@ -195,10 +199,10 @@ def plot_scaling(x_label: bool = True, log_scale: bool = False):
         #     "", "0.20"
         # ])
         plt.yticks(
-            [0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22],
-            ["0.08", "0.10", "0.12", "0.14", "0.16", "0.18", "0.20", "0.22"])
-        plt.xticks([0.01, 0.1, 0.2, 0.5, 1.0],
-                   ["1%", "10%", "20%", "50%", "100%"])
+            [0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22],
+            ["0.06", "0.08", "0.10", "0.12", "0.14", "0.16", "0.18", "0.20", "0.22"])
+        plt.xticks([0.01, 0.1, 0.2, 0.5, 1.0, 2.0],
+                   ["1%", "10%", "20%", "50%", "100%", "200%"])
         # Draw text along arrow
         plt.text(0.0096,
                 0.14,
