@@ -260,9 +260,12 @@ class FastFlow3DDistillationLoss():
 
 class FastFlow3DSupervisedLoss():
 
-    def __init__(self, device: str = None, scale_background: bool = True):
+    def __init__(self, device: str = None, scale_background: bool = True, scale_speed : bool = False):
         super().__init__()
         self._scale_background = scale_background
+        self._scale_speed = scale_speed
+
+        assert not (self._scale_background and self._scale_speed), "Cannot scale both background and speed"
 
     def __call__(self, input_batch, model_res_dict):
         model_res = model_res_dict["forward"]
@@ -293,6 +296,16 @@ class FastFlow3DSupervisedLoss():
                 # multiplying by 0.9 and adding 0.1 to get a scalar in {0.1, 1}
                 background_scalar = is_foreground_class.float() * 0.9 + 0.1
                 error = error * background_scalar
+
+            if self._scale_speed:
+                # Compute the importance scale using m/s speed.
+                gt_speed = torch.norm(ground_truth_flow, dim=1, p=2) * 10.0
+                mins = torch.ones_like(gt_speed) * 0.1
+                maxs = torch.ones_like(gt_speed)
+                # Plot \max\left(0.1,\min\left(1,1.8x-0.8\right)\right) in Desmos
+                importance_scale = torch.min(
+                    mins, torch.max(1.8 * gt_speed - 0.8, maxs))
+                error = error * importance_scale
 
             total_loss += error.mean()
 
