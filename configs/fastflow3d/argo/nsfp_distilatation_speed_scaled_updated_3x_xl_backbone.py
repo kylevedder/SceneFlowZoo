@@ -36,7 +36,7 @@ dataloader = dict(
     args=dict(batch_size=2, num_workers=4, shuffle=True, pin_memory=True))
 
 test_dataloader = dict(
-    args=dict(batch_size=2, num_workers=4, shuffle=False, pin_memory=True))
+    args=dict(batch_size=6, num_workers=12, shuffle=False, pin_memory=True))
 
 
 loader = [
