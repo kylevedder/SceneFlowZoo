@@ -116,12 +116,9 @@ class VarLenSubsequenceRawDataset(SubsequenceRawDataset):
         return subsequence_lst
 
 
-class VarLenSubsequenceSupervisedFlowDataset(VarLenSubsequenceRawDataset):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__getitem__ = partial(
-            SubsequenceSupervisedFlowDataset.__getitem__, self=self)
+class VarLenSubsequenceSupervisedFlowDataset(SubsequenceSupervisedFlowDataset,
+                                             VarLenSubsequenceRawDataset):
+    pass
 
 
 class VarLenSubsequenceSupervisedFlowSpecificSubsetDataset(

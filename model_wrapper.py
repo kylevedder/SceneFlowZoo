@@ -365,6 +365,15 @@ class ModelWrapper(pl.LightningModule):
 
         self.metric.update_runtime(output_batch["batch_delta_time"],
                                    len(input_batch["pc_array_stack"]))
+        
+        # Check that input_batch and output_batch have the correct keys.
+        assert "pc_array_stack" in input_batch, f"input_batch does not have pc_array_stack key in keys {input_batch.keys()}"
+        assert "flowed_pc_array_stack" in input_batch, f"input_batch does not have flowed_pc_array_stack key in keys {input_batch.keys()}"
+        assert "pc_class_mask_stack" in input_batch, f"input_batch does not have pc_class_mask_stack key in keys {input_batch.keys()}"
+        assert "flow" in output_batch, f"output_batch does not have flow key in keys {output_batch.keys()}"
+        assert "pc0_valid_point_idxes" in output_batch, f"output_batch does not have pc0_valid_point_idxes key in keys {output_batch.keys()}"
+        assert "pc1_valid_point_idxes" in output_batch, f"output_batch does not have pc1_valid_point_idxes key in keys {output_batch.keys()}"
+
 
         # Decode the mini-batch.
         for minibatch_idx, (pc_array, flowed_pc_array, regressed_flow,

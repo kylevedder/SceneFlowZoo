@@ -148,14 +148,19 @@ class ResultInfo():
 
     def pretty_name(self):
         name_dict = {
-            "fastflow3d_nsfp_distilatation": "DRLFS (Ours)",
-            "fastflow3d_nsfp_distilatation_2x": "DRLFS 2x (Ours)",
-            "fastflow3d_nsfp_distilatation_0.5x": "DRLFS 0.5x (Ours)",
-            "fastflow3d_nsfp_distilatation_0.1x": "DRLFS 0.1x (Ours)",
-            "fastflow3d_nsfp_distilatation_speed_scaled": "DRLFS (Ours, speed scaled)",
+            "fastflow3d_nsfp_distilatation": "ZeroFlow No Scale",
+            "fastflow3d_nsfp_distilatation_3x": "ZeroFlow 2x",
+            "fastflow3d_nsfp_distilatation_3x_xl_backbone": "ZeroFlow XL 2x",
+            "fastflow3d_nsfp_distilatation_xl_backbone": "ZeroFlow XL",
+            "fastflow3d_nsfp_distilatation_0.5x": "ZeroFlow No Scale 0.5x",
+            "fastflow3d_nsfp_distilatation_0.1x": "ZeroFlow No Scale 0.1x",
+            "fastflow3d_nsfp_distilatation_speed_scaled": "ZeroFlow",
             "fastflow3d_supervised": "FastFlow3D",
-            "fastflow3d_chodosh_distilatation": "DRLFS (Chodosh et al. pseudolabels)",
+            "fastflow3d_supervised_xl_backbone": "FastFlow3D XL",
+            "fastflow3d_chodosh_distilatation": "ZeroFlow (Chodosh et al. pseudolabels, No Scale)",
+            "fastflow3d_chodosh_distilatation_speed_scaled": "ZeroFlow (Chodosh et al. pseudolabels)",
             "fastflow3d_supervised_no_scale": "FastFlow3D (no scale)",
+            "fastflow3d_supervised_speed_scaled_batch8_train": "FastFlow3D (speed scale)",
             "nsfp_unsupervised_sensor_val_cached": "NSFP",
         }
         if self.name in name_dict:

@@ -226,8 +226,11 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
                                        runtime_error_bar: bool = True,
                                        gradient_bg: bool = True):
     runtimes = {
-        'Ours': 29.33,
+        'ZeroFlow': 29.33,
+        'ZeroFlow 2x': 29.33,
         'FastFlow3D': 29.33,
+        'ZeroFlow XL 2x': 260.61,
+        'FastFlow3D XL': 260.61,
         'NSFP': 26285.0,
         'Chodosh': 26285.0 + 8996.4,
         'Gojcic': 6087.87,
@@ -239,8 +242,11 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     }
 
     runtimes_error_bar = {
-        'Ours': 2.38,
+        'ZeroFlow': 2.38,
+        'ZeroFlow 2x': 2.38,
+        'ZeroFlow XL 2x': 1.21,
         'FastFlow3D': 2.38,
+        'FastFlow3D XL': 2.38,
         'NSFP': 18139.3,
         'Chodosh': 20247.7,
         'Gojcic': 1690.56,
@@ -252,13 +258,16 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     }
 
     perf_error_bar_dims = {
-        'Ours': (0.00, 0.002),
+        'ZeroFlow': (0.00, 0.002),
         'FastFlow3D': (0.002, 0.003),
     }
 
     points_processed = {
-        'Ours': 52871.6,
+        'ZeroFlow': 52871.6,
+        'ZeroFlow 2x': 52871.6,
+        'ZeroFlow XL 2x': 52871.6,
         'FastFlow3D': 52871.6,
+        'FastFlow3D XL': 52871.6,
         'NSFP': 52871.6,
         'Chodosh': 52871.6,
         'Gojcic': 20000,
@@ -270,7 +279,10 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     }
 
     performance = {
-        'Ours': 0.087,
+        'ZeroFlow': 0.087,
+        'ZeroFlow 2x': 0.066,
+        'ZeroFlow XL 2x': 0.056,
+        'FastFlow3D XL': 0.058,
         'NSFP': 0.068,
         'Chodosh': 0.061,
         'FastFlow3D': 0.076,
@@ -283,9 +295,12 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     }
 
     uses_labels = {
-        'Ours': False,
+        'ZeroFlow': False,
+        'ZeroFlow 2x': False,
+        'ZeroFlow XL 2x': False,
         'NSFP': False,
         'FastFlow3D': True,
+        'FastFlow3D XL': True,
         'PPWC': False,
         'FlowStep3D': False,
         'Sim2Real': False,
@@ -304,6 +319,8 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
         'NSFP': (horiz_offset, vert_offset),
         'Gojcic': (-horiz_offset, vert_offset),
         'Chodosh': (horiz_offset, -vert_offset),
+        'FastFlow3D XL': (0, vert_offset),
+        'ZeroFlow XL 2x': (0, -vert_offset),
     }
 
     keys = runtimes.keys()
@@ -312,7 +329,7 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
     shapes = ['x' if uses_labels[k] else 'o' for k in keys]
     alphas = [1.0 if uses_labels[k] else 1.0 for k in keys]
     gliph_colors = [
-        'red' if k == 'Ours' else ('black' if uses_labels[k] else 'black')
+        'red' if ("Ours" in k or "ZeroFlow" in k) else ('black' if uses_labels[k] else 'black')
         for k in keys
     ]
     text_colors = ['red' if k == 'Ours' else 'black' for k in keys]
@@ -410,7 +427,11 @@ def plot_speed_vs_performance_tradeoff(perf_error_bar: bool = True,
                          zorder=0,
                          alpha=0.2)
         # Annotate with name
-        plt.annotate(f"{key} ({point_count / 1000.0:0.1f}k points)",
+        if point_count < 50000:
+            annotation_name = f"{key} ({point_count / 1000.0:0.1f}k points)"
+        else:
+            annotation_name = f"{key} (Full)"
+        plt.annotate(annotation_name,
                      (runtime, perf),
                      xytext=(6 * x_offset_sign + label_offset.get(key,
                                                                   (0, 0))[0],
@@ -504,6 +525,13 @@ def merge_dict_list(dict_list):
 
 def plot_mover_nonmover_vs_error_by_category(results: List[ResultInfo],
                                              metacatagory, vmax):
+    valid_results_pretty_name_set = {
+        "FastFlow3D", "FastFlow3D XL", "ZeroFlow", "ZeroFlow 2x", "ZeroFlow XL", "ZeroFlow XL 2x", "NSFP"
+    }
+    results = [
+        r for r in results
+        if r.pretty_name() in valid_results_pretty_name_set
+    ]
     for result_idx, result in enumerate(results):
         metacatagory_epe_by_speed = result.get_metacatagory_epe_by_speed(
             metacatagory)
