@@ -1,11 +1,11 @@
-_base_ = "./nsfp_distilatation_3x_xl_backbone.py"
+_base_ = "./nsfp_distilatation_2x_xl_backbone.py"
 
 has_labels = False
 
 test_sequence_dir = "/efs/argoverse2/test/"
 test_flow_dir = "/efs/argoverse2/test_sceneflow/"
 
-save_output_folder = "/efs/argoverse2/test_nsfp_distilation_3x_xl_backbone_out/"
+save_output_folder = "/efs/argoverse2/test_nsfp_distilation_2x_xl_backbone_out/"
 SEQUENCE_LENGTH = 2
 
 test_loader = dict(_delete_=True,

@@ -1,4 +1,4 @@
-_base_ = "./nsfp_distilatation_3x.py"
+_base_ = "./nsfp_distilatation_2x.py"
 
 
 POINT_CLOUD_RANGE = (-51.2, -51.2, -3, 51.2, 51.2, 3)
