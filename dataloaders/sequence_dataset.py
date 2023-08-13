@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 import enum
 from typing import Union, List, Tuple, Dict, Optional, Any
-from pointclouds import to_fixed_array
+from pointclouds import to_fixed_array, PointCloud
 from pathlib import Path
 
 
@@ -159,13 +159,25 @@ class SubsequenceSupervisedFlowDataset(SubsequenceRawDataset):
     def _subsequence_lst_to_output_dict(self,
                                         subsequence_lst) -> Dict[str, Any]:
         ret_dict = super()._subsequence_lst_to_output_dict(subsequence_lst)
+
+        def _to_fixed_array_pc(e: Union[PointCloud, None]):
+            if e is None:
+                return to_fixed_array(np.zeros((0, 3), dtype=np.float32),
+                                      self.max_pc_points)
+
+            return e.to_fixed_array(self.max_pc_points)
+
+        def _to_fixed_array_classes(e):
+            if e is None:
+                return to_fixed_array(np.zeros(0, dtype=np.float32), self.max_pc_points)
+            return to_fixed_array(e.astype(np.float32), self.max_pc_points)
+
         flowed_pc_arrays = [
-            e['relative_flowed_pc'].to_fixed_array(self.max_pc_points)
+            _to_fixed_array_pc(e['relative_flowed_pc'])
             for e in subsequence_lst
         ]
         pc_class_masks = [
-            to_fixed_array(e['pc_classes'].astype(np.float32),
-                           self.max_pc_points) for e in subsequence_lst
+            _to_fixed_array_classes(e['pc_classes']) for e in subsequence_lst
         ]
         flowed_pc_array_stack = np.stack(flowed_pc_arrays,
                                          axis=0).astype(np.float32)

@@ -98,10 +98,21 @@ sequence_prediction_lookup = multiprocess_load(
     args.scene_flow_output_dir, load_scene_flow_predictions_from_folder)
 print("Done loading scene flow masks and outputs")
 
-sequence_loader = ArgoverseRawSequenceLoader(args.argoverse_dir)
 mask_keys = set(sequence_mask_lookup.keys())
 output_keys = set(sequence_prediction_lookup.keys())
-assert mask_keys == output_keys, f"Mask keys {mask_keys} != output keys {output_keys}"
+
+if output_keys & mask_keys == mask_keys:
+    print("All mask keys are in output keys")
+    if len(output_keys - mask_keys) > 0:
+        print("WARNING: extra output keys not in mask keys, removing them")
+        sequence_prediction_lookup = {
+            k: v
+            for k, v in sequence_prediction_lookup.items() if k in mask_keys
+        }
+else:
+    assert mask_keys == output_keys, f"Mask keys has {len(mask_keys - output_keys)} more keys than output keys, and output keys has {len(output_keys - mask_keys)} more keys than mask keys, and their intersection has {len(mask_keys & output_keys)} keys"
+
+sequence_loader = ArgoverseRawSequenceLoader(args.argoverse_dir)
 
 
 def make_lineset(pc, flowed_pc, draw_color):
@@ -137,7 +148,7 @@ def merge_predictions_and_mask_data(sequence: ArgoverseRawSequence,
     # Predictions are over frame pairs, so there are N - 1 predictions for N frames in a sequence.
     assert len(predictions) == len(
         sequence
-    ) - 1, f"len(id_to_output) {len(predictions)} != len(sequence) - 1 {len(sequence) - 1}"
+    ) - 1, f"sequence id {sequence.log_id} len(id_to_output) {len(predictions)} != len(sequence) - 1 {len(sequence) - 1}"
 
     timestamp_to_sequence_frame_idx = {
         timestamp: idx
@@ -158,7 +169,8 @@ def merge_predictions_and_mask_data(sequence: ArgoverseRawSequence,
         next_frame_ego_dict = sequence.load(frame_idx + 1, frame_idx + 1)
         next_frame_curr_dict = sequence.load(frame_idx + 1, frame_idx)
         submission_mask_data = timestamp_to_mask[mask_timestamp]
-        prediction_data = copy.deepcopy(timestamp_to_prediction[mask_timestamp])
+        prediction_data = copy.deepcopy(
+            timestamp_to_prediction[mask_timestamp])
 
         assert len(frame_dict['relative_pc_with_ground']) == len(
             submission_mask_data
@@ -207,8 +219,8 @@ def save_sequence(sequence: ArgoverseRawSequence,
         # Transform the flow from being in second frame to being in first frame.
         # The relative pose describes the transform from first to second frame,
         # so we need to rotate by the inverse of the relative pose.
-        no_ground_flow_array = (data['relative_pose'].inverse(
-        ).rotation_matrix @ no_ground_flow_array.T).T
+        no_ground_flow_array = (data['relative_pose'].inverse().rotation_matrix
+                                @ no_ground_flow_array.T).T
 
         full_size_flow_array[
             ~data['pc_with_ground_is_ground_points']] = no_ground_flow_array
