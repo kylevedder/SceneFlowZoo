@@ -1,0 +1,32 @@
+FROM kylevedder/cudagl:11.7.1-devel-ubuntu20.04
+SHELL ["/bin/bash", "-c"]
+# Set the timezone info because otherwise tzinfo blocks install 
+# flow and ignores the non-interactive frontend command 🤬🤬🤬
+RUN ln -snf /usr/share/zoneinfo/America/New_York /etc/localtime && echo "/usr/share/zoneinfo/America/New_York" > /etc/timezone
+
+# Core system packages
+RUN apt-get update --fix-missing
+RUN apt install -y software-properties-common wget curl gpg gcc git make
+
+# Install miniconda to /miniconda
+RUN curl -LO http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+RUN bash Miniconda3-latest-Linux-x86_64.sh -p /miniconda -b
+RUN rm Miniconda3-latest-Linux-x86_64.sh
+ENV PATH=/miniconda/bin:${PATH}
+RUN conda update -y conda
+
+RUN apt install -y apt-utils
+
+ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
+ENV FORCE_CUDA="1"
+RUN conda update -y conda
+RUN conda install numpy python pytorch==2 torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -y
+RUN conda install fvcore iopath -c fvcore -c iopath -c conda-forge -y
+RUN pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu117_pyt201/download.html
+RUN pip install mmcv==2.0.1 -f https://download.openmmlab.com/mmcv/dist/cu117/torch2.0/index.html
+RUN pip install mmengine
+RUN pip install pytorch-lightning==2.0.6 pyarrow pyquaternion open3d==0.16 tensorboard nntime imageio
+
+ENV PYTHONPATH=/project:${PYTHONPATH}
+COPY bashrc /root/.bashrc
+WORKDIR /project

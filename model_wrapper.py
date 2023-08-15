@@ -174,6 +174,7 @@ class ModelWrapper(pl.LightningModule):
         self.metric = EndpointDistanceMetricRawTorch(
             CATEGORY_ID_TO_NAME, SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
             ENDPOINT_ERROR_SPLITS_METERS)
+        
 
     def on_load_checkpoint(self, checkpoint):
         checkpoint_lrs = set()
@@ -469,7 +470,7 @@ class ModelWrapper(pl.LightningModule):
                 f"Full Nonmover EPE: {result_full_info.get_nonmover_point_epe()}"
             )
 
-    def validation_epoch_end(self, batch_parts):
+    def on_validation_epoch_end(self):
         import time
         before_gather = time.time()
 

@@ -20,7 +20,10 @@ from model_wrapper import ModelWrapper
 
 from pathlib import Path
 
-from mmcv import Config
+try:
+    from mmcv import Config
+except ImportError:
+    from mmengine import Config
 
 # Get config file from command line
 parser = argparse.ArgumentParser()
@@ -53,6 +56,11 @@ def setup_model(cfg):
         assert args.checkpoint.exists(
         ), f"Checkpoint file {args.checkpoint} does not exist"
         model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg)
+
+    
+    if hasattr(cfg, "compile_pytorch2") and cfg.compile_pytorch2:
+        print("PyTorch 2 compile()ing model!")
+        model = torch.compile(model, mode="reduce-overhead")
     return model
 
 
@@ -66,12 +74,10 @@ model = setup_model(cfg)
 trainer = pl.Trainer(devices=args.gpus,
                          accelerator="gpu",
                          strategy=DDPStrategy(find_unused_parameters=False),
-                         move_metrics_to_cpu=False,
                          num_sanity_val_steps=2,
                          log_every_n_steps=2,
                          val_check_interval=cfg.validate_every,
                          max_epochs=cfg.epochs,
-                         resume_from_checkpoint=args.checkpoint,
                          accumulate_grad_batches=cfg.accumulate_grad_batches
                          if hasattr(cfg, "accumulate_grad_batches") else 1,
                          gradient_clip_val=cfg.gradient_clip_val if hasattr(

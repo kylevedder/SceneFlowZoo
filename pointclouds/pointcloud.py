@@ -98,7 +98,7 @@ class PointCloud():
     def mask_points(self, mask: np.ndarray) -> 'PointCloud':
         assert isinstance(mask, np.ndarray)
         assert mask.ndim == 1
-        if mask.dtype == np.bool:
+        if mask.dtype == bool:
             assert mask.shape[0] == len(self)
         else:
             in_bounds = mask < len(self)
