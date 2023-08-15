@@ -174,7 +174,6 @@ class ModelWrapper(pl.LightningModule):
         self.metric = EndpointDistanceMetricRawTorch(
             CATEGORY_ID_TO_NAME, SPEED_BUCKET_SPLITS_METERS_PER_SECOND,
             ENDPOINT_ERROR_SPLITS_METERS)
-        
 
     def on_load_checkpoint(self, checkpoint):
         checkpoint_lrs = set()
@@ -366,7 +365,7 @@ class ModelWrapper(pl.LightningModule):
 
         self.metric.update_runtime(output_batch["batch_delta_time"],
                                    len(input_batch["pc_array_stack"]))
-        
+
         # Check that input_batch and output_batch have the correct keys.
         assert "pc_array_stack" in input_batch, f"input_batch does not have pc_array_stack key in keys {input_batch.keys()}"
         assert "flowed_pc_array_stack" in input_batch, f"input_batch does not have flowed_pc_array_stack key in keys {input_batch.keys()}"
@@ -374,7 +373,6 @@ class ModelWrapper(pl.LightningModule):
         assert "flow" in output_batch, f"output_batch does not have flow key in keys {output_batch.keys()}"
         assert "pc0_valid_point_idxes" in output_batch, f"output_batch does not have pc0_valid_point_idxes key in keys {output_batch.keys()}"
         assert "pc1_valid_point_idxes" in output_batch, f"output_batch does not have pc1_valid_point_idxes key in keys {output_batch.keys()}"
-
 
         # Decode the mini-batch.
         for minibatch_idx, (pc_array, flowed_pc_array, regressed_flow,

@@ -57,7 +57,6 @@ def setup_model(cfg):
         ), f"Checkpoint file {args.checkpoint} does not exist"
         model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg)
 
-    
     if hasattr(cfg, "compile_pytorch2") and cfg.compile_pytorch2:
         print("PyTorch 2 compile()ing model!")
         model = torch.compile(model, mode="reduce-overhead")
@@ -72,14 +71,14 @@ print("Val dataloader length:", len(test_dataloader))
 
 model = setup_model(cfg)
 trainer = pl.Trainer(devices=args.gpus,
-                         accelerator="gpu",
-                         strategy=DDPStrategy(find_unused_parameters=False),
-                         num_sanity_val_steps=2,
-                         log_every_n_steps=2,
-                         val_check_interval=cfg.validate_every,
-                         max_epochs=cfg.epochs,
-                         accumulate_grad_batches=cfg.accumulate_grad_batches
-                         if hasattr(cfg, "accumulate_grad_batches") else 1,
-                         gradient_clip_val=cfg.gradient_clip_val if hasattr(
-                             cfg, "gradient_clip_val") else 0.0)
+                     accelerator="gpu",
+                     strategy=DDPStrategy(find_unused_parameters=False),
+                     num_sanity_val_steps=2,
+                     log_every_n_steps=2,
+                     val_check_interval=cfg.validate_every,
+                     max_epochs=cfg.epochs,
+                     accumulate_grad_batches=cfg.accumulate_grad_batches
+                     if hasattr(cfg, "accumulate_grad_batches") else 1,
+                     gradient_clip_val=cfg.gradient_clip_val if hasattr(
+                         cfg, "gradient_clip_val") else 0.0)
 trainer.validate(model, dataloaders=test_dataloader)
