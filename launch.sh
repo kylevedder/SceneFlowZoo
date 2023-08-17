@@ -3,6 +3,7 @@ xhost +
 docker run --gpus=all --rm -it \
  --shm-size=16gb \
  -v `pwd`:/project \
+ -v `pwd`/../scene_trajectory_benchmark/:/scene_trajectory_benchmark \
  -v /efs:/efs \
  -v /bigdata:/bigdata \
  -v /tmp/.X11-unix:/tmp/.X11-unix \
@@ -10,4 +11,4 @@ docker run --gpus=all --rm -it \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \
- kylevedder/zeroflow:latest
+ zeroflow:latest

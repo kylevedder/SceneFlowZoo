@@ -374,6 +374,29 @@ class ModelWrapper(pl.LightningModule):
         assert "pc0_valid_point_idxes" in output_batch, f"output_batch does not have pc0_valid_point_idxes key in keys {output_batch.keys()}"
         assert "pc1_valid_point_idxes" in output_batch, f"output_batch does not have pc1_valid_point_idxes key in keys {output_batch.keys()}"
 
+        # Shape verifications
+        # pc_array_stack should be batch, 2, array_size, 3
+        assert input_batch[
+            "pc_array_stack"].ndim == 4, f"pc_array_stack should have 4 dimensions, but has {input_batch['pc_array_stack'].ndim}"
+        assert input_batch["pc_array_stack"].shape[
+            1] == 2, f"pc_array_stack should have 2 pointclouds, but has {input_batch['pc_array_stack'].shape[1]}"
+        assert input_batch["pc_array_stack"].shape[
+            3] == 3, f"pc_array_stack should have 3 coordinates, but has {input_batch['pc_array_stack'].shape[3]}"
+
+        # flowed_pc_array_stack should be batch, 2, array_size, 3
+        assert input_batch[
+            "flowed_pc_array_stack"].ndim == 4, f"flowed_pc_array_stack should have 4 dimensions, but has {input_batch['flowed_pc_array_stack'].ndim}"
+        assert input_batch["flowed_pc_array_stack"].shape[
+            1] == 2, f"flowed_pc_array_stack should have 2 pointclouds, but has {input_batch['flowed_pc_array_stack'].shape[1]}"
+        assert input_batch["flowed_pc_array_stack"].shape[
+            3] == 3, f"flowed_pc_array_stack should have 3 coordinates, but has {input_batch['flowed_pc_array_stack'].shape[3]}"
+
+        # flowed_pc_array_stack should be batch, 2, array_size
+        assert input_batch[
+            "pc_class_mask_stack"].ndim == 3, f"pc_class_mask_stack should have 3 dimensions, but has {input_batch['pc_class_mask_stack'].ndim}"
+        assert input_batch["pc_class_mask_stack"].shape[
+            1] == 2, f"pc_class_mask_stack should have 2 pointclouds, but has {input_batch['pc_class_mask_stack'].shape[1]}; full shape: {input_batch['pc_class_mask_stack'].shape}"
+
         # Decode the mini-batch.
         for minibatch_idx, (pc_array, flowed_pc_array, regressed_flow,
                             pc0_valid_point_idxes, pc1_valid_point_idxes,
@@ -391,6 +414,17 @@ class ModelWrapper(pl.LightningModule):
             ground_truth_flowed_pc0_to_pc1 = flowed_pc_array[-2][
                 pc0_valid_point_idxes]
             pc0_pc_class_info = class_info[-2][pc0_valid_point_idxes]
+            # There should not be any NaNs in the pc0_pc, pc1_pc, ground_truth_flowed_pc0_to_pc1, or pc0_pc_class_info.
+            assert not torch.isnan(
+                pc0_pc).any(), f"There are NaNs in the pc0_pc"
+            assert not torch.isnan(
+                pc1_pc).any(), f"There are NaNs in the pc1_pc"
+            assert not torch.isnan(ground_truth_flowed_pc0_to_pc1).any(
+            ), f"There are NaNs in the ground_truth_flowed_pc0_to_pc1"
+            assert not torch.isnan(pc0_pc_class_info).any(
+            ), f"There are NaNs in the pc0_pc_class_info"
+
+            assert ground_truth_flowed_pc0_to_pc1.shape == pc0_pc.shape, f"The input and ground truth pointclouds are not the same shape. {ground_truth_flowed_pc0_to_pc1.shape} != {pc0_pc.shape}"
 
             ground_truth_flow = ground_truth_flowed_pc0_to_pc1 - pc0_pc
 

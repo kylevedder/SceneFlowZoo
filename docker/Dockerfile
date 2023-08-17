@@ -28,7 +28,8 @@ RUN pip install pyarrow pyquaternion open3d
 RUN pip install tensorboard
 RUN pip install pytorch-lightning==1.9.4
 RUN pip install nntime
+RUN pip install imageio
 
-ENV PYTHONPATH=/project:${PYTHONPATH}
+ENV PYTHONPATH=/project:/:${PYTHONPATH}
 COPY bashrc /root/.bashrc
 WORKDIR /project

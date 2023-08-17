@@ -37,11 +37,20 @@ cfg = Config.fromfile(args.config)
 
 
 def make_test_dataloader(cfg):
-    # Setup val infra
-    test_sequence_loader = getattr(
-        dataloaders, cfg.test_loader.name)(**cfg.test_loader.args)
-    test_dataset = getattr(dataloaders, cfg.test_dataset.name)(
-        sequence_loader=test_sequence_loader, **cfg.test_dataset.args)
+    # There are two supported types of test dataloaders:
+    # 1. A dataloader that needs a dependency injected sequence loader
+    # 2. A dataloader that needs nothing
+
+    test_dataset_args = cfg.test_dataset.args
+
+    if hasattr(cfg, "test_loader"):
+        # Handle case 1
+        test_sequence_loader = getattr(
+            dataloaders, cfg.test_loader.name)(**cfg.test_loader.args)
+        test_dataset_args["sequence_loader"] = test_sequence_loader
+
+    test_dataset = getattr(dataloaders,
+                           cfg.test_dataset.name)(**test_dataset_args)
     test_dataloader = torch.utils.data.DataLoader(test_dataset,
                                                   **cfg.test_dataloader.args)
 
