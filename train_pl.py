@@ -111,10 +111,9 @@ def make_val_dataloader(cfg):
 
 
 def setup_model(cfg, checkpoint):
-    if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
+    if (hasattr(cfg, "is_trainable") and not cfg.is_trainable) or (checkpoint is None):
         model = ModelWrapper(cfg)
     else:
-        assert checkpoint is not None, "Must provide checkpoint for validation"
         assert checkpoint.exists(
         ), f"Checkpoint file {checkpoint} does not exist"
         model = ModelWrapper.load_from_checkpoint(checkpoint, cfg=cfg)
