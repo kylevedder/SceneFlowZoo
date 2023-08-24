@@ -186,22 +186,18 @@ class ModelWrapper(pl.LightningModule):
         # Save scene trajectory output #
         ################################
 
-        dataset_idxes = [e.dataset_idx for e in input_batch ]
-
         est_pc1_flows_valid_idxes = _to_numpy(
             output_batch['pc0_valid_point_idxes'])
         est_pc1_flows_valid_idxes = [
             from_fixed_array(idx) for idx in est_pc1_flows_valid_idxes
         ]
 
-        pc1_arrays = [e.source_pc.detach().cpu() for e in input_batch]
+        pc1_arrays = [_to_numpy(e.source_pc) for e in input_batch]
         pc_lookup_sizes = np.array([len(pc_array) for pc_array in pc1_arrays])
         pc1_arrays = [
             pc_array[idxes]
             for pc_array, idxes in zip(pc1_arrays, est_pc1_flows_valid_idxes)
         ]
-
-        query_timestamps = [e.query.query_timestamps for e in input_batch]
 
         est_flows = _to_numpy(output_batch['flow'])
         est_flows = [from_fixed_array(flow) for flow in est_flows]
@@ -213,9 +209,8 @@ class ModelWrapper(pl.LightningModule):
 
         prepare_data_after = time.time()
 
-        for dataset_idx, query_timestamps, pc_lookup_size, pc1, pc2, est_pc1_flows_valid_idx, input_elem in zip(
-                dataset_idxes,
-                query_timestamps,
+
+        for pc_lookup_size, pc1, pc2, est_pc1_flows_valid_idx, input_elem in zip(
                 pc_lookup_sizes,
                 pc1_arrays,
                 est_pc2_arrays,
@@ -226,18 +221,18 @@ class ModelWrapper(pl.LightningModule):
             stacked_points = np.stack([pc1, pc2], axis=1)
             lookup = EstimatedParticleTrajectories(pc_lookup_size, 2)
             lookup[est_pc1_flows_valid_idx] = (stacked_points,
-                                               query_timestamps,
+                                               [0, 1],
                                                np.zeros((len(pc2), 2),
                                                         dtype=bool))
 
-            self.evaluator.eval(lookup, input_elem.gt_result)
+            self.evaluator.eval(lookup, input_elem.gt_trajectories)
 
         loop_data_after = time.time()
 
-        print("Forward pass time:", end_time - start_time)
-        print("Prepare data time:", prepare_data_after - forward_pass_after)
-        print("Loop data time:", loop_data_after - prepare_data_after)
-        print("Total time: ", loop_data_after - start_time)
+        # print("Forward pass time:", end_time - start_time)
+        # print("Prepare data time:", prepare_data_after - forward_pass_after)
+        # print("Loop data time:", loop_data_after - prepare_data_after)
+        # print("Total time: ", loop_data_after - start_time)
 
     def _save_validation_data(self, save_dict):
         save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
@@ -319,18 +314,6 @@ class ModelWrapper(pl.LightningModule):
                 self.evaluator.eval(dataset_idx, lookup)
 
     def on_validation_epoch_end(self):
-        import time
-        before_gather = time.time()
-
-        # These are copies of the metric values on each rank.
-        per_class_bucketed_error_sum, per_class_bucketed_error_count, total_forward_time, total_forward_count = self.metric.gather(
-            self.all_gather)
-
-        after_gather = time.time()
-
-        print(
-            f"Rank {self.global_rank} gathers done in {after_gather - before_gather}."
-        )
 
         if self.global_rank != 0:
             return {}

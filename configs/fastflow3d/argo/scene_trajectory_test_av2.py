@@ -23,5 +23,3 @@ test_dataset = dict(name="SceneTrajectoryBenchmarkSceneFlowDataset",
                               root_dir=dataset_root))
 test_dataloader = dict(
     args=dict(batch_size=16, num_workers=8, shuffle=False, pin_memory=True))
-
-scene_trajectory_output_folder = "/efs/scene_trajectory_scratch/argoverse2/val/"

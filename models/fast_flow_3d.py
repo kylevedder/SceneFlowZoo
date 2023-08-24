@@ -260,12 +260,16 @@ class FastFlow3DDistillationLoss():
 
 class FastFlow3DSupervisedLoss():
 
-    def __init__(self, device: str = None, scale_background: bool = True, scale_speed : bool = False):
+    def __init__(self,
+                 device: str = None,
+                 scale_background: bool = True,
+                 scale_speed: bool = False):
         super().__init__()
         self._scale_background = scale_background
         self._scale_speed = scale_speed
 
-        assert not (self._scale_background and self._scale_speed), "Cannot scale both background and speed"
+        assert not (self._scale_background and self._scale_speed
+                    ), "Cannot scale both background and speed"
 
     def __call__(self, input_batch, model_res_dict):
         model_res = model_res_dict["forward"]
@@ -382,44 +386,11 @@ class FastFlow3D(nn.Module):
         }
 
     def forward(self,
-                batched_sequence: List[SceneTrajectoryBenchmarkSceneFlowItem],
-                compute_cycle=False,
-                compute_symmetry_x=False,
-                compute_symmetry_y=False):
+                batched_sequence: List[SceneTrajectoryBenchmarkSceneFlowItem]):
         pc0s = [e.source_pc for e in batched_sequence]
         pc1s = [e.target_pc for e in batched_sequence]
         model_res = self._model_forward(pc0s, pc1s)
 
         ret_dict = {"forward": model_res}
-
-        if compute_cycle:
-            # The warped pointcloud, original pointcloud should be the input to the model
-            pc0_warped_pc1_points_lst = model_res["pc0_warped_pc1_points_lst"]
-            pc0_points_lst = model_res["pc0_points_lst"]
-            # Some of the warped points may be outside the pseudoimage range, causing them to be clipped.
-            # When we compute this reverse flow, we need to solve for the original points that were warped to the clipped points.
-            backward_model_res = self._model_forward(pc0_warped_pc1_points_lst,
-                                                     pc0_points_lst)
-            # model_res["reverse_flow"] = backward_model_res["flow"]
-            # model_res[
-            #     "flow_valid_point_idxes_for_reverse_flow"] = backward_model_res[
-            #         "pc0_valid_point_idxes"]
-            ret_dict["backward"] = backward_model_res
-
-        if compute_symmetry_x:
-            pc0s_sym = pc0s.clone()
-            pc0s_sym[:, :, 0] *= -1
-            pc1s_sym = pc1s.clone()
-            pc1s_sym[:, :, 0] *= -1
-            model_res_sym = self._model_forward(pc0s_sym, pc1s_sym)
-            ret_dict["symmetry_x"] = model_res_sym
-
-        if compute_symmetry_y:
-            pc0s_sym = pc0s.clone()
-            pc0s_sym[:, :, 1] *= -1
-            pc1s_sym = pc1s.clone()
-            pc1s_sym[:, :, 1] *= -1
-            model_res_sym = self._model_forward(pc0s_sym, pc1s_sym)
-            ret_dict["symmetry_y"] = model_res_sym
 
         return ret_dict
