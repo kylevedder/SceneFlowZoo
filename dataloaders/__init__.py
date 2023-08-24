@@ -9,7 +9,7 @@ from .sequence_dataset import OriginMode, SubsequenceRawDataset, SubsequenceSupe
 from .var_len_sequence_dataset import VarLenSubsequenceRawDataset, VarLenSubsequenceSupervisedFlowDataset, VarLenSubsequenceSupervisedFlowSpecificSubsetDataset, VarLenSubsequenceUnsupervisedFlowDataset
 from .pointcloud_dataset import PointCloudDataset
 
-from .scene_trajectory_benchmark_scene_flow_dataset import SceneTrajectoryBenchmarkSceneFlowDataset
+from .scene_trajectory_benchmark_scene_flow_dataset import SceneTrajectoryBenchmarkSceneFlowDataset, SceneTrajectoryBenchmarkSceneFlowItem
 
 __all__ = [
     'ArgoverseRawSequenceLoader',

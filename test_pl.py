@@ -51,20 +51,25 @@ def make_test_dataloader(cfg):
 
     test_dataset = getattr(dataloaders,
                            cfg.test_dataset.name)(**test_dataset_args)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset,
-                                                  **cfg.test_dataloader.args)
 
-    return test_dataloader
+    test_dataloader = torch.utils.data.DataLoader(
+        test_dataset,
+        **cfg.test_dataloader.args,
+        collate_fn=test_dataset.collate_fn)
+
+    return test_dataloader, test_dataset.evaluator()
 
 
-def setup_model(cfg):
+def setup_model(cfg, evaluator):
     if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
         model = ModelWrapper(cfg)
     else:
         assert args.checkpoint is not None, "Must provide checkpoint for validation"
         assert args.checkpoint.exists(
         ), f"Checkpoint file {args.checkpoint} does not exist"
-        model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg)
+        model = ModelWrapper.load_from_checkpoint(args.checkpoint,
+                                                  cfg=cfg,
+                                                  evaluator=evaluator)
 
     if hasattr(cfg, "compile_pytorch2") and cfg.compile_pytorch2:
         print("PyTorch 2 compile()ing model!")
@@ -74,11 +79,11 @@ def setup_model(cfg):
 
 pl.seed_everything(42069)
 
-test_dataloader = make_test_dataloader(cfg)
+test_dataloader, evaluator = make_test_dataloader(cfg)
 
 print("Val dataloader length:", len(test_dataloader))
 
-model = setup_model(cfg)
+model = setup_model(cfg, evaluator)
 trainer = pl.Trainer(devices=args.gpus,
                      accelerator="gpu",
                      strategy=DDPStrategy(find_unused_parameters=False),

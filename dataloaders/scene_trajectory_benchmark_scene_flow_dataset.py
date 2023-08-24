@@ -1,4 +1,4 @@
-from scene_trajectory_benchmark.datastructures import PointCloudFrame, RGBFrame, RawSceneSequence, QuerySceneSequence, ResultsSceneSequence
+from scene_trajectory_benchmark.datastructures import PointCloudFrame, RGBFrame, RawSceneSequence, QuerySceneSequence, ResultsSceneSequence, SE3
 from scene_trajectory_benchmark.datasets import *
 from pathlib import Path
 import torch
@@ -6,9 +6,38 @@ from typing import Tuple, Dict, List, Any
 from pointclouds import to_fixed_array
 import numpy as np
 import time
+from dataclasses import dataclass
+
+@dataclass
+class SceneTrajectoryBenchmarkSceneFlowItem():
+    dataset_idx : int
+    source_pc : torch.FloatTensor
+    target_pc : torch.FloatTensor
+    source_pose : SE3
+    target_pose : SE3
+    full_percept_pcs : List[torch.FloatTensor]
+    full_percept_poses : List[SE3]
+    query : QuerySceneSequence
+    gt_flowed_source_pc : torch.FloatTensor
+    gt_pc_class_mask : torch.LongTensor
+    gt_result : ResultsSceneSequence
+
+    def to(self, device):
+        self.source_pc = self.source_pc.to(device)
+        self.target_pc = self.target_pc.to(device)
+        self.full_percept_pcs = [pc.to(device) for pc in self.full_percept_pcs]
+        self.gt_flowed_source_pc = self.gt_flowed_source_pc.to(device)
+        self.gt_pc_class_mask = self.gt_pc_class_mask.to(device)
+        return self
+
 
 
 class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
+
+    def __init__(self,
+                 dataset_name: str,
+                 root_dir: Path):
+        self.dataset = self._construct_dataset(dataset_name, dict(root_dir=root_dir))
 
     def _construct_dataset(self, dataset_name: str, arguments : dict):
         dataset_name = dataset_name.lower()
@@ -17,19 +46,16 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
                 return Argoverse2SceneFlow(**arguments)
             
         raise ValueError(f"Unknown dataset name {dataset_name}")
-            
-        
-
-    def __init__(self,
-                 dataset_name: str,
-                 root_dir: Path,
-                 max_pc_points: int = 120000):
-        self.dataset = self._construct_dataset(dataset_name, dict(root_dir=root_dir))
-        self.max_pc_points = max_pc_points
 
     def __len__(self):
         return len(self.dataset)
-
+    
+    def evaluator(self):
+        return self.dataset.evaluator()
+    
+    def collate_fn(self, batch : List[SceneTrajectoryBenchmarkSceneFlowItem]):
+        return batch
+        
     def _process_query(self, query: QuerySceneSequence):
         assert len(
             query.query_timestamps
@@ -38,97 +64,62 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
 
         # These contain the full problem percepts, not just the ones in the query.
         full_percept_pc_arrays: List[np.ndarray] = []
-        full_percept_poses: List[np.ndarray] = []
+        full_percept_poses: List[SE3] = []
         # These contain only the percepts in the query.0
-        pc_arrays: List[np.ndarray] = []
-        poses: List[np.ndarray] = []
+        problem_pc_arrays: List[np.ndarray] = []
+        problem_poses: List[SE3] = []
 
         for timestamp in scene.get_percept_timesteps():
-            pc_frame, rgb_frame = scene[timestamp]
-            pc_array = to_fixed_array(pc_frame.global_pc.points,
-                                      self.max_pc_points)
-            pose_array = pc_frame.global_pose.to_array()
+            pc_frame = scene[timestamp].pc_frame
+            pc_array = pc_frame.global_pc.points.astype(np.float32)
+            pose = pc_frame.global_pose
 
             full_percept_pc_arrays.append(pc_array)
-            full_percept_poses.append(pose_array)
+            full_percept_poses.append(pose)
 
             if timestamp in query.query_timestamps:
-                pc_arrays.append(pc_array)
-                poses.append(pose_array)
+                problem_pc_arrays.append(pc_array)
+                problem_poses.append(pose)
 
         assert len(full_percept_pc_arrays) == len(
             full_percept_poses
         ), f"Percept arrays and poses have different lengths."
-        assert len(pc_arrays) == len(
-            poses), f"Percept arrays and poses have different lengths."
-        assert len(pc_arrays) == len(
+        assert len(problem_pc_arrays) == len(
+            problem_poses), f"Percept arrays and poses have different lengths."
+        assert len(problem_pc_arrays) == len(
             query.query_timestamps
         ), f"Percept arrays and poses have different lengths."
 
-        full_percept_pc_array_stack = np.stack(full_percept_pc_arrays, axis=0).astype(np.float32)
-        full_percept_pose_array_stack = np.stack(full_percept_poses, axis=0).astype(np.float32)
+        return problem_pc_arrays, problem_poses, full_percept_pc_arrays, full_percept_poses
 
-        pc_array_stack = np.stack(pc_arrays, axis=0).astype(np.float32)
-        pose_array_stack = np.stack(poses, axis=0).astype(np.float32)
-        return pc_array_stack, pose_array_stack, full_percept_pc_array_stack, full_percept_pose_array_stack
+    def _process_result(self, result: ResultsSceneSequence):
+        flowed_source_pc = result.particle_trajectories.world_points[:, 1].astype(np.float32)
+        point_cls_array = result.particle_trajectories.cls_ids
+        return flowed_source_pc, point_cls_array
 
-    def _process_result(self, query: QuerySceneSequence,
-                        result: ResultsSceneSequence):
-        # Result contains trajectory information dictionary.
-        # It's keyed by the index into the pointcloud, so we
-        # can technically cheat and use that to index into the
-        # pointcloud to update its flows.
-
-        assert len(query.query_timestamps) == 2, f"Query {query} has more than two timestamps (has {len(query.query_timestamps)}). Only Scene Flow problems are supported."
-
-        source_timestap = query.query_timestamps[0]
-        
-
-        source_global_pc = query.scene_sequence[source_timestap][0].global_pc
-
-        # assert np.allclose(source_global_pc, result.particle_trajectories.world_points[:, 0]), f"Source pointcloud in query {source_global_pc.shape} does not match source pointcloud in result {result.particle_trajectories.world_points[:, 0].shape}"
-
-        flowed_source_pc = result.particle_trajectories.world_points[:, 0]
-
-        # Build array, initialized to nan, for point classes using the length of the global PC
-        point_cls_array = result.particle_trajectories.cls_ids.astype(np.float32)
-
-        flowed_pc_array = to_fixed_array(flowed_source_pc.astype(np.float32),
-                                            self.max_pc_points)
-        flowed_pc_array_stack = np.stack([flowed_pc_array, flowed_pc_array], axis=0)
-        point_cls_array = to_fixed_array(point_cls_array, self.max_pc_points)
-        point_cls_array_stack = np.stack([point_cls_array, point_cls_array], axis=0)
-
-        return flowed_pc_array_stack, point_cls_array_stack
-
-    def __getitem__(self, idx, verbose : bool=False):
-
-        if verbose:
-            print(f"SceneTrajectoryBenchmarkSceneFlowDataset.__getitem__({idx}) start")
+    def __getitem__(self, idx):
         dataset_entry: Tuple[QuerySceneSequence,
                              ResultsSceneSequence] = self.dataset[idx]
         query, gt_result = dataset_entry
 
-        process_query_start = time.time()
-        pc_array_stack, pose_array_stack, full_percept_pc_array_stack, full_percept_pose_array_stack = self._process_query(
+        (source_pc, target_pc), (source_pose, target_pose), full_pc_points_list, full_pc_poses_list = self._process_query(
             query)
 
-        process_query_end = time.time()
-        flowed_pc_array_stack, point_cls_array = self._process_result(query, gt_result)
-        process_result_end = time.time()
+        gt_flowed_source_pc, gt_point_classes = self._process_result(gt_result)
 
-        assert pc_array_stack.shape == flowed_pc_array_stack.shape, f"Pointcloud stacks have different shapes. {pc_array_stack.shape} != {flowed_pc_array_stack.shape}"
-        if verbose:
-            print(f"SceneTrajectoryBenchmarkSceneFlowDataset.__getitem__({idx}) process_query took {process_query_end - process_query_start} seconds")
-            print(f"SceneTrajectoryBenchmarkSceneFlowDataset.__getitem__({idx}) process_result took {process_result_end - process_query_end} seconds")
-        
-            print(f"SceneTrajectoryBenchmarkSceneFlowDataset.__getitem__({idx}) end")
+        item = SceneTrajectoryBenchmarkSceneFlowItem(
+            dataset_idx=idx,
+            source_pc=torch.from_numpy(source_pc),
+            target_pc=torch.from_numpy(target_pc),
+            source_pose=source_pose,
+            target_pose=target_pose,
+            full_percept_pcs=[torch.from_numpy(pc) for pc in full_pc_points_list],
+            full_percept_poses=full_pc_poses_list,
+            query=query,
+            gt_flowed_source_pc=torch.from_numpy(gt_flowed_source_pc),
+            gt_pc_class_mask=torch.from_numpy(gt_point_classes),
+            gt_result=gt_result
+                    )
 
-        return {
-            "pc_array_stack": pc_array_stack,
-            "pose_array_stack": pose_array_stack,
-            "full_percept_pc_array_stack": full_percept_pc_array_stack,
-            "full_percept_pose_array_stack": full_percept_pose_array_stack,
-            "flowed_pc_array_stack": flowed_pc_array_stack,
-            "pc_class_mask_stack": point_cls_array
-        }
+        return item
+

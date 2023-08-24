@@ -55,7 +55,7 @@ class DynamicVoxelizer(nn.Module):
 
     def forward(
             self,
-            points: torch.Tensor) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+            points: List[torch.Tensor]) -> List[Tuple[torch.Tensor, torch.Tensor]]:
 
         batch_results = []
         for batch_idx in range(len(points)):

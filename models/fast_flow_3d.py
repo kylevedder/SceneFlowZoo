@@ -7,8 +7,8 @@ from models.backbones import FastFlowUNet, FastFlowUNetXL
 from models.heads import FastFlowDecoder, FastFlowDecoderStepDown
 from pointclouds import from_fixed_array
 from pointclouds.losses import warped_pc_loss
-
-from typing import Dict, Any, Optional
+from dataloaders import SceneTrajectoryBenchmarkSceneFlowItem
+from typing import Dict, Any, Optional, List
 from collections import defaultdict
 import time
 
@@ -382,13 +382,12 @@ class FastFlow3D(nn.Module):
         }
 
     def forward(self,
-                batched_sequence: Dict[str, torch.Tensor],
+                batched_sequence: List[SceneTrajectoryBenchmarkSceneFlowItem],
                 compute_cycle=False,
                 compute_symmetry_x=False,
                 compute_symmetry_y=False):
-        pc_arrays = batched_sequence['pc_array_stack']
-        pc0s = pc_arrays[:, 0]
-        pc1s = pc_arrays[:, 1]
+        pc0s = [e.source_pc for e in batched_sequence]
+        pc1s = [e.target_pc for e in batched_sequence]
         model_res = self._model_forward(pc0s, pc1s)
 
         ret_dict = {"forward": model_res}
