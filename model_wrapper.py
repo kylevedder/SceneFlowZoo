@@ -219,7 +219,7 @@ class ModelWrapper(pl.LightningModule):
         ):
             # stack pc1 and pc2 together into an N x 2 x 3 array
             stacked_points = np.stack([pc1, pc2], axis=1)
-            lookup = EstimatedParticleTrajectories(pc_lookup_size, 2)
+            lookup = EstimatedParticleTrajectories(pc_lookup_size, input_elem.gt_trajectories.trajectory_timestamps)
             lookup[est_pc1_flows_valid_idx] = (stacked_points,
                                                [0, 1],
                                                np.zeros((len(pc2), 2),

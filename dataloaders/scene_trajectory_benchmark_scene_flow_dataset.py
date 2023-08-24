@@ -74,7 +74,7 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
         
     def _process_query(self, query: QuerySceneSequence):
         assert len(
-            query.query_timestamps
+            query.query_trajectory_timestamps
         ) == 2, f"Query {query} has more than two timestamps. Only Scene Flow problems are supported."
         scene = query.scene_sequence
 
@@ -93,7 +93,7 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
             full_percept_pc_arrays.append(pc_array)
             full_percept_poses.append(pose)
 
-            if timestamp in query.query_timestamps:
+            if timestamp in query.query_trajectory_timestamps:
                 problem_pc_arrays.append(pc_array)
                 problem_poses.append(pose)
 
@@ -103,7 +103,7 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
         assert len(problem_pc_arrays) == len(
             problem_poses), f"Percept arrays and poses have different lengths."
         assert len(problem_pc_arrays) == len(
-            query.query_timestamps
+            query.query_trajectory_timestamps
         ), f"Percept arrays and poses have different lengths."
 
         return problem_pc_arrays, problem_poses, full_percept_pc_arrays, full_percept_poses
