@@ -1,4 +1,4 @@
-from scene_trajectory_benchmark.datastructures import PointCloudFrame, RGBFrame, RawSceneSequence, QuerySceneSequence, SE3, GroundTruthParticleTrajectories
+from scene_trajectory_benchmark.datastructures import PointCloudFrame, RGBFrame, RawSceneSequence, QuerySceneSequence, SE3, GroundTruthParticleTrajectories, Timestamp
 from scene_trajectory_benchmark.datasets import *
 from pathlib import Path
 import torch
@@ -11,6 +11,7 @@ from dataclasses import dataclass
 @dataclass
 class SceneTrajectoryBenchmarkSceneFlowItem():
     dataset_idx : int
+    query_timestamp : Timestamp
     pc_array_stack : torch.FloatTensor
     pose_array_stack : torch.FloatTensor
     full_percept_pcs_array_stack : torch.FloatTensor
@@ -51,8 +52,8 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
     def __init__(self,
                  dataset_name: str,
                  root_dir: Path, 
-                 max_pc_points: int = 120000):
-        self.dataset = self._construct_dataset(dataset_name, dict(root_dir=root_dir))
+                 max_pc_points: int = 120000, **kwargs):
+        self.dataset = self._construct_dataset(dataset_name, dict(root_dir=root_dir, **kwargs))
         self.max_pc_points = max_pc_points
 
     def _construct_dataset(self, dataset_name: str, arguments : dict):
@@ -131,6 +132,7 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
 
         item = SceneTrajectoryBenchmarkSceneFlowItem(
             dataset_idx=idx,
+            query_timestamp=query.query_particles.query_init_timestamp,
             pc_array_stack=torch.from_numpy(pc_array_stack),
             pose_array_stack=torch.from_numpy(pose_array_stack),
             full_percept_pcs_array_stack=torch.from_numpy(full_percept_pcs_array_stack),

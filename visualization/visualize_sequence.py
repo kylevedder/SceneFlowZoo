@@ -8,7 +8,7 @@ import tqdm
 
 sequence_loader = ArgoverseRawSequenceLoader('/efs/argoverse2/val/')
 
-sequence_idx = 2
+sequence_idx = 0
 sequence_id = sequence_loader.get_sequence_ids()[sequence_idx]
 sequence = sequence_loader.load_sequence(sequence_id)
 
@@ -32,7 +32,7 @@ def sequence_idx_to_color(idx):
     return [1 - idx / sequence_length, idx / sequence_length, 0]
 
 
-frame_lst = sequence.load_frame_list(0)[45:47]
+frame_lst = sequence.load_frame_list(0)[110:120]
 
 print("Frames: ", len(frame_lst))
 for idx, entry_dict in enumerate(frame_lst):

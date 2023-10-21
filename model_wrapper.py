@@ -174,9 +174,9 @@ class ModelWrapper(pl.LightningModule):
         output_batch = model_res["forward"]
         forward_pass_after = time.time()
 
-        if self.global_rank != 0:
-            raise ValueError(
-                "Validation step should only be run on the master node.")
+        # if self.global_rank != 0:
+        #     raise ValueError(
+        #         "Validation step should only be run on the master node.")
 
         if not self.has_labels:
             return
@@ -225,7 +225,7 @@ class ModelWrapper(pl.LightningModule):
                                                np.zeros((len(pc2), 2),
                                                         dtype=bool))
 
-            self.evaluator.eval(lookup, input_elem.gt_trajectories)
+            self.evaluator.eval(lookup, input_elem.gt_trajectories, input_elem.query_timestamp)
 
         loop_data_after = time.time()
 
@@ -315,7 +315,18 @@ class ModelWrapper(pl.LightningModule):
 
     def on_validation_epoch_end(self):
 
+        gathered_evaluator_list = [None for _ in range(torch.distributed.get_world_size())]
+        # Get the output from each process
+        torch.distributed.all_gather_object(gathered_evaluator_list, self.evaluator)
+
         if self.global_rank != 0:
             return {}
-
-        return {}
+        
+        # Check that the output from each process is not None
+        for idx, output in enumerate(gathered_evaluator_list):
+            assert output is not None, f"Output is None for idx {idx}"
+        
+        # Merge the outputs from each process into a single object
+        gathered_evaluator = self.evaluator.from_evaluator_list(gathered_evaluator_list)
+        print("Gathered evaluator of length: ", len(gathered_evaluator))
+        return gathered_evaluator.compute_results()
