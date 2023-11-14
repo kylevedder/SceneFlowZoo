@@ -20,6 +20,9 @@ loss_fn = dict(name="FastFlow3DSupervisedLoss", args=dict())
 
 test_dataset = dict(name="SceneTrajectoryBenchmarkSceneFlowDataset",
                     args=dict(dataset_name="Argoverse2SceneFlow",
-                              root_dir=dataset_root, with_ground=False))
+                              root_dir=dataset_root,
+                              with_ground=False,
+                              eval_type="scaled_epe",
+                              eval_args=dict(scaling_type="constant")))
 test_dataloader = dict(
     args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))
