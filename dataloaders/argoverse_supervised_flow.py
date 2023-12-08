@@ -7,7 +7,8 @@ import numpy as np
 
 from . import ArgoverseRawSequence
 
-CATEGORY_MAP = {
+CATEGORY_ID_TO_NAME = {
+    -1: 'BACKGROUND',
     0: 'ANIMAL',
     1: 'ARTICULATED_BUS',
     2: 'BICYCLE',
@@ -118,6 +119,20 @@ class ArgoverseSupervisedFlowSequence(ArgoverseRawSequence):
             "log_idx": idx,
         }
 
+    @staticmethod
+    def category_ids() -> List[int]:
+        return ArgoverseSupervisedFlowSequenceLoader.category_ids()
+
+    @staticmethod
+    def category_id_to_name(category_id: int) -> str:
+        return ArgoverseSupervisedFlowSequenceLoader.category_id_to_name(
+            category_id)
+
+    @staticmethod
+    def category_name_to_id(category_name: str) -> int:
+        return ArgoverseSupervisedFlowSequenceLoader.category_name_to_id(
+            category_name)
+
 
 class ArgoverseSupervisedFlowSequenceLoader():
 
@@ -179,3 +194,15 @@ class ArgoverseSupervisedFlowSequenceLoader():
             self.last_loaded_sequence = self._load_sequence_raw(sequence_id)
             self.last_loaded_sequence_id = sequence_id
         return self.last_loaded_sequence
+
+    @staticmethod
+    def category_ids() -> List[int]:
+        return list(CATEGORY_ID_TO_NAME.keys())
+
+    @staticmethod
+    def category_id_to_name(category_id: int) -> str:
+        return CATEGORY_ID_TO_NAME[category_id]
+
+    @staticmethod
+    def category_name_to_id(category_name: str) -> int:
+        return {v: k for k, v in CATEGORY_ID_TO_NAME.items()}[category_name]
