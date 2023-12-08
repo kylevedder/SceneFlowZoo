@@ -1,5 +1,5 @@
-from scene_trajectory_benchmark.datastructures import PointCloudFrame, RGBFrame, RawSceneSequence, QuerySceneSequence, SE3, GroundTruthParticleTrajectories, Timestamp
-from scene_trajectory_benchmark.datasets import *
+from bucketed_scene_flow_eval.datastructures import PointCloudFrame, RGBFrame, RawSceneSequence, QuerySceneSequence, SE3, GroundTruthParticleTrajectories, Timestamp
+from bucketed_scene_flow_eval.datasets import *
 from pathlib import Path
 import torch
 from typing import Tuple, Dict, List, Any
@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 
 @dataclass
-class SceneTrajectoryBenchmarkSceneFlowItem():
+class BucketedSceneFlowItem():
     dataset_idx : int
     query_timestamp : Timestamp
     pc_array_stack : torch.FloatTensor
@@ -47,7 +47,7 @@ class SceneTrajectoryBenchmarkSceneFlowItem():
 
 
 
-class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
+class BucketedSceneFlowDataset(torch.utils.data.Dataset):
 
     def __init__(self,
                  dataset_name: str,
@@ -58,9 +58,8 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
 
     def _construct_dataset(self, dataset_name: str, arguments : dict):
         dataset_name = dataset_name.lower()
-        match dataset_name:
-            case "argoverse2sceneflow":
-                return Argoverse2SceneFlow(**arguments)
+        if dataset_name == "argoverse2sceneflow":
+            return Argoverse2SceneFlow(**arguments)
             
         raise ValueError(f"Unknown dataset name {dataset_name}")
 
@@ -70,7 +69,7 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
     def evaluator(self):
         return self.dataset.evaluator()
     
-    def collate_fn(self, batch : List[SceneTrajectoryBenchmarkSceneFlowItem]):
+    def collate_fn(self, batch : List[BucketedSceneFlowItem]):
         return batch
         
     def _process_query(self, query: QuerySceneSequence):
@@ -130,7 +129,7 @@ class SceneTrajectoryBenchmarkSceneFlowDataset(torch.utils.data.Dataset):
         full_percept_pcs_array_stack = np.stack([to_fixed_array(pc, self.max_pc_points) for pc in full_pc_points_list], axis=1)
         full_percept_pose_array_stack = np.stack([pose.to_array() for pose in full_pc_poses_list], axis=1)
 
-        item = SceneTrajectoryBenchmarkSceneFlowItem(
+        item = BucketedSceneFlowItem(
             dataset_idx=idx,
             query_timestamp=query.query_particles.query_init_timestamp,
             pc_array_stack=torch.from_numpy(pc_array_stack),

@@ -14,8 +14,8 @@ import nntime
 import time
 import multiprocessing as mp
 from functools import partial
-from scene_trajectory_benchmark.datastructures import *
-from dataloaders import SceneTrajectoryBenchmarkSceneFlowItem
+from bucketed_scene_flow_eval.datastructures import *
+from dataloaders import BucketedSceneFlowItem
 import tqdm
 
 
@@ -163,7 +163,7 @@ class ModelWrapper(pl.LightningModule):
 
     
     def validation_step(
-            self, input_batch: List[SceneTrajectoryBenchmarkSceneFlowItem],
+            self, input_batch: List[BucketedSceneFlowItem],
             batch_idx):
         forward_pass_before = time.time()
         nntime.timer_start(self, "validation_forward")

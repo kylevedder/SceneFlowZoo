@@ -18,7 +18,7 @@ model = dict(name="FastFlow3D",
 
 loss_fn = dict(name="FastFlow3DSupervisedLoss", args=dict())
 
-test_dataset = dict(name="SceneTrajectoryBenchmarkSceneFlowDataset",
+test_dataset = dict(name="BucketedSceneFlowDataset",
                     args=dict(dataset_name="Argoverse2SceneFlow",
                               root_dir=dataset_root,
                               with_ground=False,

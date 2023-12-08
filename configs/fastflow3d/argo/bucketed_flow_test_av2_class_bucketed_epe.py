@@ -1,4 +1,4 @@
-_base_ = "./scene_trajectory_test_av2_class_scaled.py"
+_base_ = "./bucketed_flow_test_av2_class_scaled.py"
 
 BACKGROUND_CATEGORIES = ['-1BACKGROUND']
 

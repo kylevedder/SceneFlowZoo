@@ -7,7 +7,7 @@ from models.backbones import FastFlowUNet, FastFlowUNetXL
 from models.heads import FastFlowDecoder, FastFlowDecoderStepDown
 from pointclouds import from_fixed_array
 from pointclouds.losses import warped_pc_loss
-from dataloaders import SceneTrajectoryBenchmarkSceneFlowItem
+from dataloaders import BucketedSceneFlowItem
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
 import time
@@ -386,7 +386,7 @@ class FastFlow3D(nn.Module):
         }
 
     def forward(self,
-                batched_sequence: List[SceneTrajectoryBenchmarkSceneFlowItem]):
+                batched_sequence: List[BucketedSceneFlowItem]):
         pc0s = [e.source_pc for e in batched_sequence]
         pc1s = [e.target_pc for e in batched_sequence]
         model_res = self._model_forward(pc0s, pc1s)

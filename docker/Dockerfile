@@ -29,6 +29,7 @@ RUN pip install tensorboard
 RUN pip install pytorch-lightning==1.9.4
 RUN pip install nntime
 RUN pip install imageio
+RUN pip install bucketed-scene-flow-eval==0.0.3
 
 ENV PYTHONPATH=/project:/:${PYTHONPATH}
 COPY bashrc /root/.bashrc
