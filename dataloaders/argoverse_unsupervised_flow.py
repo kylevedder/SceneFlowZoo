@@ -54,9 +54,16 @@ class ArgoverseUnsupervisedFlowSequence(ArgoverseRawSequence):
         relative_global_frame_pc_with_ground = raw_pc.transform(relative_pose)
         relative_global_frame_pc = relative_global_frame_pc_with_ground.mask_points(
             ~is_ground_points)
+        if flow_0_1 is not None:
+            relative_global_frame_flowed_pc = relative_global_frame_pc.copy()
+            relative_global_frame_flowed_pc.points[valid_idxes] += flow_0_1.reshape(-1, 3)      
+        else:
+            relative_global_frame_flowed_pc = relative_global_frame_pc.copy()
+
         return {
             "relative_pc": relative_global_frame_pc,
             "relative_pc_with_ground": relative_global_frame_pc_with_ground,
+            "relative_flowed_pc": relative_global_frame_flowed_pc,
             "is_ground_points": is_ground_points,
             "relative_pose": relative_pose,
             "flow": flow_0_1,

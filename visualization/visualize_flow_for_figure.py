@@ -8,27 +8,59 @@ import tqdm
 from pathlib import Path
 from loader_utils import load_pickle, save_pickle
 import time
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--dataset',
+                    type=str,
+                    default='waymo',
+                    help='waymo or argo',
+                    choices=['waymo', 'argo'])
+parser.add_argument('--sequence', type=str, default=None, help='waymo or argo')
+args = parser.parse_args()
 
 # sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
 # sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
 #     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
-supervised_sequence_loader = WaymoSupervisedFlowSequenceLoader(
-    '/efs/waymo_open_processed_flow/validation/')
-our_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
-    '/efs/waymo_open_processed_flow/validation/',
-    '/bigdata/waymo_open_processed_flow/val_distillation_out/')
-sup_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
-    '/efs/waymo_open_processed_flow/validation/',
-    '/bigdata/waymo_open_processed_flow/val_supervised_out/')
 
 # supervised_sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
 #     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
 # unsupervised_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
 #     '/efs/argoverse2/val/', '/efs/argoverse2/val_distilation_flow/')
 
-camera_params_path = Path() / 'camera_params.pkl'
+if args.dataset == "waymo":
+    supervised_sequence_loader = WaymoSupervisedFlowSequenceLoader(
+        '/efs/waymo_open_processed_flow/validation/')
+    our_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
+        '/efs/waymo_open_processed_flow/validation/',
+        '/bigdata/waymo_open_processed_flow/val_distillation_out/')
+    sup_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
+        '/efs/waymo_open_processed_flow/validation/',
+        '/bigdata/waymo_open_processed_flow/val_supervised_out/')
+elif args.dataset == "argo":
+    supervised_sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
+        '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
+    our_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
+        '/efs/argoverse2/val/', '/efs/argoverse2/val_distilation_out/')
+    sup_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
+        '/efs/argoverse2/val/', '/efs/argoverse2/val_supervised_out/')
+else:
+    raise ValueError(f'Unknown dataset {args.dataset}')
+
 screenshot_path = Path() / 'screenshots'
 screenshot_path.mkdir(exist_ok=True)
+
+sequence_idx = 0
+
+if args.sequence is not None:
+    sequence_idx = supervised_sequence_loader.get_sequence_ids().index(
+        args.sequence)
+
+draw_flow_lines_color = None
+
+flow_type = 'gt'
+
+starter_idx = 122
 
 
 def load_sequence(sequence_idx: int):
@@ -59,28 +91,9 @@ def load_sequence(sequence_idx: int):
 vis = o3d.visualization.VisualizerWithKeyCallback()
 vis.create_window()
 vis.get_render_option().point_size = 2
-vis.get_render_option().background_color = (0, 0, 0) #(1, 1, 1)
+vis.get_render_option().background_color = (1, 1, 1)
 vis.get_render_option().show_coordinate_frame = False
 # Set camera parameters
-
-
-def save_camera_params(camera_params: o3d.camera.PinholeCameraParameters):
-    param_dict = {}
-    param_dict['intrinsics'] = camera_params.intrinsic.intrinsic_matrix
-    param_dict['extrinsics'] = camera_params.extrinsic
-    save_pickle(camera_params_path, param_dict)
-
-
-ctr = vis.get_view_control()
-
-sequence_idx = 1
-# sequence_idx = 7
-
-draw_flow_lines_color = None
-
-flow_type = 'gt'
-
-starter_idx = 122
 
 supervised_frame_list, our_frame_list, sup_frame_list = load_sequence(
     sequence_idx)

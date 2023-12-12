@@ -6,7 +6,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import torch  # This is required to not have the parallel hang for some reason
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseSupervisedFlowSequenceLoader, ArgoverseSupervisedFlowSequence
+from dataloaders import ArgoverseSupervisedFlowSequenceLoader, ArgoverseSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
@@ -16,18 +16,20 @@ from loader_utils import save_pickle, save_json
 import matplotlib.pyplot as plt
 # Import color map for plotting
 from matplotlib import cm
-from typing import Tuple, List, Callable, Dict
+import matplotlib
+from typing import Tuple, List, Callable, Dict, Optional, Iterable, Iterator
 from pathlib import Path
 from PIL import Image, ImageDraw
 import argparse
-# Import dataclass
-from dataclasses import dataclass
+import subprocess
+import cv2
+import hashlib
 
 # Take the save_dir as an argument
 parser = argparse.ArgumentParser()
 parser.add_argument('--save_dir',
                     type=Path,
-                    default=Path("dataset_count_compute_save_dir/"))
+                    default=Path("/efs/argoverse2/val_dataset_stats/"))
 parser.add_argument('--dataset_dir',
                     type=Path,
                     default=Path("/efs/argoverse2/val/"))
@@ -37,11 +39,20 @@ parser.add_argument('--flow_dir',
 parser.add_argument('--num_workers',
                     type=int,
                     default=multiprocessing.cpu_count())
+parser.add_argument('--dataset',
+                    type=str,
+                    default="argo",
+                    choices=["argo", "waymo"])
+parser.add_argument('--range_limit',
+                    type=float,
+                    default=None,
+                    help="The range limit for the pointclouds in meters")
 args = parser.parse_args()
 
 save_dir = args.save_dir
 dataset_dir = args.dataset_dir
 flow_dir = args.flow_dir
+range_limit = args.range_limit
 
 # Make the save directory if it does not exist
 save_dir.mkdir(parents=True, exist_ok=True)
@@ -49,6 +60,9 @@ save_dir.mkdir(parents=True, exist_ok=True)
 assert dataset_dir.exists(), f"dataset_dir {dataset_dir} does not exist"
 # Assert that flow dir exists
 assert flow_dir.exists(), f"flow_dir {flow_dir} does not exist"
+
+if range_limit is not None:
+    assert range_limit > 0, f"range_limit must be > 0, but got {range_limit}"
 
 speed_bucket_ticks = [
     0, 0.1, 0.5, 1, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.5, 10.0, 12.5, 15.0, 20.0,
@@ -58,9 +72,22 @@ speed_bucket_ticks = [
 
 class RenderedCanvas():
 
-    def __init__(self, global_pc: np.ndarray, colors: np.ndarray,
-                 pose_list: List[SE3], grid_cell_size: Tuple[float, float],
-                 margin: float):
+    @staticmethod
+    def extents_from_pc(pc: np.ndarray,
+                        margin: float) -> Tuple[float, float, float, float]:
+        assert pc.ndim == 2, f"pc must be (N, 3) shape, but got {pc.shape}"
+        assert pc.shape[1] == 3, f"pc must be (N, 3) shape, but got {pc.shape}"
+        min_x, min_y = np.min(pc[:, :2], axis=0) - margin
+        max_x, max_y = np.max(pc[:, :2], axis=0) + margin
+        return min_x, max_x, min_y, max_y
+
+    def __init__(self,
+                 global_pc: np.ndarray,
+                 colors: np.ndarray,
+                 pose_list: List[SE3],
+                 grid_cell_size: Tuple[float, float],
+                 margin: float,
+                 extents: Optional[Tuple[float, float, float, float]] = None):
         assert global_pc.ndim == 2, f"global_pc must be (N, 3) shape, but got {global_pc.shape}"
         assert global_pc.shape[
             1] == 3, f"global_pc must be (N, 3) shape, but got {global_pc.shape}"
@@ -76,9 +103,12 @@ class RenderedCanvas():
         assert np.all(colors <= 1), f"colors must be between 0 and 1 inclusive"
 
         self.grid_cell_size = grid_cell_size
-        global_pc_xy = global_pc[:, :2]
-        self.min_x, self.min_y = np.min(global_pc_xy, axis=0) - margin
-        self.max_x, self.max_y = np.max(global_pc_xy, axis=0) + margin
+
+        if extents is None:
+            self.min_x, self.max_x, self.min_y, self.max_y = self.extents_from_pc(
+                global_pc, margin)
+        else:
+            self.min_x, self.max_x, self.min_y, self.max_y = extents
 
         canvas_size = (
             int((self.max_x - self.min_x) / self.grid_cell_size[0]),
@@ -145,7 +175,13 @@ class RenderedCanvas():
         points_canvas_coords = points_canvas_coords.astype(np.int32)
         return points_canvas_coords
 
-    def save(self, path: Path):
+    def to_image(self) -> np.ndarray:
+        return (self.canvas * 255).astype(np.uint8)
+
+    def to_open_cv_image(self) -> np.ndarray:
+        return cv2.cvtColor(self.to_image(), cv2.COLOR_RGB2BGR)
+
+    def save(self, path: Path, verbose=True):
         path = Path(path)
         # Make the parent directory if it does not exist
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,8 +189,9 @@ class RenderedCanvas():
         if path.exists():
             path.unlink()
         # Save the canvas as a PNG
-        Image.fromarray((self.canvas * 255).astype(np.uint8)).save(path)
-        print(f"Saved {path} of shape {self.canvas.shape}")
+        Image.fromarray(self.to_image()).save(path)
+        if verbose:
+            print(f"Saved {path} of shape {self.canvas.shape}")
 
 
 class BEVRenderer():
@@ -180,6 +217,29 @@ class BEVRenderer():
         self.pc_list.append(pc.points)
         self.pose_list.append(ego_pose)
         self.category_id_list.append(category_ids)
+
+    def render_video_frames(self) -> Iterator[RenderedCanvas]:
+        global_pc = np.concatenate(self.pc_list, axis=0)
+        extents = RenderedCanvas.extents_from_pc(global_pc, self.margin)
+        for frame_pc, frame_category_ids, pose in zip(self.pc_list,
+                                                      self.category_id_list,
+                                                      self.pose_list):
+            frame_colors = self._category_ids_to_rgbs(frame_category_ids)
+
+            # Sort the global pc by z so that the points with larger Z are at the end of the array.
+            # This ensure that the points with larger Z are drawn on top of the points with smaller Z.
+            # We do arg sort because we want to sort the colors as well
+            sorted_order = np.argsort(frame_pc[:, 2])
+            frame_pc = frame_pc[sorted_order]
+            frame_colors = frame_colors[sorted_order]
+
+            canvas = RenderedCanvas(frame_pc,
+                                    frame_colors, [pose],
+                                    self.grid_cell_size,
+                                    self.margin,
+                                    extents=extents)
+
+            yield canvas
 
     def render(
         self, category_id_to_name: Callable[[int], str]
@@ -212,7 +272,9 @@ class BEVRenderer():
 
         return canvas, category_name_to_color
 
-    def _category_ids_to_rgbs(self, category_ids):
+    def _category_ids_to_rgbs(self,
+                              category_ids,
+                              color_map_name: str = "gist_rainbow"):
         """Convert a category ID to an RGB color for plotting"""
         assert category_ids is not None, f"category_ids must not be None"
         # Category ids have to be a numpy array for indexing
@@ -225,11 +287,37 @@ class BEVRenderer():
         is_background_mask = (
             category_ids == self.sequence.category_name_to_id("BACKGROUND"))
 
-        # We need to shift the category ID by 1 because the background class is -1, and then we need to normalize it
-        index = category_ids + 1
-        # Normalize the index
-        index = index / len(self.sequence.category_ids())
-        result = cm.tab20(index)[:, :3]
+        # We need to shatter classes because the color map is continuous and
+        # many of the most common classes are close together.
+        category_id_set = np.array(self.sequence.category_ids())
+        min_id = np.min(category_id_set)
+        max_id = np.max(category_id_set)
+
+        # Ensure start at 0
+        category_idxes = category_ids - min_id
+        assert np.all(
+            category_idxes >= 0
+        ), f"category_idxes must be >= 0, but got {category_idxes}"
+        assert np.all(
+            category_idxes < len(category_id_set)
+        ), f"category_idxes must be < len(category_ids), but got {category_idxes} against {len(category_id_set)}"
+
+        shattered_id_set = category_id_set.copy()
+        # Shuffle the array in place, seeded by the hash of the color map name
+        colormap_hash = hashlib.md5(color_map_name.encode())
+        seed_from_hash = int.from_bytes(colormap_hash.digest(), "little")
+        rng = np.random.default_rng(seed_from_hash)
+        rng.shuffle(shattered_id_set)
+
+        # We can index into the shattered id set with the category_idxes to get the shattered ids
+        shattered_category_ids = shattered_id_set[category_idxes]
+        assert shattered_category_ids.shape == category_ids.shape
+
+        normalized_colormap_entries = (shattered_category_ids -
+                                       min_id) / (max_id - min_id)
+
+        color_map = matplotlib.colormaps[color_map_name]
+        result = color_map(normalized_colormap_entries)[:, :3]
         # Set the background class to black
         result[is_background_mask] = np.array([0.5, 0.5, 0.5])
         return result
@@ -308,6 +396,83 @@ class SpeedBucketResult():
         return result
 
 
+def save_bev_video(bev_renderer: BEVRenderer, video_save_folder: Path):
+    video_save_folder = Path(video_save_folder)
+    # Make the parent directory if it does not exist
+    video_save_folder.mkdir(parents=True, exist_ok=True)
+
+    # Clear out any existing files in the frame format, so they don't get included in the video
+    for file in video_save_folder.glob("frame_*.png"):
+        file.unlink()
+
+    # Save the canvas as a PNGs and then convert to a video with ffmpeg
+    for idx, rendered_canvas in enumerate(bev_renderer.render_video_frames()):
+        rendered_canvas.save(video_save_folder / f"frame_{idx:05d}.png", False)
+
+    output_mp4_path = video_save_folder / "bev.mp4"
+    if output_mp4_path.exists():
+        output_mp4_path.unlink()
+
+    # Convert to a video with ffmpeg
+    # Call FFmpeg to create a video from these images
+    # Adjust '-framerate' as needed
+    command = [
+        '/usr/bin/ffmpeg',
+        '-framerate',
+        '10',  # Set the frame rate
+        '-i',
+        f'{video_save_folder}/frame_%05d.png',  # Input file pattern
+        '-vf',
+        'pad=ceil(iw/2)*2:ceil(ih/2)*2',  # Pad to even width and height
+        '-c:v',
+        'libx264',  # Codec
+        '-profile:v',
+        'high',
+        '-crf',
+        '18',  # Quality, lower is better, typical values range from 18 to 24
+        '-pix_fmt',
+        'yuv420p',  # Pixel format
+        '-threads',
+        '1',  # Threads
+        f'{output_mp4_path}'  # Output file
+    ]
+
+    command_str = ' '.join(command)
+    # Save the command to a file for debugging
+    with open(video_save_folder / "ffmpeg_command.sh", "w") as f:
+        f.write(command_str)
+
+    # Run the command
+    # print(f"Running command: {' '.join(command)}")
+    # result = subprocess.run(command)
+    # assert result.returncode == 0, f"FFMPEG failed with return code {result.returncode}"
+    print(f"Saved video to {output_mp4_path}")
+
+
+def save_bev_thumbnail_info(sequence: ArgoverseSupervisedFlowSequence,
+                            renderer: BEVRenderer,
+                            speed_buckets: SpeedBucketResult,
+                            thumbnail_dir: Path):
+    thumbnail_dir = Path(thumbnail_dir)
+    # Make the parent directory if it does not exist
+    thumbnail_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save the counts array
+    save_json(thumbnail_dir / "category_count.json",
+              speed_buckets.to_named_dict(sequence.category_id_to_name),
+              verbose=False)
+
+    canvas, category_name_to_color = renderer.render(
+        sequence.category_id_to_name)
+
+    # Save the canvas as a PNG
+    canvas.save(thumbnail_dir / "bev.png", verbose=False)
+
+    save_json(thumbnail_dir / "category_color.json",
+              category_name_to_color,
+              verbose=False)
+
+
 def clean_process_sequence(
         sequence: ArgoverseSupervisedFlowSequence) -> SpeedBucketResult:
     speed_bucket_result = SpeedBucketResult(sequence.category_ids(),
@@ -322,23 +487,33 @@ def clean_process_sequence(
         if flowed_pc is None:
             continue
 
+        if range_limit is not None:
+            ego_pc = pc.transform(ego_pose.inverse())
+            in_range_mask = np.linalg.norm(ego_pc.points, axis=1) < range_limit
+            pc = pc.mask_points(in_range_mask)
+            flowed_pc = flowed_pc.mask_points(in_range_mask)
+            category_ids = category_ids[in_range_mask]
+
         speed_bucket_result.update(pc, flowed_pc, category_ids)
         bev_renderer.update(pc, ego_pose, category_ids)
 
-    rendered_canvas, category_name_to_color_map = bev_renderer.render(
-        sequence.category_id_to_name)
-    rendered_canvas.save(save_dir / f"{sequence.log_id}" / "bev.png")
+    sequence_save_dir = save_dir / f"range_{range_limit}" / f"{sequence.log_id}"
+    save_bev_thumbnail_info(sequence, bev_renderer, speed_bucket_result,
+                            sequence_save_dir)
 
-    save_json(save_dir / f"{sequence.log_id}" / "category_count.json",
-              speed_bucket_result.to_named_dict(sequence.category_id_to_name))
-
-    save_json(save_dir / f"{sequence.log_id}" / "category_color.json",
-              category_name_to_color_map)
+    save_bev_video(bev_renderer, sequence_save_dir / "animation")
 
     return speed_bucket_result
 
 
-sequence_loader = ArgoverseSupervisedFlowSequenceLoader(dataset_dir, flow_dir)
+if args.dataset == "argo":
+    sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
+        dataset_dir, flow_dir)
+elif args.dataset == "waymo":
+    sequence_loader = WaymoSupervisedFlowSequenceLoader(dataset_dir)
+else:
+    raise ValueError(f"Unknown dataset {args.dataset}")
+
 sequence_ids = sequence_loader.get_sequence_ids()
 sequences = [
     sequence_loader.load_sequence(sequence_id) for sequence_id in sequence_ids

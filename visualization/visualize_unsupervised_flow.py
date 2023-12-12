@@ -37,7 +37,8 @@ def voxel_restrict_pointcloud(pc: PointCloud):
 sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
     '/efs/argoverse2/val/', '/efs/argoverse2/val_nsfp_flow/')
 
-sequence_id = sequence_loader.get_sequence_ids()[1]
+# sequence_id = sequence_loader.get_sequence_ids()[1]
+sequence_id = "0bae3b5e-417d-3b03-abaa-806b433233b8"
 print("Sequence ID: ", sequence_id)
 sequence = sequence_loader.load_sequence(sequence_id)
 

@@ -90,6 +90,9 @@ class PointCloud():
 
     def to_array(self) -> np.ndarray:
         return self.points
+    
+    def copy(self) -> 'PointCloud':
+        return PointCloud(self.points.copy())
 
     @staticmethod
     def from_array(points: np.ndarray) -> 'PointCloud':

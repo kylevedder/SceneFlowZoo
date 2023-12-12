@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
+from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader, ArgoverseUnsupervisedFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
@@ -9,10 +9,14 @@ import tqdm
 # sequence_loader = ArgoverseSequenceLoader('/bigdata/argoverse_lidar/train/')
 sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
     '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
+
+sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
+    '/efs/argoverse2/val/', '/efs/argoverse2/val_nsfp_flow/')
 # sequence_loader = WaymoSupervisedFlowSequenceLoader(
 #     '/efs/waymo_open_processed_flow/training/')
 
 sequence_id = sequence_loader.get_sequence_ids()[1]
+sequence_id = "0bae3b5e-417d-3b03-abaa-806b433233b8"
 print("Sequence ID: ", sequence_id)
 sequence = sequence_loader.load_sequence(sequence_id)
 
@@ -34,11 +38,10 @@ def sequence_idx_to_color(idx):
 
 frame_list = sequence.load_frame_list(0)[125:127]
 
-
 draw_flow_lines_color = None
 
 
-def toggle_flow_lines(vis ):
+def toggle_flow_lines(vis):
     global draw_flow_lines_color
 
     if draw_flow_lines_color is None:
@@ -48,13 +51,13 @@ def toggle_flow_lines(vis ):
     elif draw_flow_lines_color == 'blue':
         draw_flow_lines_color = None
     else:
-        raise ValueError(f'Invalid draw_flow_lines_color: {draw_flow_lines_color}')
+        raise ValueError(
+            f'Invalid draw_flow_lines_color: {draw_flow_lines_color}')
     vis.clear_geometries()
     draw_frames(reset_view=False)
 
 
 vis.register_key_callback(ord("F"), toggle_flow_lines)
-
 
 
 def draw_frames(reset_view=False):
@@ -63,7 +66,7 @@ def draw_frames(reset_view=False):
         pc = frame_dict['relative_pc']
         pose = frame_dict['relative_pose']
         flowed_pc = frame_dict['relative_flowed_pc']
-        classes = frame_dict['pc_classes']
+        # classes = frame_dict['pc_classes']
 
         # Add base point cloud
         pcd = o3d.geometry.PointCloud()
@@ -75,7 +78,7 @@ def draw_frames(reset_view=False):
         # Add flowed point cloud
         if flowed_pc is not None and idx < len(frame_list) - 1:
             print("Max flow magnitude:",
-                pc.matched_point_distance(flowed_pc).max())
+                  pc.matched_point_distance(flowed_pc).max())
 
             if draw_flow_lines_color is not None:
                 line_set = o3d.geometry.LineSet()
@@ -87,10 +90,13 @@ def draw_frames(reset_view=False):
                 lines = np.array([[i, i + len(pc)] for i in range(len(pc))])
                 line_set.points = o3d.utility.Vector3dVector(line_set_points)
                 line_set.lines = o3d.utility.Vector2iVector(lines)
-                draw_color = [0, 1, 0] if draw_flow_lines_color == 'green' else [0, 0, 1]
+                draw_color = [
+                    0, 1, 0
+                ] if draw_flow_lines_color == 'green' else [0, 0, 1]
                 line_set.colors = o3d.utility.Vector3dVector(
                     [draw_color for _ in range(len(lines))])
                 vis.add_geometry(line_set, reset_bounding_box=reset_view)
+
 
 draw_frames(reset_view=True)
 

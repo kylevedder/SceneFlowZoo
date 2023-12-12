@@ -6,6 +6,13 @@ from pointclouds import PointCloud, SE3, SE2
 import numpy as np
 from loader_utils import load_pickle
 
+CATEGORY_ID_TO_NAME = {
+    0 : 'BACKGROUND',
+    1 : 'VEHICLE',
+    2 : 'PEDESTRIAN',
+    3 : 'SIGN',
+    4 : 'CYCLIST',
+}
 
 class WaymoSupervisedFlowSequence():
 
@@ -14,6 +21,7 @@ class WaymoSupervisedFlowSequence():
         self.sequence_files = sorted(self.sequence_folder.glob('*.pkl'))
         assert len(self.sequence_files
                    ) > 0, f'no frames found in {self.sequence_folder}'
+        self.log_id = self.sequence_folder.name
 
     def __repr__(self) -> str:
         return f'WaymoRawSequence with {len(self)} frames'
@@ -56,6 +64,23 @@ class WaymoSupervisedFlowSequence():
         car_frame_flowed_pc = idx_pc.flow(idx_flow)
         relative_global_frame_flowed_pc = car_frame_flowed_pc.transform(
             relative_pose)
+        
+        # // If the point is not annotated with scene flow information, class is set
+        # // to -1. A point is not annotated if it is in a no-label zone or if its label
+        # // bounding box does not have a corresponding match in the previous frame,
+        # // making it infeasible to estimate the motion of the point.
+        # // Otherwise, (vx, vy, vz) are velocity along (x, y, z)-axis for this point
+        # // and class is set to one of the following values:
+        # //  -1: no-flow-label, the point has no flow information.
+        # //   0:  unlabeled or "background,", i.e., the point is not contained in a
+        # //       bounding box.
+        # //   1: vehicle, i.e., the point corresponds to a vehicle label box.
+        # //   2: pedestrian, i.e., the point corresponds to a pedestrian label box.
+        # //   3: sign, i.e., the point corresponds to a sign label box.
+        # //   4: cyclist, i.e., the point corresponds to a cyclist label box.
+    
+        cleaned_idx_labels = idx_labels.astype(np.int32)
+        cleaned_idx_labels[cleaned_idx_labels == -1] = 0
 
         return {
             "relative_pc": relative_global_frame_pc,
@@ -63,7 +88,7 @@ class WaymoSupervisedFlowSequence():
             "is_ground_points": np.zeros(len(relative_global_frame_pc), dtype=bool),
             "relative_pose": relative_pose,
             "relative_flowed_pc": relative_global_frame_flowed_pc,
-            "pc_classes": idx_labels,
+            "pc_classes": cleaned_idx_labels,
             "pc_is_ground": (idx_labels == -1),
             "log_id": self.sequence_folder.name,
             "log_idx": idx,
@@ -77,6 +102,20 @@ class WaymoSupervisedFlowSequence():
                       relative_to_idx if relative_to_idx is not None else idx)
             for idx in range(len(self))
         ]
+
+    @staticmethod
+    def category_ids() -> List[int]:
+        return WaymoSupervisedFlowSequenceLoader.category_ids()
+
+    @staticmethod
+    def category_id_to_name(category_id: int) -> str:
+        return WaymoSupervisedFlowSequenceLoader.category_id_to_name(
+            category_id)
+
+    @staticmethod
+    def category_name_to_id(category_name: str) -> int:
+        return WaymoSupervisedFlowSequenceLoader.category_name_to_id(
+            category_name)
 
 
 class WaymoSupervisedFlowSequenceLoader():
@@ -110,3 +149,15 @@ class WaymoSupervisedFlowSequenceLoader():
         sequence_folder = self.log_lookup[log_id]
         return WaymoSupervisedFlowSequence(sequence_folder,
                                            verbose=self.verbose)
+
+    @staticmethod
+    def category_ids() -> List[int]:
+        return list(CATEGORY_ID_TO_NAME.keys())
+
+    @staticmethod
+    def category_id_to_name(category_id: int) -> str:
+        return CATEGORY_ID_TO_NAME[category_id]
+
+    @staticmethod
+    def category_name_to_id(category_name: str) -> int:
+        return {v: k for k, v in CATEGORY_ID_TO_NAME.items()}[category_name]
