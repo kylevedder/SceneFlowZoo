@@ -1,4 +1,4 @@
-_base_ = ["../../pseudoimage.py", "../../av2_metacategories.py"]
+_base_ = ["../../pseudoimage.py"]
 
 epochs = 50
 learning_rate = 2e-6
@@ -27,7 +27,7 @@ test_dataset = dict(
               with_ground=False,
               with_rgb=False,
               eval_type="bucketed_epe",
-              eval_args=dict(meta_class_lookup={{_base_.METACATAGORIES}})))
+              eval_args=dict()))
 
 test_dataloader = dict(
     args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))

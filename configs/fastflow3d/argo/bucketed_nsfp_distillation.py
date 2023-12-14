@@ -24,7 +24,7 @@ train_dataset = dict(
               use_gt_flow=False,
               with_rgb=False,
               eval_type="bucketed_epe",
-              eval_args=dict(meta_class_lookup={{_base_.METACATAGORIES}})))
+              eval_args=dict()))
 
 train_dataloader = dict(
     args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))

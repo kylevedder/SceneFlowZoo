@@ -1,8 +1,8 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseSupervisedFlowSequenceLoader, ArgoverseUnsupervisedFlowSequenceLoader, WaymoSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader, WaymoUnsupervisedFlowSequenceLoader
-from pointclouds import PointCloud, SE3
+from bucketed_scene_flow_eval.datasets.argoverse2 import ArgoverseSupervisedSceneFlowSequenceLoader, ArgoverseSupervisedSceneFlowSequence
+from bucketed_scene_flow_eval.datasets.waymoopen import WaymoSupervisedSceneFlowSequenceLoader, WaymoSupervisedSceneFlowSequence
 import numpy as np
 import tqdm
 from pathlib import Path
@@ -29,20 +29,20 @@ args = parser.parse_args()
 #     '/efs/argoverse2/val/', '/efs/argoverse2/val_distilation_flow/')
 
 if args.dataset == "waymo":
-    supervised_sequence_loader = WaymoSupervisedFlowSequenceLoader(
+    gt_sequence_loader = WaymoSupervisedSceneFlowSequenceLoader(
         '/efs/waymo_open_processed_flow/validation/')
-    our_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
+    dist_sequence_loader = WaymoUnsupervisedSceneFlowSequenceLoader(
         '/efs/waymo_open_processed_flow/validation/',
         '/bigdata/waymo_open_processed_flow/val_distillation_out/')
-    sup_sequence_loader = WaymoUnsupervisedFlowSequenceLoader(
+    sup_sequence_loader = WaymoUnsupervisedSceneFlowSequenceLoader(
         '/efs/waymo_open_processed_flow/validation/',
         '/bigdata/waymo_open_processed_flow/val_supervised_out/')
 elif args.dataset == "argo":
-    supervised_sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
+    gt_sequence_loader = ArgoverseSupervisedSceneFlowSequenceLoader(
         '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
-    our_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
+    dist_sequence_loader = ArgoverseUnsupervisedSceneFlowSequenceLoader(
         '/efs/argoverse2/val/', '/efs/argoverse2/val_distilation_out/')
-    sup_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
+    sup_sequence_loader = ArgoverseUnsupervisedSceneFlowSequenceLoader(
         '/efs/argoverse2/val/', '/efs/argoverse2/val_supervised_out/')
 else:
     raise ValueError(f'Unknown dataset {args.dataset}')
@@ -53,7 +53,7 @@ screenshot_path.mkdir(exist_ok=True)
 sequence_idx = 0
 
 if args.sequence is not None:
-    sequence_idx = supervised_sequence_loader.get_sequence_ids().index(
+    sequence_idx = gt_sequence_loader.get_sequence_ids().index(
         args.sequence)
 
 draw_flow_lines_color = None
@@ -64,13 +64,13 @@ starter_idx = 122
 
 
 def load_sequence(sequence_idx: int):
-    sequence_id = supervised_sequence_loader.get_sequence_ids()[sequence_idx]
+    sequence_id = gt_sequence_loader.get_sequence_ids()[sequence_idx]
     assert sequence_id in set(
-        our_sequence_loader.get_sequence_ids()
-    ), f"sequence_id {sequence_id} not in unsupervised_sequence_loader.get_sequence_ids() {our_sequence_loader.get_sequence_ids()}"
+        dist_sequence_loader.get_sequence_ids()
+    ), f"sequence_id {sequence_id} not in unsupervised_sequence_loader.get_sequence_ids() {dist_sequence_loader.get_sequence_ids()}"
     print("Sequence ID: ", sequence_id, "Sequence idx: ", sequence_idx)
-    supervised_sequence = supervised_sequence_loader.load_sequence(sequence_id)
-    our_sequence = our_sequence_loader.load_sequence(sequence_id)
+    supervised_sequence = gt_sequence_loader.load_sequence(sequence_id)
+    our_sequence = dist_sequence_loader.load_sequence(sequence_id)
     sup_sequence = sup_sequence_loader.load_sequence(sequence_id)
 
     before_human_load = time.time()
@@ -174,7 +174,7 @@ def starter_idx_end(vis):
 
 
 def save_screenshot(vis):
-    save_name = screenshot_path / f'{supervised_sequence_loader.get_sequence_ids()[sequence_idx]}_{starter_idx}_{time.time():03f}.png'
+    save_name = screenshot_path / f'{gt_sequence_loader.get_sequence_ids()[sequence_idx]}_{starter_idx}_{time.time():03f}.png'
     vis.capture_screen_image(str(save_name))
 
 
