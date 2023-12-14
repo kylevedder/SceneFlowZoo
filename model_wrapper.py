@@ -234,6 +234,7 @@ class ModelWrapper(pl.LightningModule):
         # print("Loop data time:", loop_data_after - prepare_data_after)
         # print("Total time: ", loop_data_after - start_time)
 
+
     def _save_validation_data(self, save_dict):
         save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
         try:

@@ -6,16 +6,10 @@ from pathlib import Path
 import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.strategies import DDPStrategy
-import torchmetrics
-import warnings
 
 from tqdm import tqdm
 import dataloaders
-from dataloaders import ArgoverseRawSequenceLoader, ArgoverseRawSequence, SubsequenceRawDataset, OriginMode
 
-from pointclouds import PointCloud, SE3
-
-import models
 from model_wrapper import ModelWrapper
 
 from pathlib import Path
@@ -62,7 +56,7 @@ def make_test_dataloader(cfg):
 
 def setup_model(cfg, evaluator):
     if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
-        model = ModelWrapper(cfg)
+        model = ModelWrapper(cfg, evaluator=evaluator)
     else:
         assert args.checkpoint is not None, "Must provide checkpoint for validation"
         assert args.checkpoint.exists(

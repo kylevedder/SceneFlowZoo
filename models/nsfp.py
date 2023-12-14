@@ -8,6 +8,8 @@ from models.nsfp_baseline import NSFPProcessor
 from typing import Dict, Any, Optional
 from collections import defaultdict
 from pathlib import Path
+from dataloaders import BucketedSceneFlowItem
+from typing import Dict, Any, Optional, List, Tuple
 import time
 
 
@@ -27,24 +29,28 @@ class NSFP(nn.Module):
         self.nsfp_processor = NSFPProcessor()
         self.flow_save_folder = Path(flow_save_folder)
         self.flow_save_folder.mkdir(parents=True, exist_ok=True)
-        self.skip_existing_cache = dict()
         self.skip_existing = skip_existing
-        if self.skip_existing:
-            self.skip_existing_cache = self._build_skip_existing_cache()
+        self.skip_existing_cache = self._build_skip_existing_cache()
 
     def _build_skip_existing_cache(self):
         skip_existing_cache = dict()
-        for log_id in self.flow_save_folder.iterdir():
-            skip_existing_cache[log_id.name] = set()
-            for npz_idx, npz_file in enumerate(sorted((log_id).glob("*.npz"))):
+        if not self.skip_existing:
+            return skip_existing_cache
+        for log_id_dir in self.flow_save_folder.iterdir():
+            skip_existing_cache[log_id_dir.name] = set()
+            for npz_idx, npz_file in enumerate(sorted(
+                    log_id_dir.glob("*.npz"))):
                 npz_filename_idx = int(npz_file.stem.split('_')[0])
-                skip_existing_cache[log_id.name].add(npz_idx)
-                skip_existing_cache[log_id.name].add(npz_filename_idx)
+                # Hack: we include the sorted index and the global index in the cache.
+                # This is because sometimes they are not globally indexed due to partial runs.
+                # Adding the sorted index allows us to skip existing files even if the global
+                # index is not contiguous.
+                skip_existing_cache[log_id_dir.name].add(npz_idx)
+                skip_existing_cache[log_id_dir.name].add(npz_filename_idx)
         return skip_existing_cache
 
-    def _save_result(self, log_id: str, batch_idx: int, minibatch_idx: int,
-                     delta_time: float, flow: torch.Tensor,
-                     valid_idxes: torch.Tensor):
+    def _save_result(self, log_id: str, dataset_idx: int, delta_time: float,
+                     flow: torch.Tensor, valid_idxes: torch.Tensor):
         flow = flow.cpu().numpy()
         valid_idxes = valid_idxes.cpu().numpy()
         data = {
@@ -54,15 +60,9 @@ class NSFP(nn.Module):
         }
         seq_save_folder = self.flow_save_folder / log_id
         seq_save_folder.mkdir(parents=True, exist_ok=True)
-        np.savez(seq_save_folder / f'{batch_idx:010d}_{minibatch_idx:03d}.npz',
-                 **data)
+        np.savez(seq_save_folder / f'{dataset_idx:010d}.npz', **data)
 
-    def _voxelize_batched_sequence(self, batched_sequence: Dict[str,
-                                                                torch.Tensor]):
-        pc_arrays = batched_sequence['pc_array_stack']
-        pc0s = pc_arrays[:, 0]
-        pc1s = pc_arrays[:, 1]
-
+    def _voxelize_batched_sequence(self, pc0s, pc1s):
         pc0_voxel_infos_lst = self.voxelizer(pc0s)
         pc1_voxel_infos_lst = self.voxelizer(pc1s)
 
@@ -104,63 +104,71 @@ class NSFP(nn.Module):
 
         o3d.visualization.draw_geometries([pc0_pcd, warped_pc0_pcd, line_set])
 
-    def forward(self, batched_sequence: Dict[str, torch.Tensor]):
+    def _in_existing_cache(self, log_id: str, dataset_idx: int):
+        if self.skip_existing:
+            if log_id in self.skip_existing_cache:
+                if dataset_idx in self.skip_existing_cache[log_id]:
+                    return True
+        return False
+
+    def forward(self, batched_sequence: List[BucketedSceneFlowItem]):
+        pc0s = [e.source_pc for e in batched_sequence]
+        pc1s = [e.target_pc for e in batched_sequence]
+        dataset_idxes = [e.dataset_idx for e in batched_sequence]
+        log_ids = [e.dataset_log_id for e in batched_sequence]
+        return self._model_forward(pc0s, pc1s, dataset_idxes, log_ids)
+
+    def _process_batch_entry(self, pc0_points, pc1_points, pc0_valid_point_idx,
+                             dataset_idx,
+                             log_id) -> Optional[Tuple[np.ndarray, float]]:
+        if self.skip_existing and self._in_existing_cache(log_id, dataset_idx):
+            return None
+
+        pc0_points = torch.unsqueeze(pc0_points, 0)
+        pc1_points = torch.unsqueeze(pc1_points, 0)
+
+        with torch.inference_mode(False):
+            with torch.enable_grad():
+                pc0_points_new = pc0_points.clone().detach().requires_grad_(
+                    True)
+                pc1_points_new = pc1_points.clone().detach().requires_grad_(
+                    True)
+
+                self.nsfp_processor.train()
+
+                before_time = time.time()
+                warped_pc0_points, _ = self.nsfp_processor(
+                    pc0_points_new, pc1_points_new, pc1_points_new.device)
+                after_time = time.time()
+
+        delta_time = after_time - before_time
+        # self._visualize_result(pc0_points, warped_pc0_points)
+        flow = warped_pc0_points - pc0_points
+        self._save_result(log_id=log_id,
+                          dataset_idx=dataset_idx,
+                          delta_time=delta_time,
+                          flow=flow,
+                          valid_idxes=pc0_valid_point_idx)
+
+        return flow.squeeze(0), delta_time
+
+    def _model_forward(self, pc0s, pc1s, dataset_idxes, log_ids):
         pc0_points_lst, pc0_valid_point_idxes, pc1_points_lst, pc1_valid_point_idxes = self._voxelize_batched_sequence(
-            batched_sequence)
+            pc0s, pc1s)
 
         # process minibatch
         flows = []
         delta_times = []
-        for minibatch_idx, (pc0_points, pc1_points,
-                            pc0_valid_point_idx) in enumerate(
-                                zip(pc0_points_lst, pc1_points_lst,
-                                    pc0_valid_point_idxes)):
-            log_id = batched_sequence['log_ids'][minibatch_idx][0]
-            batch_idx = batched_sequence['data_index'].item()
-            if self.skip_existing:
-                if log_id in self.skip_existing_cache:
-                    existing_set = self.skip_existing_cache[log_id]
-                    if batch_idx in existing_set:
-                        print(f'Skip existing flow for {log_id} {batch_idx}')
-                        continue
-                    else:
-                        print("batch_idx", batch_idx, "not in", existing_set)
-                else:
-                    print("log_id", log_id, "not in", self.skip_existing_cache.keys())
-            #     and (
-            #         log_id in self.skip_existing_cache) and (
-            #             batch_idx in self.skip_existing_cache[log_id]):
-            #     print(f'Skip existing flow for {log_id} {batch_idx}')
-            #     continue
-            # else:
-            #     print(self.skip_existing_cache.keys())
+        for pc0_points, pc1_points, pc0_valid_point_idx, dataset_idx, log_id in zip(
+                pc0_points_lst, pc1_points_lst, pc0_valid_point_idxes,
+                dataset_idxes, log_ids):
 
-            pc0_points = torch.unsqueeze(pc0_points, 0)
-            pc1_points = torch.unsqueeze(pc1_points, 0)
-
-            with torch.inference_mode(False):
-                with torch.enable_grad():
-                    pc0_points_new = pc0_points.clone().detach(
-                    ).requires_grad_(True)
-                    pc1_points_new = pc1_points.clone().detach(
-                    ).requires_grad_(True)
-
-                    self.nsfp_processor.train()
-
-                    before_time = time.time()
-                    warped_pc0_points, _ = self.nsfp_processor(
-                        pc0_points_new, pc1_points_new, pc1_points_new.device)
-                    after_time = time.time()
-
-            delta_time = after_time - before_time
-            # self._visualize_result(pc0_points, warped_pc0_points)
-            flow = warped_pc0_points - pc0_points
-            self._save_result(log_id=log_id,
-                              batch_idx=batch_idx,
-                              minibatch_idx=minibatch_idx,
-                              delta_time=delta_time,
-                              flow=flow,
-                              valid_idxes=pc0_valid_point_idx)
+            result = self._process_batch_entry(pc0_points, pc1_points,
+                                               pc0_valid_point_idx,
+                                               dataset_idx, log_id)
+            if result is None:
+                continue
+            flow, delta_time = result
             flows.append(flow.squeeze(0))
             delta_times.append(delta_time)
 
@@ -183,19 +191,23 @@ class NSFPCached(NSFP):
         super().__init__(VOXEL_SIZE, POINT_CLOUD_RANGE, SEQUENCE_LENGTH,
                          flow_save_folder)
         # Implement basic caching to avoid repeated folder reads for the same log.
-        self.flow_folder_id = None
-        self.flow_folder_list = None
+        self.cached_flow_folder_id = ""
+        self.cached_flow_folder_lookup: Dict[int, Path] = {}
 
-    def _load_result(self, log_id: str, log_idx: int):
-        if self.flow_folder_id != log_id:
-            self.flow_folder_id = log_id
-            flow_folder = self.flow_save_folder / log_id
-            assert flow_folder.is_dir(), f"{flow_folder} does not exist"
-            self.flow_folder_list = sorted(flow_folder.glob('*.npz'))
+    def _setup_folder_cache(self, log_id: str):
+        self.cached_flow_folder_id = log_id
+        flow_folder = self.flow_save_folder / log_id
+        assert flow_folder.is_dir(), f"{flow_folder} does not exist"
+        self.cached_flow_folder_lookup = {
+            int(e.stem.split('_')[0]): e
+            for e in sorted(flow_folder.glob('*.npz'))
+        }
 
-        assert log_idx < len(
-            self.flow_folder_list), f"Log index {log_idx} is out of range"
-        flow_file = self.flow_folder_list[log_idx]
+    def _load_result(self, log_id: str, dataset_idx: int):
+        if self.cached_flow_folder_id != log_id:
+            self._setup_folder_cache(log_id)
+
+        flow_file = self.cached_flow_folder_lookup[dataset_idx]
         print(f"Loading flow from {flow_file}")
         data = dict(np.load(flow_file, allow_pickle=True))
         flow = data['flow']
@@ -203,49 +215,8 @@ class NSFPCached(NSFP):
         delta_time = data['delta_time']
         return flow, valid_idxes, delta_time
 
-    def _transpose_list(self, lst):
-        if isinstance(lst[0], torch.Tensor):
-            return torch.stack(lst).T.tolist()
-        return np.array(lst).T.tolist()
-
-    def forward(self, batched_sequence: Dict[str, torch.Tensor]):
-        pc0_points_lst, pc0_valid_point_idxes, pc1_points_lst, pc1_valid_point_idxes = self._voxelize_batched_sequence(
-            batched_sequence)
-
-        log_ids_lst = self._transpose_list(batched_sequence['log_ids'])
-        log_idxes_lst = self._transpose_list(batched_sequence['log_idxes'])
-
-        flows = []
-        delta_times = []
-        for minibatch_idx, (pc0_points, pc0_valid_points_idx, log_ids,
-                            log_idxes) in enumerate(
-                                zip(pc0_points_lst, pc0_valid_point_idxes,
-                                    log_ids_lst, log_idxes_lst)):
-            assert len(
-                log_ids) == 2, f"Expect 2 frames for NSFP, got {len(log_ids)}"
-            assert len(
-                log_idxes
-            ) == 2, f"Expect 2 frames for NSFP, got {len(log_idxes)}"
-            flow, flow_valid_idxes, delta_time = self._load_result(
-                log_ids[0], log_idxes[0])
-            assert flow_valid_idxes.shape == pc0_valid_points_idx.shape, f"{flow_valid_idxes.shape} != {pc0_valid_points_idx.shape}"
-            idx_equality = flow_valid_idxes == pc0_valid_points_idx.detach(
-            ).cpu().numpy()
-            assert idx_equality.all(
-            ), f"Points that disagree: {(~idx_equality).astype(int).sum()}"
-            if flow.ndim == 3 and flow.shape[0] == 1:
-                flow = flow.squeeze(0)
-            assert flow.shape == pc0_points.shape, f"{flow.shape} != {pc0_points.shape}"
-            flows.append(torch.from_numpy(flow).to(pc0_points.device))
-            delta_times.append(delta_time)
-
-        return {
-            "forward": {
-                "flow": flows,
-                "batch_delta_time": np.sum(delta_times),
-                "pc0_points_lst": pc0_points_lst,
-                "pc0_valid_point_idxes": pc0_valid_point_idxes,
-                "pc1_points_lst": pc1_points_lst,
-                "pc1_valid_point_idxes": pc1_valid_point_idxes
-            }
-        }
+    def _process_batch_entry(self, pc0_points, pc1_points, pc0_valid_point_idx,
+                             dataset_idx,
+                             log_id) -> Optional[Tuple[np.ndarray, float]]:
+        flow, _, delta_time = self._load_result(log_id, dataset_idx)
+        return flow, delta_time

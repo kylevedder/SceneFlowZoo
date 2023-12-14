@@ -1,4 +1,6 @@
-_base_ = ["../../pseudoimage.py", "../../av2_metacategories.py"]
+_base_ = "./bucketed_flow_test_av2_class_bucketed_epe.py"
+
+train_sequence_dir = "/efs/argoverse2/train/"
 
 epochs = 50
 learning_rate = 2e-6
@@ -14,20 +16,17 @@ model = dict(name="FastFlow3D",
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
 
-loss_fn = dict(name="FastFlow3DBucketedLoaderLoss", args=dict())
-
-###############################################################################
-
-test_dataset_root = "/efs/argoverse2/val/"
-
-test_dataset = dict(
+train_dataset = dict(
     name="BucketedSceneFlowDataset",
     args=dict(dataset_name="Argoverse2SceneFlow",
-              root_dir=test_dataset_root,
+              root_dir=train_sequence_dir,
               with_ground=False,
+              use_gt_flow=False,
               with_rgb=False,
               eval_type="bucketed_epe",
               eval_args=dict(meta_class_lookup={{_base_.METACATAGORIES}})))
 
-test_dataloader = dict(
-    args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))
+train_dataloader = dict(
+    args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))
+
+loss_fn = dict(name="FastFlow3DBucketedLoaderLoss", args=dict())

@@ -15,11 +15,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from tqdm import tqdm
 import dataloaders
-from dataloaders import ConcatDataset
-
-from pointclouds import PointCloud, SE3
-
-import models
 from model_wrapper import ModelWrapper
 
 from pathlib import Path
@@ -57,66 +52,40 @@ def get_checkpoint_path(cfg, checkpoint_dir_name: str):
 
 
 def make_train_dataloader(cfg):
-    # Handle single loader case
-    if not isinstance(cfg.loader, list) and not isinstance(cfg.dataset, list):
-        try:
-            train_sequence_loader = getattr(dataloaders,
-                                            cfg.loader.name)(**cfg.loader.args)
-        except Exception as e:
-            print("Error loading loader:", cfg.loader.name)
-            print("Config:", cfg.loader)
-            raise e
-        train_dataset = getattr(dataloaders, cfg.dataset.name)(
-            sequence_loader=train_sequence_loader, **cfg.dataset.args)
-        return torch.utils.data.DataLoader(train_dataset,
-                                           **cfg.dataloader.args)
 
-    # Handle multiple loader case
-    assert isinstance(cfg.loader, list) and isinstance(cfg.dataset, list), \
-        f"Either both loader and dataset should be lists, or neither should be. Got loader: {type(cfg.loader)} and dataset: {type(cfg.dataset)}"
+    train_dataset_args = cfg.train_dataset.args
+    train_dataset = getattr(dataloaders,
+                            cfg.train_dataset.name)(**train_dataset_args)
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset,
+        **cfg.train_dataloader.args,
+        collate_fn=train_dataset.collate_fn)
 
-    assert len(cfg.loader) == len(cfg.dataset), \
-        f"Length of loader list {len(cfg.loader)} should be equal to length of dataset list {len(cfg.dataset)}"
-
-    print("Using multiple loaders of length:", len(cfg.loader))
-    train_sequence_loader_lst = []
-    for loader in cfg.loader:
-        train_sequence_loader_lst.append(
-            getattr(dataloaders, loader.name)(**loader.args))
-
-    print("Using multiple datasets of length:", len(cfg.dataset))
-    train_dataloader_lst = []
-    for dataset, train_sequence_loader in zip(cfg.dataset,
-                                              train_sequence_loader_lst):
-        train_dataset = getattr(dataloaders, dataset.name)(
-            sequence_loader=train_sequence_loader, **dataset.args)
-        train_dataloader_lst.append(train_dataset)
-
-    # Use the concat dataloader to combine the multiple dataloaders
-    concat_dataset = dataloaders.ConcatDataset(train_dataloader_lst)
-
-    return torch.utils.data.DataLoader(concat_dataset, **cfg.dataloader.args)
+    return train_dataloader, train_dataset.evaluator()
 
 
 def make_val_dataloader(cfg):
-    # Setup val infra
-    val_sequence_loader = getattr(dataloaders,
-                                  cfg.test_loader.name)(**cfg.test_loader.args)
-    val_dataset = getattr(dataloaders, cfg.test_dataset.name)(
-        sequence_loader=val_sequence_loader, **cfg.test_dataset.args)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset,
-                                                 **cfg.test_dataloader.args)
+    test_dataset_args = cfg.test_dataset.args
+    test_dataset = getattr(dataloaders,
+                           cfg.test_dataset.name)(**test_dataset_args)
+    test_dataloader = torch.utils.data.DataLoader(
+        test_dataset,
+        **cfg.test_dataloader.args,
+        collate_fn=test_dataset.collate_fn)
 
-    return val_dataloader
+    return test_dataloader, test_dataset.evaluator()
 
 
-def setup_model(cfg, checkpoint):
-    if (hasattr(cfg, "is_trainable") and not cfg.is_trainable) or (checkpoint is None):
-        model = ModelWrapper(cfg)
+def setup_model(cfg, checkpoint, evaluator):
+    if (hasattr(cfg, "is_trainable")
+            and not cfg.is_trainable) or (checkpoint is None):
+        model = ModelWrapper(cfg, evaluator=evaluator)
     else:
         assert checkpoint.exists(
         ), f"Checkpoint file {checkpoint} does not exist"
-        model = ModelWrapper.load_from_checkpoint(checkpoint, cfg=cfg)
+        model = ModelWrapper.load_from_checkpoint(checkpoint,
+                                                  cfg=cfg,
+                                                  evaluator=evaluator)
 
     if hasattr(cfg, "compile_pytorch2") and cfg.compile_pytorch2:
         print("PyTorch 2 compile()ing model!")
@@ -158,14 +127,14 @@ def main():
                             name=cfg.filename,
                             version=checkpoint_dir_name)
 
-    train_dataloader = make_train_dataloader(cfg)
-    val_dataloader = make_val_dataloader(cfg)
+    train_dataloader, _ = make_train_dataloader(cfg)
+    val_dataloader, evaluator = make_val_dataloader(cfg)
 
     print("Train dataloader length:", len(train_dataloader))
     print("Val dataloader length:", len(val_dataloader))
 
     resume_from_checkpoint = args.resume_from_checkpoint
-    model = setup_model(cfg, resume_from_checkpoint)
+    model = setup_model(cfg, resume_from_checkpoint, evaluator)
 
     epoch_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_path,
