@@ -6,7 +6,8 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import torch  # This is required to not have the parallel hang for some reason
 import pandas as pd
 import open3d as o3d
-from dataloaders import ArgoverseSupervisedFlowSequenceLoader, ArgoverseSupervisedFlowSequence, WaymoSupervisedFlowSequenceLoader
+from bucketed_scene_flow_eval.datasets.argoverse2 import ArgoverseSupervisedSceneFlowSequenceLoader, ArgoverseSupervisedSceneFlowSequence
+from bucketed_scene_flow_eval.datasets.waymoopen import WaymoSupervisedSceneFlowSequenceLoader
 from pointclouds import PointCloud, SE3
 import numpy as np
 import tqdm
@@ -197,7 +198,7 @@ class RenderedCanvas():
 class BEVRenderer():
 
     def __init__(self,
-                 sequence: ArgoverseSupervisedFlowSequence,
+                 sequence: ArgoverseSupervisedSceneFlowSequence,
                  grid_cell_size: Tuple[float, float] = (0.05, 0.05),
                  margin: float = 1.0):
         self.sequence = sequence
@@ -449,7 +450,7 @@ def save_bev_video(bev_renderer: BEVRenderer, video_save_folder: Path):
     print(f"Saved video to {output_mp4_path}")
 
 
-def save_bev_thumbnail_info(sequence: ArgoverseSupervisedFlowSequence,
+def save_bev_thumbnail_info(sequence: ArgoverseSupervisedSceneFlowSequence,
                             renderer: BEVRenderer,
                             speed_buckets: SpeedBucketResult,
                             thumbnail_dir: Path):
@@ -474,7 +475,7 @@ def save_bev_thumbnail_info(sequence: ArgoverseSupervisedFlowSequence,
 
 
 def clean_process_sequence(
-        sequence: ArgoverseSupervisedFlowSequence) -> SpeedBucketResult:
+        sequence: ArgoverseSupervisedSceneFlowSequence) -> SpeedBucketResult:
     speed_bucket_result = SpeedBucketResult(sequence.category_ids(),
                                             speed_bucket_ticks)
     bev_renderer = BEVRenderer(sequence)
@@ -507,10 +508,10 @@ def clean_process_sequence(
 
 
 if args.dataset == "argo":
-    sequence_loader = ArgoverseSupervisedFlowSequenceLoader(
-        dataset_dir, flow_dir)
+    sequence_loader = ArgoverseSupervisedSceneFlowSequenceLoader(
+        raw_data_path=dataset_dir, flow_data_path=flow_dir, with_rgb=False)
 elif args.dataset == "waymo":
-    sequence_loader = WaymoSupervisedFlowSequenceLoader(dataset_dir)
+    sequence_loader = WaymoSupervisedSceneFlowSequenceLoader(sequence_dir=dataset_dir)
 else:
     raise ValueError(f"Unknown dataset {args.dataset}")
 
