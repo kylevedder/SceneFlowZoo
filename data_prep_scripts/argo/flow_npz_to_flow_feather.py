@@ -13,15 +13,18 @@ from bucketed_scene_flow_eval.datastructures import QuerySceneSequence, GroundTr
 
 parser = argparse.ArgumentParser(
     description="Convert NPZ files to Feather format.")
-parser.add_argument("input_root_dir", type=Path)
 parser.add_argument("output_root_dir", type=Path)
+parser.add_argument("input_root_dir", type=str, nargs='+')
 args = parser.parse_args()
+
+# Convert input_root_dirs from string to Path objects
+input_root_dirs = [Path(dir) for dir in args.input_root_dirs]
 
 # We want to iterate over the dataset and save each item as a feather file
 # using the dataset index as a name.
 dataset = construct_dataset(
     "Argoverse2SceneFlow",
-    dict(root_dir=args.input_root_dir,
+    dict(root_dir=input_root_dirs,
          use_gt_flow=False,
          with_rgb=False,
          with_ground=True))
