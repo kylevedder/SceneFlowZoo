@@ -14,7 +14,7 @@ from bucketed_scene_flow_eval.datastructures import QuerySceneSequence, GroundTr
 parser = argparse.ArgumentParser(
     description="Convert NPZ files to Feather format.")
 parser.add_argument("output_root_dir", type=Path)
-parser.add_argument("input_root_dir", type=str, nargs='+')
+parser.add_argument("input_root_dirs", type=str, nargs='+')
 args = parser.parse_args()
 
 # Convert input_root_dirs from string to Path objects
