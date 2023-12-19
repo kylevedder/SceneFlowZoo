@@ -16,17 +16,19 @@ model = dict(name="FastFlow3D",
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
 
-train_dataset = dict(
-    name="BucketedSceneFlowDataset",
-    args=dict(dataset_name="Argoverse2SceneFlow",
-              root_dir=train_sequence_dir,
-              with_ground=False,
-              use_gt_flow=False,
-              with_rgb=False,
-              eval_type="bucketed_epe",
-              eval_args=dict()))
+train_dataset = dict(name="BucketedSceneFlowDataset",
+                     args=dict(dataset_name="Argoverse2SceneFlow",
+                               root_dir=train_sequence_dir,
+                               with_ground=False,
+                               use_gt_flow=False,
+                               with_rgb=False,
+                               eval_type="bucketed_epe",
+                               eval_args=dict()))
 
 train_dataloader = dict(
     args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))
 
 loss_fn = dict(name="FastFlow3DBucketedLoaderLoss", args=dict())
+
+test_dataset = dict(args=dict(eval_args=dict(
+    output_path="/tmp/frame_results/bucketed_epe/nsfp_distillation_1x/")))
