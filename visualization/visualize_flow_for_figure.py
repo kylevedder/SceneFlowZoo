@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from bucketed_scene_flow_eval.datasets.argoverse2 import ArgoverseSupervisedSceneFlowSequenceLoader, ArgoverseSupervisedSceneFlowSequence
+from bucketed_scene_flow_eval.datasets.argoverse2 import ArgoverseUnsupervisedFlowSequenceLoader, ArgoverseSupervisedSceneFlowSequenceLoader, ArgoverseSupervisedSceneFlowSequence
 from bucketed_scene_flow_eval.datasets.waymoopen import WaymoSupervisedSceneFlowSequenceLoader, WaymoSupervisedSceneFlowSequence
 import numpy as np
 import tqdm
@@ -13,7 +13,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset',
                     type=str,
-                    default='waymo',
+                    default='argo',
                     help='waymo or argo',
                     choices=['waymo', 'argo'])
 parser.add_argument('--sequence', type=str, default=None, help='waymo or argo')
@@ -40,9 +40,9 @@ if args.dataset == "waymo":
 elif args.dataset == "argo":
     gt_sequence_loader = ArgoverseSupervisedSceneFlowSequenceLoader(
         '/efs/argoverse2/val/', '/efs/argoverse2/val_sceneflow/')
-    dist_sequence_loader = ArgoverseUnsupervisedSceneFlowSequenceLoader(
+    dist_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
         '/efs/argoverse2/val/', '/efs/argoverse2/val_distilation_out/')
-    sup_sequence_loader = ArgoverseUnsupervisedSceneFlowSequenceLoader(
+    sup_sequence_loader = ArgoverseUnsupervisedFlowSequenceLoader(
         '/efs/argoverse2/val/', '/efs/argoverse2/val_supervised_out/')
 else:
     raise ValueError(f'Unknown dataset {args.dataset}')

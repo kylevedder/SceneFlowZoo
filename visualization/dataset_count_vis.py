@@ -2,49 +2,12 @@ from pathlib import Path
 from loader_utils import load_pickle, load_json
 import numpy as np
 from typing import Dict, List, Any
-
+from bucketed_scene_flow_eval.datasets.argoverse2.av2_metacategories import METACATAGORIES
 import matplotlib.pyplot as plt
-
-# ANIMAL_CATEGORIES = ['ANIMAL', 'DOG']
-
-BACKGROUND_CATEGORIES = ['BACKGROUND']
-
-ROAD_SIGNS = [
-    'BOLLARD',
-    'CONSTRUCTION_BARREL',
-    'CONSTRUCTION_CONE',
-    'MOBILE_PEDESTRIAN_CROSSING_SIGN',
-    'SIGN',
-    'STOP_SIGN',
-    'MESSAGE_BOARD_TRAILER',
-    'TRAFFIC_LIGHT_TRAILER',
-]
-PEDESTRIAN_CATEGORIES = [
-    'PEDESTRIAN', 'STROLLER', 'WHEELCHAIR', 'OFFICIAL_SIGNALER'
-]
-WHEELED_VRU = [
-    'BICYCLE', 'BICYCLIST', 'MOTORCYCLE', 'MOTORCYCLIST', 'WHEELED_DEVICE',
-    'WHEELED_RIDER'
-]
-CAR = ['REGULAR_VEHICLE']
-
-OTHER_VEHICLES = [
-    'BOX_TRUCK', 'LARGE_VEHICLE', 'RAILED_VEHICLE', 'TRUCK', 'TRUCK_CAB',
-    'VEHICULAR_TRAILER', 'ARTICULATED_BUS', 'BUS', 'SCHOOL_BUS'
-]
-
-
-METACATAGORIES = {
-    "BACKGROUND": BACKGROUND_CATEGORIES,
-    "ROAD_SIGNS": ROAD_SIGNS,
-    "CAR": CAR,
-    "PEDESTRIAN": PEDESTRIAN_CATEGORIES,
-    "WHEELED_VRU": WHEELED_VRU,
-    "OTHER_VEHICLES": OTHER_VEHICLES,
-}
+from visualization.figures.plot_lib import *
 
 # Load the saved count data
-raw_class_speed_info = load_json('/efs/argoverse2/val_dataset_stats/dataset_count_info.json')
+raw_class_speed_count_info = load_json('/efs/argoverse2/val_dataset_stats/dataset_count_info.json')
 
 
 def merge_classes(class_a: Dict[float, int], class_b: Dict[float, int]):
@@ -83,7 +46,7 @@ def collapse_speed_buckets(entry: Dict[float, int]) -> int:
 
 # Convert the array to a dictionary of
 
-meta_class_speed_info = collapse_into_meta_classes(raw_class_speed_info)
+meta_class_speed_info = collapse_into_meta_classes(raw_class_speed_count_info)
 meta_class_count_info = {
     meta_class_name: collapse_speed_buckets(meta_class_speed_info)
     for meta_class_name, meta_class_speed_info in
@@ -102,7 +65,7 @@ def plot_meta_class_counts(meta_class_count_info: Dict[str, int]):
                      reverse=True)
     labels, values = zip(*entries)
 
-    bars = ax.bar(labels, values)
+    bars = ax.bar(labels, values, color=color(0, 1))
     ax.set_xlabel("Meta Class")
     ax.set_ylabel("Lidar points in semantic class")
     ax.set_title("Meta Class Counts")
@@ -124,7 +87,11 @@ def plot_meta_class_counts(meta_class_count_info: Dict[str, int]):
 
     # fig.savefig("meta_class_counts.pdf", bbox_inches='tight')
     # Save as a png as well
-    fig.savefig("meta_class_counts.png", bbox_inches='tight')
+        
+    # Remove the top and right axes
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    savefig("validation_results", "meta_class_counts")
 
 
 plot_meta_class_counts(meta_class_count_info)

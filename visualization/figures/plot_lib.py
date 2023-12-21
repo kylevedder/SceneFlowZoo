@@ -2,6 +2,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import List, Tuple, Dict, Any, Optional
+from pathlib import Path
 
 linewidth = 0.5
 minor_tick_color = (0.9, 0.9, 0.9)
@@ -59,7 +60,8 @@ def grid(minor=True, axis='both'):
                  zorder=0)
 
 
-def savefig(name, pad: float = 0):
+def savefig(save_folder : Path, name : str, pad: float = 0):
+    save_folder = Path(save_folder)
     for ext in ['pdf', 'png']:
         outfile = save_folder / f"{name}.{ext}"
         print("Saving", outfile)
@@ -67,7 +69,7 @@ def savefig(name, pad: float = 0):
     plt.clf()
 
 
-def savetable(name, content: List[List[Any]]):
+def savetable(save_folder : Path, name : str, content: List[List[Any]]):
     outfile = save_folder / f"{name}.txt"
 
     def fmt(e):
