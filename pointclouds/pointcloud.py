@@ -1,6 +1,7 @@
 import numpy as np
 
 from .se3 import SE3
+from typing import Union
 
 
 def to_fixed_array(array: np.ndarray,
@@ -17,24 +18,19 @@ def to_fixed_array(array: np.ndarray,
         return np.pad(array, pad_tuples, constant_values=pad_val)
 
 
-def from_fixed_array(array: np.ndarray) -> np.ndarray:
+def from_fixed_array(array: Union[np.ndarray, 'torch.Tensor']) -> np.ndarray:
+
+    if len(array.shape) == 2:
+        check_array = array[:, 0]
+    elif len(array.shape) == 1:
+        check_array = array
+    else:
+        raise ValueError(f'unknown array shape {array.shape}')
     if isinstance(array, np.ndarray):
-        if len(array.shape) == 2:
-            check_array = array[:, 0]
-        elif len(array.shape) == 1:
-            check_array = array
-        else:
-            raise ValueError(f'unknown array shape {array.shape}')
         are_valid_points = np.logical_not(np.isnan(check_array))
         are_valid_points = are_valid_points.astype(bool)
     else:
         import torch
-        if len(array.shape) == 2:
-            check_array = array[:, 0]
-        elif len(array.shape) == 1:
-            check_array = array
-        else:
-            raise ValueError(f'unknown array shape {array.shape}')
         are_valid_points = torch.logical_not(torch.isnan(check_array))
         are_valid_points = are_valid_points.bool()
     return array[are_valid_points]
@@ -44,7 +40,8 @@ class PointCloud():
 
     def __init__(self, points: np.ndarray) -> None:
         assert points.ndim == 2, f'points must be a 2D array, got {points.ndim}'
-        assert points.shape[1] == 3, f'points must be a Nx3 array, got {points.shape}'
+        assert points.shape[
+            1] == 3, f'points must be a Nx3 array, got {points.shape}'
         self.points = points
 
     def __eq__(self, o: object) -> bool:
@@ -75,7 +72,7 @@ class PointCloud():
 
     def to_fixed_array(self, max_points: int) -> np.ndarray:
         return to_fixed_array(self.points, max_points)
-    
+
     def matched_point_diffs(self, other: 'PointCloud') -> np.ndarray:
         assert len(self) == len(other)
         return self.points - other.points
@@ -90,7 +87,7 @@ class PointCloud():
 
     def to_array(self) -> np.ndarray:
         return self.points
-    
+
     def copy(self) -> 'PointCloud':
         return PointCloud(self.points.copy())
 

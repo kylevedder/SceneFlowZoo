@@ -3,7 +3,7 @@ from bucketed_scene_flow_eval.datasets import *
 from pathlib import Path
 import torch
 from typing import Tuple, Dict, List, Any
-from pointclouds import to_fixed_array, from_fixed_array
+from pointclouds import to_fixed_array, from_fixed_array, PointCloud
 import numpy as np
 import time
 from dataclasses import dataclass
@@ -11,20 +11,26 @@ from dataclasses import dataclass
 
 @dataclass
 class BucketedSceneFlowItem():
-    dataset_log_id : str
+    dataset_log_id: str
     dataset_idx: int
     query_timestamp: Timestamp
-    pc_array_stack: torch.FloatTensor
-    pose_array_stack: torch.FloatTensor
-    full_percept_pcs_array_stack: torch.FloatTensor
-    full_percept_pose_array_stack: torch.FloatTensor
-    gt_flowed_source_pc: torch.FloatTensor
-    gt_pc_class_mask: torch.LongTensor
+    source_pc: torch.FloatTensor  # (N, 3)
+    target_pc: torch.FloatTensor  # (M, 3)
+    source_pose: SE3
+    target_pose: SE3
+    gt_flowed_source_pc: torch.FloatTensor  # (N, 3)
+    gt_pc_class_mask: torch.LongTensor  # (N,)
+
+    # Included for completeness, these are the full percepts provided by the
+    # dataloader rather than just the scene flow query points.
+    # This allows for the data loader to e.g. provide more point clouds for accumulation.
+    full_percept_pcs_array_stack: torch.FloatTensor  # (K, PadN, 3)
+    full_percept_pose_array_stack: torch.FloatTensor  # (K, 4, 4)
     gt_trajectories: GroundTruthParticleTrajectories
 
     def to(self, device):
-        self.pc_array_stack = self.pc_array_stack.to(device)
-        self.pose_array_stack = self.pose_array_stack.to(device)
+        self.source_pc = self.source_pc.to(device)
+        self.target_pc = self.target_pc.to(device)
         self.full_percept_pcs_array_stack = self.full_percept_pcs_array_stack.to(
             device)
         self.full_percept_pose_array_stack = self.full_percept_pose_array_stack.to(
@@ -33,21 +39,37 @@ class BucketedSceneFlowItem():
         self.gt_pc_class_mask = self.gt_pc_class_mask.to(device)
         return self
 
-    @property
-    def source_pc(self):
-        return from_fixed_array(self.pc_array_stack[:, 0])
+    def __post_init__(self):
+        assert self.source_pc.shape[
+            1] == 3, f"Source PC has shape {self.source_pc.shape}"
+        assert self.target_pc.shape[
+            1] == 3, f"Target PC has shape {self.target_pc.shape}"
+        assert self.gt_flowed_source_pc.shape[
+            1] == 3, f"GT flowed source PC has shape {self.gt_flowed_source_pc.shape}"
+        assert self.source_pc.shape == self.gt_flowed_source_pc.shape, f"Source PC {self.source_pc.shape} != GT flowed source PC {self.gt_flowed_source_pc.shape}"
 
-    @property
-    def target_pc(self):
-        return from_fixed_array(self.pc_array_stack[:, 1])
+        assert self.gt_pc_class_mask.shape[0] == self.gt_flowed_source_pc.shape[
+            0], f"GT PC class mask {self.gt_pc_class_mask.shape} != GT flowed source PC {self.gt_flowed_source_pc.shape}"
 
-    @property
-    def source_pose(self) -> SE3:
-        return SE3.from_array(self.pose_array_stack[:, 0])
+        assert isinstance(self.source_pose, SE3), f"Source pose is not an SE3"
+        assert isinstance(self.target_pose, SE3), f"Target pose is not an SE3"
 
-    @property
-    def target_pose(self) -> SE3:
-        return SE3.from_array(self.pose_array_stack[:, 1])
+        assert self.full_percept_pcs_array_stack.shape[
+            2] == 3, f"Percept PC has shape {self.full_percept_pcs_array_stack.shape}, but should be (K, PadN, 3)"
+        assert self.full_percept_pose_array_stack.shape[
+            0] == self.full_percept_pcs_array_stack.shape[
+                0], f"Full percept and pose stacks have different number of entries"
+
+    def full_percept(self, idx: int) -> Tuple[np.ndarray, SE3]:
+        return from_fixed_array(
+            self.full_percept_pcs_array_stack[idx]), SE3.from_array(
+                self.full_percept_pose_array_stack[idx])
+
+    def full_percepts(self) -> List[Tuple[np.ndarray, SE3]]:
+        return [
+            self.full_percept(idx)
+            for idx in range(len(self.full_percept_pcs_array_stack))
+        ]
 
 
 class BucketedSceneFlowDataset(torch.utils.data.Dataset):
@@ -77,7 +99,10 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
     def collate_fn(self, batch: List[BucketedSceneFlowItem]):
         return batch
 
-    def _process_query(self, query: QuerySceneSequence):
+    def _process_query(
+        self, query: QuerySceneSequence
+    ) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[SE3, SE3],
+               List[np.ndarray], List[SE3]]:
         assert len(
             query.query_trajectory_timestamps
         ) == 2, f"Query {query} has more than two timestamps. Only Scene Flow problems are supported."
@@ -130,30 +155,22 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
 
         gt_flowed_source_pc, gt_point_classes = self._process_gt(gt_result)
 
-        pc_array_stack = np.stack([
-            to_fixed_array(source_pc, self.max_pc_points),
-            to_fixed_array(target_pc, self.max_pc_points)
-        ],
-                                  axis=1)
-        pose_array_stack = np.stack(
-            [source_pose.to_array(),
-             target_pose.to_array()], axis=1)
         full_percept_pcs_array_stack = np.stack([
             to_fixed_array(pc, self.max_pc_points)
             for pc in full_pc_points_list
         ],
-                                                axis=1)
+                                                axis=0)
         full_percept_pose_array_stack = np.stack(
-            [pose.to_array() for pose in full_pc_poses_list], axis=1)
-        
-        breakpoint()
+            [pose.to_array() for pose in full_pc_poses_list], axis=0)
 
         item = BucketedSceneFlowItem(
             dataset_log_id=query.scene_sequence.log_id,
             dataset_idx=idx,
             query_timestamp=query.query_particles.query_init_timestamp,
-            pc_array_stack=torch.from_numpy(pc_array_stack),
-            pose_array_stack=torch.from_numpy(pose_array_stack),
+            source_pc=torch.from_numpy(source_pc),
+            target_pc=torch.from_numpy(target_pc),
+            source_pose=source_pose,
+            target_pose=target_pose,
             full_percept_pcs_array_stack=torch.from_numpy(
                 full_percept_pcs_array_stack),
             full_percept_pose_array_stack=torch.from_numpy(
