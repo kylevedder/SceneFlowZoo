@@ -1,6 +1,4 @@
-_base_ = "./bucketed_flow_test_av2_class_bucketed_epe.py"
-
-train_sequence_dir = "/efs/argoverse2/train/"
+_base_ = ["../../pseudoimage.py"]
 
 epochs = 50
 learning_rate = 2e-6
@@ -16,6 +14,31 @@ model = dict(name="FastFlow3D",
                        FEATURE_CHANNELS=32,
                        SEQUENCE_LENGTH=SEQUENCE_LENGTH))
 
+loss_fn = dict(name="FastFlow3DBucketedLoaderLoss", args=dict())
+
+######## TEST DATASET ########
+
+test_dataset_root = "/efs/argoverse2/val/"
+
+test_dataset = dict(
+    name="BucketedSceneFlowDataset",
+    args=dict(
+        dataset_name="Argoverse2SceneFlow",
+        root_dir=test_dataset_root,
+        with_ground=False,
+        with_rgb=False,
+        eval_type="bucketed_epe",
+        eval_args=dict(
+            output_path="/tmp/frame_results/bucketed_epe/nsfp_distillation_1x/"
+        )))
+
+test_dataloader = dict(
+    args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))
+
+######## TRAIN DATASET ########
+
+train_sequence_dir = "/efs/argoverse2/train/"
+
 train_dataset = dict(name="BucketedSceneFlowDataset",
                      args=dict(dataset_name="Argoverse2SceneFlow",
                                root_dir=train_sequence_dir,
@@ -27,8 +50,3 @@ train_dataset = dict(name="BucketedSceneFlowDataset",
 
 train_dataloader = dict(
     args=dict(batch_size=16, num_workers=16, shuffle=True, pin_memory=False))
-
-loss_fn = dict(name="FastFlow3DBucketedLoaderLoss", args=dict())
-
-test_dataset = dict(args=dict(eval_args=dict(
-    output_path="/tmp/frame_results/bucketed_epe/nsfp_distillation_1x/")))

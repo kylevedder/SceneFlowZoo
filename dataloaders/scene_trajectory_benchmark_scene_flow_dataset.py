@@ -145,6 +145,8 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
                                                 axis=1)
         full_percept_pose_array_stack = np.stack(
             [pose.to_array() for pose in full_pc_poses_list], axis=1)
+        
+        breakpoint()
 
         item = BucketedSceneFlowItem(
             dataset_log_id=query.scene_sequence.log_id,
