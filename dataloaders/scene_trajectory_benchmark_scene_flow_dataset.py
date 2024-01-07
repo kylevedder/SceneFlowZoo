@@ -3,7 +3,7 @@ from bucketed_scene_flow_eval.datasets import *
 from pathlib import Path
 import torch
 from typing import Tuple, Dict, List, Any
-from pointclouds import to_fixed_array, from_fixed_array, PointCloud
+from pointclouds import to_fixed_array, from_fixed_array
 import numpy as np
 import time
 from dataclasses import dataclass

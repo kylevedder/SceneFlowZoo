@@ -1,7 +1,6 @@
 import torch
 from pytorch3d.ops.knn import knn_points
 from pytorch3d.loss import chamfer_distance
-from pointclouds import PointCloud
 from typing import Union
 
 
@@ -40,11 +39,11 @@ def warped_pc_loss(warped_pc: torch.Tensor,
     return loss
 
 
-def pc0_to_pc1_distance(pc0: Union[PointCloud, torch.Tensor],
-                        pc1: Union[PointCloud, torch.Tensor]):
-    if isinstance(pc0, PointCloud):
+def pc0_to_pc1_distance(pc0: Union['PointCloud', torch.Tensor],
+                        pc1: Union['PointCloud', torch.Tensor]):
+    if hasattr(pc0, "points"):
         pc0 = pc0.points
-    if isinstance(pc1, PointCloud):
+    if hasattr(pc1, "points"):
         pc1 = pc1.points
 
     if pc0.ndim == 2:
