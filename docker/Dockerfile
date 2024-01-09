@@ -1,6 +1,6 @@
 FROM nvidia/cudagl:11.3.0-devel-ubuntu20.04
 SHELL ["/bin/bash", "-c"]
-# Set the timezone info because otherwise tzinfo blocks install 
+# Set the timezone info because otherwise tzinfo blocks install
 # flow and ignores the non-interactive frontend command 🤬🤬🤬
 RUN ln -snf /usr/share/zoneinfo/America/New_York /etc/localtime && echo "/usr/share/zoneinfo/America/New_York" > /etc/timezone
 

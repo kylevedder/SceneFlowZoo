@@ -1,0 +1,29 @@
+{
+    "name": "zeroflow:latest",
+    "initializeCommand": "touch ${localWorkspaceFolder}/docker_history.txt",
+	"build": { "dockerfile": "docker/Dockerfile" },
+    "privileged": true,
+	"workspaceMount": "source=${localWorkspaceFolder},target=/project,type=bind,consistency=default",
+    "workspaceFolder": "/project",
+    "customizations":
+    {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance"
+            ]
+        }
+    },
+	"postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+    "mounts": [
+        "source=/bigdata,target=/bigdata,type=bind,consistency=default",
+        "source=/efs,target=/efs,type=bind,consistency=default",
+        "source=/tmp/frame_results,target=/tmp/frame_results,type=bind,consistency=default",
+        "source=${localWorkspaceFolder}/docker_history.txt,target=/root/.bash_history,type=bind,consistency=default"
+    ],
+    "runArgs": [
+        "--gpus=all",
+        "-h ${HOSTNAME}",
+        "--shm-size=16gb"
+    ]
+}
