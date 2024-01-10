@@ -23,7 +23,7 @@
     ],
     "runArgs": [
         "--gpus=all",
-        "-h ${HOSTNAME}",
+        "-h=zeroflow",
         "--shm-size=16gb"
     ]
 }

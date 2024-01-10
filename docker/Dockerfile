@@ -23,12 +23,16 @@ RUN conda update -y conda
 RUN conda install numpy python=3.10 pytorch==1.12.1 torchvision torchaudio cudatoolkit=11.3 -c pytorch -y
 RUN conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y
 RUN pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu113_pyt1121/download.html
+# YAPF versions newer than this break the MMCV config system
+RUN pip install yapf==0.40.1
 RUN pip install mmcv-full==1.7.1 -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.12.0/index.html
 RUN pip install pyarrow pyquaternion open3d
 RUN pip install tensorboard
 RUN pip install pytorch-lightning==1.9.4
 RUN pip install nntime
 RUN pip install imageio
+RUN pip install black
+RUN pip install isort
 RUN pip install bucketed-scene-flow-eval==0.0.10
 
 # ENV PYTHONPATH=/project:/:${PYTHONPATH}
