@@ -1,4 +1,4 @@
-from dataclasses import BucketedSceneFlowItem
+from .dataclasses import BucketedSceneFlowItem
 from pathlib import Path
 from typing import List, Tuple
 
