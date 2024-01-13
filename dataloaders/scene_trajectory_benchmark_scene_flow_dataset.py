@@ -1,4 +1,4 @@
-from dataclasses import BucketedSceneFlowItem
+from .dataclasses import BucketedSceneFlowItem
 from pathlib import Path
 from typing import List, Tuple
 
@@ -7,7 +7,7 @@ import torch
 from bucketed_scene_flow_eval.datasets import *
 from bucketed_scene_flow_eval.datastructures import (
     SE3,
-    GroundTruthParticleTrajectories,
+    GroundTruthPointFlow,
     QuerySceneSequence,
 )
 
@@ -39,7 +39,7 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
         self, query: QuerySceneSequence
     ) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[SE3, SE3], List[np.ndarray], List[SE3]]:
         assert (
-            len(query.query_trajectory_timestamps) == 2
+            len(query.query_flow_timestamps) == 2
         ), f"Query {query} has more than two timestamps. Only Scene Flow problems are supported."
         scene = query.scene_sequence
 
@@ -58,7 +58,7 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
             full_percept_pc_arrays.append(pc_array)
             full_percept_poses.append(pose)
 
-            if timestamp in query.query_trajectory_timestamps:
+            if timestamp in query.query_flow_timestamps:
                 problem_pc_arrays.append(pc_array)
                 problem_poses.append(pose)
 
@@ -69,18 +69,18 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
             problem_poses
         ), f"Percept arrays and poses have different lengths."
         assert len(problem_pc_arrays) == len(
-            query.query_trajectory_timestamps
+            query.query_flow_timestamps
         ), f"Percept arrays and poses have different lengths."
 
         return problem_pc_arrays, problem_poses, full_percept_pc_arrays, full_percept_poses
 
-    def _process_gt(self, result: GroundTruthParticleTrajectories):
+    def _process_gt(self, result: GroundTruthPointFlow):
         flowed_source_pc = result.world_points[:, 1].astype(np.float32)
         point_cls_array = result.cls_ids
         return flowed_source_pc, point_cls_array
 
     def __getitem__(self, idx):
-        dataset_entry: Tuple[QuerySceneSequence, GroundTruthParticleTrajectories] = self.dataset[
+        dataset_entry: Tuple[QuerySceneSequence, GroundTruthPointFlow] = self.dataset[
             idx
         ]
         query, gt_result = dataset_entry
@@ -100,7 +100,6 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
         full_percept_pose_array_stack = np.stack(
             [pose.to_array() for pose in full_pc_poses_list], axis=0
         )
-
         item = BucketedSceneFlowItem(
             dataset_log_id=query.scene_sequence.log_id,
             dataset_idx=idx,

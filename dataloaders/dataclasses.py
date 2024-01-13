@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from bucketed_scene_flow_eval.datastructures import (
     SE3,
-    GroundTruthParticleTrajectories,
+    GroundTruthPointFlow,
     Timestamp,
 )
 
@@ -47,7 +47,7 @@ class BucketedSceneFlowItem:
     # This allows for the data loader to e.g. provide more point clouds for accumulation.
     full_percept_pcs_array_stack: torch.FloatTensor  # (K, PadN, 3)
     full_percept_pose_array_stack: torch.FloatTensor  # (K, 4, 4)
-    gt_trajectories: GroundTruthParticleTrajectories
+    gt_trajectories: GroundTruthPointFlow
 
     def to(self, device: str) -> None:
         """
