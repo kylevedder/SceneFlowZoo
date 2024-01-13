@@ -47,7 +47,7 @@ class FastFlow3DBucketedLoaderLoss:
             gt_flow = gt_flowed_pc - source_pc
             valid_gt_flow = gt_flow[output_item.pc0_valid_point_indexes]
 
-            flow_difference = model_results.flow - valid_gt_flow
+            flow_difference = output_item.flow - valid_gt_flow
             diff_l2 = torch.norm(flow_difference, dim=1, p=2).mean()
             total_loss += diff_l2
         return {
