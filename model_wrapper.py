@@ -186,7 +186,7 @@ class ModelWrapper(pl.LightningModule):
             pc_array[idxes] for pc_array, idxes in zip(pc1_arrays, est_pc1_flows_valid_idxes)
         ]
 
-        est_flows = _to_numpy(output_batch.flow)
+        est_flows = [_to_numpy(e.flow) for e in output_batch]
         est_flows = [from_fixed_array(flow) for flow in est_flows]
 
         est_pc2_arrays = [
