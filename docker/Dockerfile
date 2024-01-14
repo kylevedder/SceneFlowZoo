@@ -33,7 +33,7 @@ RUN pip install nntime
 RUN pip install imageio
 RUN pip install black
 RUN pip install isort
-RUN pip install bucketed-scene-flow-eval==0.0.12
+RUN pip install bucketed-scene-flow-eval==0.0.13
 
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 COPY bashrc /root/.bashrc

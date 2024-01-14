@@ -21,33 +21,100 @@ class BucketedSceneFlowItem:
         dataset_log_id: string of the log id in the dataset
         dataset_idx: the index of the sample in the dataset
         query_timestamp: An int specifying which timestep in the sequence to start the flow query.
-        source_pc: Source point cloud for the scene flow problem, shape <N, 3>
-        target_pc: Target point cloud for the scene flow problem, shape <M, 3>
+        raw_source_pc: Source point cloud for the scene flow problem, shape <N, 3>
+        raw_source_pc_mask: Source point cloud mask for the scene flow problem, shape <N>
+        raw_target_pc: Target point cloud for the scene flow problem, shape <M, 3>
+        raw_target_pc_mask: Target point cloud mask for the scene flow problem, shape <M>
         source_pose: SE3 object for the pose at the source
         target_pose: SE3 object for the pose at the target
-        gt_flowed_source_pc: The source point cloud with ground truth flow vectors applied, shape <N, 3>
-        gt_pc_class_mask: The class ID for each point in the point cloud, shape <N>
         full_percept_pcs_array_stack: Provided for convenience, the full pc instead of just the flow query points, shape <K, PadN, 3>
         full_percept_pose_array_stack: Full pose, shape <K, 4, 4>
-        gt_trajectories: Accessed as Dict[ParticleID, ParticleTrajectory] but backed by a numpy array
+        raw_gt_flowed_source_pc: The source point cloud with ground truth flow vectors applied, shape <N, 3>
+        raw_gt_flowed_source_pc_mask: The mask for the ground truth flowed source point cloud, shape <N>
+        raw_gt_pc_class_mask: The class ID for each point in the point cloud, shape <N>
+        gt_trajectories: GroundTruthPointFlow object containing the ground truth trajectories.
     """
 
     dataset_log_id: str
     dataset_idx: int
     query_timestamp: Timestamp
-    source_pc: torch.FloatTensor  # (N, 3)
-    target_pc: torch.FloatTensor  # (M, 3)
+    raw_source_pc: torch.FloatTensor  # (N, 3)
+    raw_source_pc_mask: torch.BoolTensor  # (N, 3)
+    raw_target_pc: torch.FloatTensor  # (M, 3)
+    raw_target_pc_mask: torch.BoolTensor  # (M, 3)
     source_pose: SE3
     target_pose: SE3
-    gt_flowed_source_pc: torch.FloatTensor  # (N, 3)
-    gt_pc_class_mask: torch.LongTensor  # (N,)
+    raw_gt_flowed_source_pc: torch.FloatTensor  # (N, 3)
+    raw_gt_flowed_source_pc_mask: torch.BoolTensor  # (N, 3)
+    raw_gt_pc_class_mask: torch.LongTensor  # (N,)
 
     # Included for completeness, these are the full percepts provided by the
     # dataloader rather than just the scene flow query points.
     # This allows for the data loader to e.g. provide more point clouds for accumulation.
-    full_percept_pcs_array_stack: torch.FloatTensor  # (K, PadN, 3)
-    full_percept_pose_array_stack: torch.FloatTensor  # (K, 4, 4)
+    all_percept_pcs_array_stack: torch.FloatTensor  # (K, PadN, 3)
+    all_percept_pose_array_stack: torch.FloatTensor  # (K, 4, 4)
     gt_trajectories: GroundTruthPointFlow
+
+    def __post_init__(self):
+        # Ensure the point clouds are _ x 3
+        assert (
+            self.raw_source_pc.shape[1] == 3
+        ), f"Raw source pc shape is {self.raw_source_pc.shape}"
+        assert (
+            self.raw_target_pc.shape[1] == 3
+        ), f"Raw target pc shape is {self.raw_target_pc.shape}"
+
+        # Ensure the point cloud masks are boolean and the same length as the point clouds
+        assert (
+            self.raw_source_pc_mask.dtype == torch.bool
+        ), f"Raw source pc mask dtype is {self.raw_source_pc_mask.dtype}"
+        assert (
+            self.raw_target_pc_mask.dtype == torch.bool
+        ), f"Raw target pc mask dtype is {self.raw_target_pc_mask.dtype}"
+        assert (
+            self.raw_source_pc_mask.shape == self.raw_source_pc.shape[:1]
+        ), f"Raw source pc mask shape is {self.raw_source_pc_mask.shape}"
+        assert (
+            self.raw_target_pc_mask.shape == self.raw_target_pc.shape[:1]
+        ), f"Raw target pc mask shape is {self.raw_target_pc_mask.shape}"
+
+        # Ensure the poses are SE3 objects
+        assert isinstance(self.source_pose, SE3), f"Source pose is {self.source_pose}"
+        assert isinstance(self.target_pose, SE3), f"Target pose is {self.target_pose}"
+
+        # Ensure the ground truth point cloud is _ x 3
+        assert (
+            self.raw_gt_flowed_source_pc.shape[1] == 3
+        ), f"Raw gt flowed source pc shape is {self.raw_gt_flowed_source_pc.shape}"
+
+        # Ensure the ground truth point cloud mask is boolean and the same length as the point clouds
+        assert (
+            self.raw_gt_flowed_source_pc_mask.dtype == torch.bool
+        ), f"Raw gt flowed source pc mask dtype is {self.raw_gt_flowed_source_pc_mask.dtype}"
+        assert (
+            self.raw_gt_flowed_source_pc_mask.shape == self.raw_gt_flowed_source_pc.shape[:1]
+        ), f"Raw gt flowed source pc mask shape is {self.raw_gt_flowed_source_pc_mask.shape}"
+
+        # Ensure the ground truth point cloud class mask is the same length as the point clouds
+        assert (
+            self.raw_gt_pc_class_mask.shape == self.raw_gt_flowed_source_pc.shape[:1]
+        ), f"Raw gt pc class mask shape is {self.raw_gt_pc_class_mask.shape}"
+
+    @property
+    def source_pc(self) -> torch.FloatTensor:
+        return self.raw_source_pc[self.raw_source_pc_mask]
+
+    @property
+    def target_pc(self) -> torch.FloatTensor:
+        return self.raw_target_pc[self.raw_target_pc_mask]
+
+    @property
+    def gt_flowed_source_pc(self) -> torch.FloatTensor:
+        return self.raw_gt_flowed_source_pc[self.raw_gt_flowed_source_pc_mask]
+
+    @property
+    def gt_pc_class_mask(self) -> torch.LongTensor:
+        return self.raw_gt_pc_class_mask[self.raw_gt_flowed_source_pc_mask]
 
     def to(self, device: str) -> None:
         """
@@ -56,46 +123,24 @@ class BucketedSceneFlowItem:
         Args:
             device: the string (and optional ordinal) used to construct the device object ex. 'cuda:0'
         """
-        self.source_pc = self.source_pc.to(device)
-        self.target_pc = self.target_pc.to(device)
-        self.full_percept_pcs_array_stack = self.full_percept_pcs_array_stack.to(device)
-        self.full_percept_pose_array_stack = self.full_percept_pose_array_stack.to(device)
-        self.gt_flowed_source_pc = self.gt_flowed_source_pc.to(device)
-        self.gt_pc_class_mask = self.gt_pc_class_mask.to(device)
+        self.raw_source_pc = self.raw_source_pc.to(device)
+        self.raw_source_pc_mask = self.raw_source_pc_mask.to(device)
+        self.raw_target_pc = self.raw_target_pc.to(device)
+        self.raw_target_pc_mask = self.raw_target_pc_mask.to(device)
+        self.all_percept_pcs_array_stack = self.all_percept_pcs_array_stack.to(device)
+        self.all_percept_pose_array_stack = self.all_percept_pose_array_stack.to(device)
+        self.raw_gt_flowed_source_pc = self.raw_gt_flowed_source_pc.to(device)
+        self.raw_gt_flowed_source_pc_mask = self.raw_gt_flowed_source_pc_mask.to(device)
+        self.raw_gt_pc_class_mask = self.raw_gt_pc_class_mask.to(device)
         return self
 
-    def __post_init__(self):
-        assert self.source_pc.shape[1] == 3, f"Source PC has shape {self.source_pc.shape}"
-        assert self.target_pc.shape[1] == 3, f"Target PC has shape {self.target_pc.shape}"
-        assert (
-            self.gt_flowed_source_pc.shape[1] == 3
-        ), f"GT flowed source PC has shape {self.gt_flowed_source_pc.shape}"
-        assert (
-            self.source_pc.shape == self.gt_flowed_source_pc.shape
-        ), f"Source PC {self.source_pc.shape} != GT flowed source PC {self.gt_flowed_source_pc.shape}"
-
-        assert (
-            self.gt_pc_class_mask.shape[0] == self.gt_flowed_source_pc.shape[0]
-        ), f"GT PC class mask {self.gt_pc_class_mask.shape} != GT flowed source PC {self.gt_flowed_source_pc.shape}"
-
-        assert isinstance(self.source_pose, SE3), f"Source pose is not an SE3"
-        assert isinstance(self.target_pose, SE3), f"Target pose is not an SE3"
-
-        assert (
-            self.full_percept_pcs_array_stack.shape[2] == 3
-        ), f"Percept PC has shape {self.full_percept_pcs_array_stack.shape}, but should be (K, PadN, 3)"
-        assert (
-            self.full_percept_pose_array_stack.shape[0]
-            == self.full_percept_pcs_array_stack.shape[0]
-        ), f"Full percept and pose stacks have different number of entries"
-
     def full_percept(self, idx: int) -> Tuple[np.ndarray, SE3]:
-        return from_fixed_array(self.full_percept_pcs_array_stack[idx]), SE3.from_array(
-            self.full_percept_pose_array_stack[idx]
+        return from_fixed_array(self.all_percept_pcs_array_stack[idx]), SE3.from_array(
+            self.all_percept_pose_array_stack[idx]
         )
 
     def full_percepts(self) -> List[Tuple[np.ndarray, SE3]]:
-        return [self.full_percept(idx) for idx in range(len(self.full_percept_pcs_array_stack))]
+        return [self.full_percept(idx) for idx in range(len(self.all_percept_pcs_array_stack))]
 
 
 # @dataclass

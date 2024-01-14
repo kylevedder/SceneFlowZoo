@@ -4,11 +4,12 @@ from typing import List, Tuple
 
 import numpy as np
 import torch
-from bucketed_scene_flow_eval.datasets import *
+from bucketed_scene_flow_eval.datasets import Argoverse2SceneFlow
 from bucketed_scene_flow_eval.datastructures import (
     SE3,
     GroundTruthPointFlow,
     QuerySceneSequence,
+    RawSceneSequence,
 )
 
 from pointclouds import to_fixed_array
@@ -35,83 +36,108 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
     def collate_fn(self, batch: List[BucketedSceneFlowItem]):
         return batch
 
-    def _process_query(
-        self, query: QuerySceneSequence
-    ) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[SE3, SE3], List[np.ndarray], List[SE3]]:
-        assert (
-            len(query.query_flow_timestamps) == 2
-        ), f"Query {query} has more than two timestamps. Only Scene Flow problems are supported."
-        scene = query.scene_sequence
-
+    def _extract_all_percept_arrays(
+        self, scene: RawSceneSequence
+    ) -> Tuple[List[np.ndarray], List[SE3]]:
         # These contain the full problem percepts, not just the ones in the query.
-        full_percept_pc_arrays: List[np.ndarray] = []
-        full_percept_poses: List[SE3] = []
-        # These contain only the percepts in the query.0
-        problem_pc_arrays: List[np.ndarray] = []
-        problem_poses: List[SE3] = []
+        all_percept_pc_arrays: List[np.ndarray] = []
+        all_percept_poses: List[SE3] = []
 
         for timestamp in scene.get_percept_timesteps():
             pc_frame = scene[timestamp].pc_frame
             pc_array = pc_frame.global_pc.points.astype(np.float32)
             pose = pc_frame.global_pose
 
-            full_percept_pc_arrays.append(pc_array)
-            full_percept_poses.append(pose)
+            all_percept_pc_arrays.append(pc_array)
+            all_percept_poses.append(pose)
 
-            if timestamp in query.query_flow_timestamps:
-                problem_pc_arrays.append(pc_array)
-                problem_poses.append(pose)
+        return all_percept_pc_arrays, all_percept_poses
 
-        assert len(full_percept_pc_arrays) == len(
-            full_percept_poses
-        ), f"Percept arrays and poses have different lengths."
-        assert len(problem_pc_arrays) == len(
-            problem_poses
-        ), f"Percept arrays and poses have different lengths."
-        assert len(problem_pc_arrays) == len(
-            query.query_flow_timestamps
-        ), f"Percept arrays and poses have different lengths."
+    def _process_query(
+        self, query: QuerySceneSequence
+    ) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray], Tuple[SE3, SE3]]:
+        assert (
+            len(query.query_flow_timestamps) == 2
+        ), f"Query {query} has more than two timestamps. Only Scene Flow problems are supported."
+        scene = query.scene_sequence
 
-        return problem_pc_arrays, problem_poses, full_percept_pc_arrays, full_percept_poses
+        # These contain the percepts for the query only
+        source_timestamp, target_timestamp = query.query_flow_timestamps
+
+        # Source PC
+        source_pc_frame = scene[source_timestamp].pc_frame
+        # Grab the full, unmasked point cloud.
+        source_pc_array = source_pc_frame.full_global_pc.points.astype(np.float32)
+        source_pc_mask = source_pc_frame.mask
+        source_pose = source_pc_frame.global_pose
+
+        # Target PC
+        target_pc_frame = scene[target_timestamp].pc_frame
+        # Grab the already masked point cloud.
+        target_pc_array = target_pc_frame.full_global_pc.points.astype(np.float32)
+        target_pc_mask = target_pc_frame.mask
+        target_pose = target_pc_frame.global_pose
+
+        # These contain only the percepts in the query.
+        query_pc_arrays = (source_pc_array, target_pc_array)
+        query_pc_masks = (source_pc_mask, target_pc_mask)
+        query_poses = (source_pose, target_pose)
+
+        return query_pc_arrays, query_pc_masks, query_poses
 
     def _process_gt(self, result: GroundTruthPointFlow):
         flowed_source_pc = result.world_points[:, 1].astype(np.float32)
+        is_valid_mask = result.is_valid_flow
         point_cls_array = result.cls_ids
-        return flowed_source_pc, point_cls_array
+        return flowed_source_pc, is_valid_mask, point_cls_array
 
     def __getitem__(self, idx):
-        dataset_entry: Tuple[QuerySceneSequence, GroundTruthPointFlow] = self.dataset[
-            idx
-        ]
+        dataset_entry: Tuple[QuerySceneSequence, GroundTruthPointFlow] = self.dataset[idx]
         query, gt_result = dataset_entry
 
+        all_pc_points_list, all_pc_poses_list = self._extract_all_percept_arrays(
+            query.scene_sequence
+        )
+
+        all_percept_pcs_array_stack = np.stack(
+            [to_fixed_array(pc, self.max_pc_points) for pc in all_pc_points_list], axis=0
+        )
+        all_percept_pose_array_stack = np.stack(
+            [pose.to_array() for pose in all_pc_poses_list], axis=0
+        )
+
         (
-            (source_pc, target_pc),
-            (source_pose, target_pose),
-            full_pc_points_list,
-            full_pc_poses_list,
+            (
+                raw_source_pc,
+                raw_target_pc,
+            ),
+            (
+                raw_source_pc_mask,
+                raw_target_pc_mask,
+            ),
+            (
+                source_pose,
+                target_pose,
+            ),
         ) = self._process_query(query)
 
-        gt_flowed_source_pc, gt_point_classes = self._process_gt(gt_result)
+        gt_flowed_source_pc, gt_valid_flow_mask, gt_point_classes = self._process_gt(gt_result)
 
-        full_percept_pcs_array_stack = np.stack(
-            [to_fixed_array(pc, self.max_pc_points) for pc in full_pc_points_list], axis=0
-        )
-        full_percept_pose_array_stack = np.stack(
-            [pose.to_array() for pose in full_pc_poses_list], axis=0
-        )
         item = BucketedSceneFlowItem(
             dataset_log_id=query.scene_sequence.log_id,
             dataset_idx=idx,
             query_timestamp=query.query_particles.query_init_timestamp,
-            source_pc=torch.from_numpy(source_pc),
-            target_pc=torch.from_numpy(target_pc),
+            raw_source_pc=torch.from_numpy(raw_source_pc),
+            raw_source_pc_mask=torch.from_numpy(raw_source_pc_mask),
+            raw_target_pc=torch.from_numpy(raw_target_pc),
+            raw_target_pc_mask=torch.from_numpy(raw_target_pc_mask),
             source_pose=source_pose,
             target_pose=target_pose,
-            full_percept_pcs_array_stack=torch.from_numpy(full_percept_pcs_array_stack),
-            full_percept_pose_array_stack=torch.from_numpy(full_percept_pose_array_stack),
-            gt_flowed_source_pc=torch.from_numpy(gt_flowed_source_pc),
-            gt_pc_class_mask=torch.from_numpy(gt_point_classes),
+            all_percept_pcs_array_stack=torch.from_numpy(all_percept_pcs_array_stack),
+            all_percept_pose_array_stack=torch.from_numpy(all_percept_pose_array_stack),
+            raw_gt_flowed_source_pc=torch.from_numpy(gt_flowed_source_pc),
+            raw_gt_pc_class_mask=torch.from_numpy(gt_point_classes),
+            raw_gt_flowed_source_pc_mask=torch.from_numpy(gt_valid_flow_mask),
             gt_trajectories=gt_result,
         )
 

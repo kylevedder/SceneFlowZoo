@@ -1,6 +1,6 @@
 {
     "name": "zeroflow:latest",
-    "initializeCommand": "touch ${localWorkspaceFolder}/docker_history.txt",
+    "initializeCommand": "touch ${localWorkspaceFolder}/docker_history.txt; mkdir -p /tmp/frame_results",
 	"build": { "dockerfile": "docker/Dockerfile" },
     "privileged": true,
 	"workspaceMount": "source=${localWorkspaceFolder},target=/project,type=bind,consistency=default",
@@ -10,7 +10,10 @@
         "vscode": {
             "extensions": [
                 "ms-python.python",
-                "ms-python.vscode-pylance"
+                "ms-python.black-formatter",
+                "ms-python.vscode-pylance",
+                "ms-python.mypy-type-checker",
+                "ms-azuretools.vscode-docker",
             ]
         }
     },

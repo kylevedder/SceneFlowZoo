@@ -165,9 +165,9 @@ class ModelWrapper(pl.LightningModule):
         nntime.timer_end(self, "validation_forward")
         forward_pass_after = time.time()
 
-        # if self.global_rank != 0:
-        #     raise ValueError(
-        #         "Validation step should only be run on the master node.")
+        assert len(output_batch) == len(
+            input_batch
+        ), f"output minibatch different size than input: {len(output_batch)} != {len(input_batch)}"
 
         if not self.has_labels:
             return
@@ -176,42 +176,23 @@ class ModelWrapper(pl.LightningModule):
         # Save scene trajectory output #
         ################################
 
-        est_pc1_flows_valid_idxes = [
-            from_fixed_array(_to_numpy(item.pc0_valid_point_indexes)) for item in output_batch
-        ]
-
-        pc1_arrays = [_to_numpy(e.source_pc) for e in input_batch]
-        pc_lookup_sizes = np.array([len(pc_array) for pc_array in pc1_arrays])
-        pc1_arrays = [
-            pc_array[idxes] for pc_array, idxes in zip(pc1_arrays, est_pc1_flows_valid_idxes)
-        ]
-
-        est_flows = [_to_numpy(e.flow) for e in output_batch]
-        est_flows = [from_fixed_array(flow) for flow in est_flows]
-
-        est_pc2_arrays = [
-            pc1_array + est_flow for pc1_array, est_flow in zip(pc1_arrays, est_flows)
-        ]
-
-        prepare_data_after = time.time()
-
-        for pc_lookup_size, pc1, pc2, est_pc1_flows_valid_idx, input_elem in zip(
-            pc_lookup_sizes,
-            pc1_arrays,
-            est_pc2_arrays,
-            est_pc1_flows_valid_idxes,
-            input_batch,
-        ):
-            # stack pc1 and pc2 together into an N x 2 x 3 array
-            stacked_points = np.stack([pc1, pc2], axis=1)
-            lookup = EstimatedParticleTrajectories(
-                pc_lookup_size, input_elem.gt_trajectories.trajectory_timestamps
+        for output_elem, input_elem in zip(output_batch, input_batch):
+            masked_output_pc1_flows_valid_idxes = from_fixed_array(
+                _to_numpy(output_elem.pc0_valid_point_indexes)
             )
-            lookup[est_pc1_flows_valid_idx] = (
-                stacked_points,
-                [0, 1],
-                np.zeros((len(pc2), 2), dtype=bool),
+            masked_pc1 = _to_numpy(input_elem.source_pc)
+            masked_est_pc2 = masked_pc1.copy()
+            masked_est_pc2[masked_output_pc1_flows_valid_idxes] += from_fixed_array(
+                _to_numpy(output_elem.flow)
             )
+
+            masked_stacked_points = np.stack([masked_pc1, masked_est_pc2], axis=1)
+
+            lookup = EstimatedPointFlow(
+                input_elem.gt_trajectories.num_entries,
+                input_elem.gt_trajectories.trajectory_timestamps,
+            )
+            lookup[_to_numpy(input_elem.raw_source_pc_mask)] = masked_stacked_points
 
             self.evaluator.eval(lookup, input_elem.gt_trajectories, input_elem.query_timestamp)
 
@@ -268,47 +249,6 @@ class ModelWrapper(pl.LightningModule):
             print(f"Close Nonmover EPE: {result_close_info.get_nonmover_point_epe()}")
             print(f"Full Mover EPE: {result_full_info.get_mover_point_dynamic_epe()}")
             print(f"Full Nonmover EPE: {result_full_info.get_nonmover_point_epe()}")
-
-    def _process_val_files(self):
-        assert (
-            self.scene_trajectory_output_folder is not None
-        ), f"scene_trajectory_output_folder is None"
-        pickle_files = sorted(Path(self.scene_trajectory_output_folder).glob("*.pkl"))
-        for pickle_file in tqdm.tqdm(pickle_files):
-            data = load_pickle(pickle_file, verbose=False)
-            dataset_idxes = data["dataset_idxes"]
-            query_timestamps_arr = data["query_timestamps"]
-            est_pc1_flows_valid_idxes = data["est_pc1_flows_valid_idxes"]
-
-            pc1_points = data["pc1_arrays"]
-            est_pc2_points = data["est_pc2_arrays"]
-
-            pc_lookup_sizes = data["pc_lookup_sizes"]
-
-            for (
-                dataset_idx,
-                query_timestamps,
-                pc_lookup_size,
-                pc1,
-                pc2,
-                est_pc1_flows_valid_idx,
-            ) in zip(
-                dataset_idxes,
-                query_timestamps_arr,
-                pc_lookup_sizes,
-                pc1_points,
-                est_pc2_points,
-                est_pc1_flows_valid_idxes,
-            ):
-                # stack pc1 and pc2 together into an N x 2 x 3 array
-                stacked_points = np.stack([pc1, pc2], axis=1)
-                lookup = EstimatedParticleTrajectories(pc_lookup_size, 2)
-                lookup[est_pc1_flows_valid_idx] = (
-                    stacked_points,
-                    query_timestamps,
-                    np.zeros((len(pc2), 2), dtype=bool),
-                )
-                self.evaluator.eval(dataset_idx, lookup)
 
     def on_validation_epoch_end(self):
         gathered_evaluator_list = [None for _ in range(torch.distributed.get_world_size())]
