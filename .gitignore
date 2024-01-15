@@ -22,3 +22,4 @@ cluster_tb_logs/
 **.zip
 dataset_count_compute_save_dir/
 checkpoint_eval_launch_dir/
+screenshots/
