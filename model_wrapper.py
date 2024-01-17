@@ -4,6 +4,7 @@ from typing import List
 
 import nntime
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import torch
 import torch.optim as optim
@@ -47,6 +48,9 @@ class ModelWrapper(pl.LightningModule):
             self.val_forward_args = {}
 
         self.has_labels = True if not hasattr(cfg, "has_labels") else cfg.has_labels
+        self.save_output_folder = (
+            None if not hasattr(cfg, "save_output_folder") else cfg.save_output_folder
+        )
 
         self.evaluator = evaluator
 
@@ -154,6 +158,55 @@ class ModelWrapper(pl.LightningModule):
 
         vis.run()
 
+    def _save_output(
+        self,
+        input_batch: List[BucketedSceneFlowItem],
+        output_batch: List[BucketedSceneFlowOutputItem],
+    ):
+        """
+        Save each element in the batch as a separate feather file.
+
+        The content of the feather file is a dataframe with the following columns:
+         - is_valid
+         - flow_tx_m
+         - flow_ty_m
+         - flow_tz_m
+
+        The feather file is named {save_dir} / {dataset_log_id} / {dataset_idx}.feather
+        """
+        for input_elem, output_elem in zip(input_batch, output_batch):
+            raw_source_pc = _to_numpy(input_elem.raw_source_pc)
+            raw_source_pc_mask = _to_numpy(input_elem.raw_source_pc_mask)
+            valid_pc0_idxes = _to_numpy(output_elem.pc0_valid_point_indexes)
+
+            full_flow_buffer = np.zeros_like(raw_source_pc)  # Default to zero vector
+            full_is_valid_buffer = np.zeros_like(raw_source_pc_mask)  # Default to False
+
+            cropped_flow_buffer = full_flow_buffer[raw_source_pc_mask].copy()
+            cropped_is_valid_buffer = full_is_valid_buffer[raw_source_pc_mask].copy()
+
+            cropped_flow_buffer[valid_pc0_idxes] = _to_numpy(output_elem.flow)
+            cropped_is_valid_buffer[valid_pc0_idxes] = True
+
+            full_flow_buffer[raw_source_pc_mask] = cropped_flow_buffer
+            full_is_valid_buffer[raw_source_pc_mask] = cropped_is_valid_buffer
+
+            assert full_is_valid_buffer.sum() == len(valid_pc0_idxes), f"Invalid is_valid_buffer"
+            output_df = pd.DataFrame(
+                {
+                    "is_valid": full_is_valid_buffer,
+                    "flow_tx_m": full_flow_buffer[:, 0],
+                    "flow_ty_m": full_flow_buffer[:, 1],
+                    "flow_tz_m": full_flow_buffer[:, 2],
+                }
+            )
+            save_feather(
+                Path(self.save_output_folder)
+                / f"{input_elem.dataset_log_id}/{input_elem.dataset_idx:010d}.feather",
+                output_df,
+                verbose=False,
+            )
+
     def validation_step(self, input_batch: List[BucketedSceneFlowItem], batch_idx):
         forward_pass_before = time.time()
         nntime.timer_start(self, "validation_forward")
@@ -168,6 +221,9 @@ class ModelWrapper(pl.LightningModule):
         assert len(output_batch) == len(
             input_batch
         ), f"output minibatch different size than input: {len(output_batch)} != {len(input_batch)}"
+
+        if self.save_output_folder is not None:
+            self._save_output(input_batch, output_batch)
 
         if not self.has_labels:
             return
