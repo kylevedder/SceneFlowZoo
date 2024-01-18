@@ -23,3 +23,4 @@ cluster_tb_logs/
 dataset_count_compute_save_dir/
 checkpoint_eval_launch_dir/
 screenshots/
+eval_results/

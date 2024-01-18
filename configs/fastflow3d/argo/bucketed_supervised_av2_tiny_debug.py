@@ -8,7 +8,7 @@ epochs = 1
 train_dataset = dict(args=dict(use_gt_flow=True))
 test_dataset = dict(
     args=dict(
-              eval_args=dict(output_path = "/tmp/frame_results/bucketed_epe_tiny/supervised/")))
+              eval_args=dict(output_path = "eval_results/bucketed_epe_tiny/supervised/")))
 
 # Limit batch size to 8 to fit on 24GB RTX3090
 train_dataloader = dict(

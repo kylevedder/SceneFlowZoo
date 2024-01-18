@@ -14,7 +14,7 @@ model = dict(name="FastFlow3D",
                        xl_backbone=True))
 
 test_dataset = dict(args=dict(eval_args=dict(
-    output_path="/tmp/frame_results/bucketed_epe/nsfp_distillation_xl_1x/")))
+    output_path="eval_results/bucketed_epe/nsfp_distillation_xl_1x/")))
 
 dataloader = dict(
     args=dict(batch_size=2, num_workers=4, shuffle=True, pin_memory=True))

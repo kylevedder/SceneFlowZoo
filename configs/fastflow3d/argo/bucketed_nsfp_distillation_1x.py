@@ -29,7 +29,7 @@ test_dataset = dict(
         with_rgb=False,
         eval_type="bucketed_epe",
         eval_args=dict(
-            output_path="/tmp/frame_results/bucketed_epe/nsfp_distillation_1x/"
+            output_path="eval_results/bucketed_epe/nsfp_distillation_1x/"
         )))
 
 test_dataloader = dict(
