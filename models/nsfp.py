@@ -173,39 +173,3 @@ class NSFP(nn.Module):
             )
 
         return batch_output
-
-
-class NSFPCached(NSFP):
-    def __init__(
-        self, VOXEL_SIZE, POINT_CLOUD_RANGE, SEQUENCE_LENGTH, flow_save_folder: Path
-    ) -> None:
-        super().__init__(VOXEL_SIZE, POINT_CLOUD_RANGE, SEQUENCE_LENGTH, flow_save_folder)
-        # Implement basic caching to avoid repeated folder reads for the same log.
-        self.cached_flow_folder_id = ""
-        self.cached_flow_folder_lookup: Dict[int, Path] = {}
-
-    def _setup_folder_cache(self, log_id: str):
-        self.cached_flow_folder_id = log_id
-        flow_folder = self.flow_save_folder / log_id
-        assert flow_folder.is_dir(), f"{flow_folder} does not exist"
-        self.cached_flow_folder_lookup = {
-            int(e.stem.split("_")[0]): e for e in sorted(flow_folder.glob("*.npz"))
-        }
-
-    def _load_result(self, log_id: str, dataset_idx: int):
-        if self.cached_flow_folder_id != log_id:
-            self._setup_folder_cache(log_id)
-
-        flow_file = self.cached_flow_folder_lookup[dataset_idx]
-        print(f"Loading flow from {flow_file}")
-        data = dict(np.load(flow_file, allow_pickle=True))
-        flow = data["flow"]
-        valid_idxes = data["valid_idxes"]
-        delta_time = data["delta_time"]
-        return flow, valid_idxes, delta_time
-
-    def _process_batch_entry(
-        self, pc0_points, pc1_points, pc0_valid_point_idx, dataset_idx, log_id
-    ) -> Optional[Tuple[np.ndarray, float]]:
-        flow, _, delta_time = self._load_result(log_id, dataset_idx)
-        return flow, delta_time
