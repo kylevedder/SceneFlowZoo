@@ -18,7 +18,6 @@ class NSFP(nn.Module):
         POINT_CLOUD_RANGE,
         SEQUENCE_LENGTH,
         flow_save_folder: Path,
-        skip_existing: bool = False,
     ) -> None:
         super().__init__()
         self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
@@ -31,43 +30,6 @@ class NSFP(nn.Module):
         self.nsfp_processor = NSFPProcessor()
         self.flow_save_folder = Path(flow_save_folder)
         self.flow_save_folder.mkdir(parents=True, exist_ok=True)
-        self.skip_existing = skip_existing
-        self.skip_existing_cache = self._build_skip_existing_cache()
-
-    def _build_skip_existing_cache(self):
-        skip_existing_cache = dict()
-        if not self.skip_existing:
-            return skip_existing_cache
-        for log_id_dir in self.flow_save_folder.iterdir():
-            skip_existing_cache[log_id_dir.name] = set()
-            for npz_idx, npz_file in enumerate(sorted(log_id_dir.glob("*.npz"))):
-                npz_filename_idx = int(npz_file.stem.split("_")[0])
-                # Hack: we include the sorted index and the global index in the cache.
-                # This is because sometimes they are not globally indexed due to partial runs.
-                # Adding the sorted index allows us to skip existing files even if the global
-                # index is not contiguous.
-                skip_existing_cache[log_id_dir.name].add(npz_idx)
-                skip_existing_cache[log_id_dir.name].add(npz_filename_idx)
-        return skip_existing_cache
-
-    def _save_result(
-        self,
-        log_id: str,
-        dataset_idx: int,
-        delta_time: float,
-        flow: torch.Tensor,
-        valid_idxes: torch.Tensor,
-    ):
-        flow = flow.cpu().numpy()
-        valid_idxes = valid_idxes.cpu().numpy()
-        data = {
-            "delta_time": delta_time,
-            "flow": flow,
-            "valid_idxes": valid_idxes,
-        }
-        seq_save_folder = self.flow_save_folder / log_id
-        seq_save_folder.mkdir(parents=True, exist_ok=True)
-        np.savez(seq_save_folder / f"{dataset_idx:010d}.npz", **data)
 
     def _voxelize_batched_sequence(self, pc0s, pc1s):
         pc0_voxel_infos_lst = self.voxelizer(pc0s)
@@ -107,13 +69,6 @@ class NSFP(nn.Module):
 
         o3d.visualization.draw_geometries([pc0_pcd, warped_pc0_pcd, line_set])
 
-    def _in_existing_cache(self, log_id: str, dataset_idx: int):
-        if self.skip_existing:
-            if log_id in self.skip_existing_cache:
-                if dataset_idx in self.skip_existing_cache[log_id]:
-                    return True
-        return False
-
     def forward(
         self, batched_sequence: List[BucketedSceneFlowItem]
     ) -> List[BucketedSceneFlowOutputItem]:
@@ -132,12 +87,10 @@ class NSFP(nn.Module):
 
     def _process_batch_entry(
         self, pc0_points, pc1_points, pc0_valid_point_idx, dataset_idx, log_id
-    ) -> Optional[Tuple[np.ndarray, float]]:
+    ) -> Tuple[np.ndarray, float]:
         """
         Process a pair of point clouds using NSFP to return flow
         """
-        if self.skip_existing and self._in_existing_cache(log_id, dataset_idx):
-            return None
 
         pc0_points = torch.unsqueeze(pc0_points, 0)
         pc1_points = torch.unsqueeze(pc1_points, 0)
@@ -158,29 +111,30 @@ class NSFP(nn.Module):
         delta_time = after_time - before_time  # How long to do the optimization
         # self._visualize_result(pc0_points, warped_pc0_points)
         flow = warped_pc0_points - pc0_points
-        self._save_result(
-            log_id=log_id,
-            dataset_idx=dataset_idx,
-            delta_time=delta_time,
-            flow=flow,
-            valid_idxes=pc0_valid_point_idx,
-        )
 
         return flow.squeeze(0), delta_time
+    
+    def _indices_to_mask(self, points, mask_indices):
+        mask = torch.zeros((points.shape[0], ), dtype=torch.bool)
+        assert mask_indices.max() < len(mask), f"Mask indices go outside of the tensor range. {mask_indices.max()} >= {len(mask)}"
+        mask[mask_indices] = True
+        return mask
 
     def _model_forward(
-        self, pc0s, pc1s, dataset_idxes, log_ids
+        self, full_pc0s, full_pc1s, dataset_idxes, log_ids
     ) -> List[BucketedSceneFlowOutputItem]:
         (
             pc0_points_lst,
             pc0_valid_point_idxes,
             pc1_points_lst,
             pc1_valid_point_idxes,
-        ) = self._voxelize_batched_sequence(pc0s, pc1s)
+        ) = self._voxelize_batched_sequence(full_pc0s, full_pc1s)
 
         # process minibatch
         batch_output: List[BucketedSceneFlowOutputItem] = []
         for (
+            full_p0,
+            full_p1,
             pc0_points,
             pc1_points,
             pc0_valid_point_idx,
@@ -188,6 +142,8 @@ class NSFP(nn.Module):
             dataset_idx,
             log_id,
         ) in zip(
+            full_pc0s,
+            full_pc1s,
             pc0_points_lst,
             pc1_points_lst,
             pc0_valid_point_idxes,
@@ -195,21 +151,24 @@ class NSFP(nn.Module):
             dataset_idxes,
             log_ids,
         ):
-            result = self._process_batch_entry(
+            flow, _ = self._process_batch_entry(
                 pc0_points, pc1_points, pc0_valid_point_idx, dataset_idx, log_id
             )
-            if result is None:
-                continue
-            flow, _ = result
+
+            pc0_point_mask = self._indices_to_mask(full_p0, pc0_valid_point_idx)
+            pc1_point_mask = self._indices_to_mask(full_p1, pc1_valid_point_idx)
+
+            warped_pc0 = full_p0.clone()
+            warped_pc0[pc0_point_mask] += flow
 
             batch_output.append(
                 BucketedSceneFlowOutputItem(
-                    raw_flow=flow.squeeze(0),
-                    pc0_points=pc0_points,
-                    pc0_valid_point_indexes=pc0_valid_point_idx,
-                    pc1_points=pc1_points,
-                    pc1_valid_point_indexes=pc1_valid_point_idx,
-                    pc0_warped_points=pc0_points + flow,
+                    flow=flow,
+                    pc0_points=full_p0,
+                    pc0_valid_point_mask=pc0_point_mask,
+                    pc1_points=full_p1,
+                    pc1_valid_point_mask=pc1_point_mask,
+                    pc0_warped_points=warped_pc0,
                 )
             )
 
