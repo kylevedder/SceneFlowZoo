@@ -60,4 +60,4 @@ python test_pl.py <my config path> <my checkpoint path> --gpus <num gpus>
 
 1. Dump the outputs of the model for the `test` split
     - Run a dumper config with the `save_output_folder` set to the desired output folder, and the `test` set as the `val_split` (e.g. `configs/fastflow3d/argo/nsfp_distilatation_dump_output_test.py`)
-4. Use official zip `make_submission_archive.py` file (`python /av2-api/src/av2/evaluation/scene_flow/make_submission_archive.py <path to dumped results> /efs/argoverse2/test_official_masks.zip`)
+2. Zip the output and submit it to EvalAI.
