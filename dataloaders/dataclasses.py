@@ -95,10 +95,17 @@ class BucketedSceneFlowItem:
             self.raw_gt_flowed_source_pc_mask.shape == self.raw_gt_flowed_source_pc.shape[:1]
         ), f"Raw gt flowed source pc mask shape is {self.raw_gt_flowed_source_pc_mask.shape}"
 
+        # Ensure that all entries that are true in the gt mask are also true in the source mask
+        assert (
+            self.raw_source_pc_mask[self.raw_gt_flowed_source_pc_mask].all()
+        ), "Not all valid GT entries are valid in the source mask"
+
         # Ensure the ground truth point cloud class mask is the same length as the point clouds
         assert (
             self.raw_gt_pc_class_mask.shape == self.raw_gt_flowed_source_pc.shape[:1]
         ), f"Raw gt pc class mask shape is {self.raw_gt_pc_class_mask.shape}"
+
+        
 
     @property
     def source_pc(self) -> torch.FloatTensor:
@@ -176,20 +183,38 @@ class BucketedSceneFlowOutputItem:
     Args:
         flow: A <N, 3> tensor containing the flow for each point.
         pc0_points: A <N, 3> tensor containing pc0.
-        pc0_valid_point_indexes: A <N> tensor containing a valid mask for the pointcloud pc0.
+        pc0_valid_point_mask: A <N> tensor containing a valid mask for the pointcloud pc0.
         pc1_points: A <M, 3> tensor containing pc1.
-        pc1_valid_point_indexes: A <M> tensor containing a valid mask for the pointcloud pc1.
+        pc1_valid_point_mask: A <M> tensor containing a valid mask for the pointcloud pc1.
         pc0_warped_points: A <N, 3> tensor containing the points of pc0 with the flow vectors added to them.
     """
 
     flow: torch.FloatTensor
     pc0_points: torch.FloatTensor
-    pc0_valid_point_indexes: torch.LongTensor
+    pc0_valid_point_mask: torch.BoolTensor
     pc1_points: torch.FloatTensor
-    pc1_valid_point_indexes: torch.LongTensor
+    pc1_valid_point_mask: torch.BoolTensor
     pc0_warped_points: torch.FloatTensor
 
-    def to(self, device: str) -> None:
+    def __post_init__(self):
+        # Ensure the flow and pcs are  _ x 3
+        assert self.flow.shape[1] == 3, f"Flow shape is {self.flow.shape}"
+        assert self.pc0_points.shape[1] == 3, f"PC0 shape is {self.pc0_points.shape}"
+        assert self.pc1_points.shape[1] == 3, f"PC1 shape is {self.pc1_points.shape}"
+        assert self.pc0_warped_points.shape[1] == 3, f"PC0 warped shape is {self.pc0_warped_points.shape}"
+
+        # Ensure the point cloud masks are boolean
+        assert self.pc0_valid_point_mask.dtype == torch.bool, f"PC0 mask dtype is {self.pc0_valid_point_mask.dtype}"
+        assert self.pc1_valid_point_mask.dtype == torch.bool, f"PC1 mask dtype is {self.pc1_valid_point_mask.dtype}"
+
+        # Ensure the point cloud masks are the same length as the point clouds
+        assert self.pc0_valid_point_mask.shape == self.pc0_points.shape[:1], f"PC0 mask shape is {self.pc0_valid_point_mask.shape}"
+        assert self.pc1_valid_point_mask.shape == self.pc1_points.shape[:1], f"PC1 mask shape is {self.pc1_valid_point_mask.shape}"
+
+        # Ensure the warped PC0 is the same shape as PC0
+        assert self.pc0_warped_points.shape == self.pc0_points.shape, f"PC0 warped shape is {self.pc0_warped_points.shape}"
+
+    def to(self, device: str) -> 'BucketedSceneFlowOutputItem':
         """
         Copy tensors in this batch to the target device.
 
@@ -197,9 +222,9 @@ class BucketedSceneFlowOutputItem:
             device: the string (and optional ordinal) used to construct the device object ex. 'cuda:0'
         """
         self.flow = self.flow.to(device)
-        self.pc0_points = self.target_pc.to(device)
-        self.pc0_valid_point_indexes = self.pc0_valid_point_indexes.to(device)
+        self.pc0_points = self.pc0_points.to(device)
+        self.raw_pc0_valid_point_indexes = self.raw_pc0_valid_point_indexes.to(device)
         self.pc1_points = self.pc1_points.to(device)
-        self.pc1_valid_point_indexes = self.pc1_valid_point_indexes.to(device)
+        self.raw_pc1_valid_point_indexes = self.raw_pc1_valid_point_indexes.to(device)
         self.pc0_warped_points = self.pc0_warped_points.to(device)
         return self

@@ -177,7 +177,7 @@ class ModelWrapper(pl.LightningModule):
         for input_elem, output_elem in zip(input_batch, output_batch):
             raw_source_pc = _to_numpy(input_elem.raw_source_pc)
             raw_source_pc_mask = _to_numpy(input_elem.raw_source_pc_mask)
-            valid_pc0_idxes = _to_numpy(output_elem.pc0_valid_point_indexes)
+            valid_pc0_mask = _to_numpy(output_elem.pc0_valid_point_mask)
 
             full_flow_buffer = np.zeros_like(raw_source_pc)  # Default to zero vector
             full_is_valid_buffer = np.zeros_like(raw_source_pc_mask)  # Default to False
@@ -185,13 +185,16 @@ class ModelWrapper(pl.LightningModule):
             cropped_flow_buffer = full_flow_buffer[raw_source_pc_mask].copy()
             cropped_is_valid_buffer = full_is_valid_buffer[raw_source_pc_mask].copy()
 
-            cropped_flow_buffer[valid_pc0_idxes] = _to_numpy(output_elem.flow)
-            cropped_is_valid_buffer[valid_pc0_idxes] = True
+            assert cropped_flow_buffer.shape[0] == valid_pc0_mask.shape[0], (
+                f"Flow and valid mask shapes do not match: {cropped_flow_buffer.shape} != {valid_pc0_mask.shape}"
+            )
+            cropped_flow_buffer = _to_numpy(output_elem.flow)
+            cropped_is_valid_buffer[valid_pc0_mask] = True
 
             full_flow_buffer[raw_source_pc_mask] = cropped_flow_buffer
             full_is_valid_buffer[raw_source_pc_mask] = cropped_is_valid_buffer
 
-            assert full_is_valid_buffer.sum() == len(valid_pc0_idxes), f"Invalid is_valid_buffer"
+            assert full_is_valid_buffer.sum() == valid_pc0_mask.sum(), f"Invalid is_valid_buffer"
             output_df = pd.DataFrame(
                 {
                     "is_valid": full_is_valid_buffer,
@@ -232,23 +235,29 @@ class ModelWrapper(pl.LightningModule):
         # Save scene trajectory output #
         ################################
 
-        for output_elem, input_elem in zip(output_batch, input_batch):
-            masked_output_pc1_flows_valid_idxes = from_fixed_array(
-                _to_numpy(output_elem.pc0_valid_point_indexes)
-            )
-            masked_pc1 = _to_numpy(input_elem.source_pc)
-            masked_est_pc2 = masked_pc1.copy()
-            masked_est_pc2[masked_output_pc1_flows_valid_idxes] += from_fixed_array(
-                _to_numpy(output_elem.flow)
+        for input_elem, output_elem in zip(input_batch, output_batch):
+            
+
+            # The valid input pc should be the same size as the raw output pc
+            assert input_elem.source_pc.shape == output_elem.pc0_points.shape, (
+                f"Input and output shapes do not match: {input_elem.source_pc.shape} != {output_elem.pc0_points.shape}"
             )
 
-            masked_stacked_points = np.stack([masked_pc1, masked_est_pc2], axis=1)
+            output_valid_mask = _to_numpy(output_elem.pc0_valid_point_mask)
+            pc0 = _to_numpy(output_elem.pc0_points)[output_valid_mask]
+            flowed_pc0 = _to_numpy(output_elem.pc0_warped_points)[output_valid_mask]
+
+            
+            masked_stacked_points = np.stack([pc0, flowed_pc0], axis=1)
+
+            raw_valid_mask = _to_numpy(input_elem.raw_source_pc_mask)
+            raw_valid_mask[raw_valid_mask] = output_valid_mask
 
             lookup = EstimatedPointFlow(
                 input_elem.gt_trajectories.num_entries,
                 input_elem.gt_trajectories.trajectory_timestamps,
             )
-            lookup[_to_numpy(input_elem.raw_source_pc_mask)] = masked_stacked_points
+            lookup[raw_valid_mask] = masked_stacked_points
 
             self.evaluator.eval(lookup, input_elem.gt_trajectories, input_elem.query_timestamp)
 

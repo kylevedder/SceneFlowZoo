@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 import numpy as np
 import torch
-from bucketed_scene_flow_eval.datasets import Argoverse2SceneFlow
+from bucketed_scene_flow_eval.datasets import Argoverse2SceneFlow, WaymoOpenSceneFlow
 from bucketed_scene_flow_eval.datastructures import (
     SE3,
     GroundTruthPointFlow,
@@ -12,8 +12,40 @@ from bucketed_scene_flow_eval.datastructures import (
     RawSceneSequence,
 )
 
+from dataclasses import dataclass
+
 from pointclouds import to_fixed_array
 
+@dataclass
+class ProcessedQueryResult:
+    source_pc : np.ndarray
+    target_pc : np.ndarray
+    source_pc_mask : np.ndarray
+    target_pc_mask : np.ndarray
+    source_pose : SE3
+    target_pose : SE3
+
+
+    def __post_init__(self):
+        # Ensure the point clouds are _ x 3
+        assert (
+            self.source_pc.shape[1] == 3
+        ), f"Source PC has shape {self.source_pc.shape} instead of (N, 3)"
+        assert (
+            self.target_pc.shape[1] == 3
+        ), f"Target PC has shape {self.target_pc.shape} instead of (M, 3)"
+        assert (
+            self.source_pc_mask.shape[0] == self.source_pc.shape[0]
+        ), f"Source PC mask has shape {self.source_pc_mask.shape} instead of (N,)"
+        assert (
+            self.target_pc_mask.shape[0] == self.target_pc.shape[0]
+        ), f"Target PC mask has shape {self.target_pc_mask.shape} instead of (M,)"
+        
+        # Type check the poses
+        assert isinstance(self.source_pose, SE3), f"Source pose is not an SE3 object"
+        assert isinstance(self.target_pose, SE3), f"Target pose is not an SE3 object"
+
+    
 
 class BucketedSceneFlowDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_name: str, root_dir: Path, max_pc_points: int = 120000, **kwargs):
@@ -24,6 +56,8 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
         dataset_name = dataset_name.strip().lower()
         if dataset_name == "argoverse2sceneflow":
             return Argoverse2SceneFlow(**arguments)
+        elif dataset_name == "waymoopensceneflow":
+            return WaymoOpenSceneFlow(**arguments)
 
         raise ValueError(f"Unknown dataset name {dataset_name}")
 
@@ -55,7 +89,7 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
 
     def _process_query(
         self, query: QuerySceneSequence
-    ) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray], Tuple[SE3, SE3]]:
+    ) -> ProcessedQueryResult:
         assert (
             len(query.query_flow_timestamps) == 2
         ), f"Query {query} has more than two timestamps. Only Scene Flow problems are supported."
@@ -78,12 +112,14 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
         target_pc_mask = target_pc_frame.mask
         target_pose = target_pc_frame.global_pose
 
-        # These contain only the percepts in the query.
-        query_pc_arrays = (source_pc_array, target_pc_array)
-        query_pc_masks = (source_pc_mask, target_pc_mask)
-        query_poses = (source_pose, target_pose)
-
-        return query_pc_arrays, query_pc_masks, query_poses
+        return ProcessedQueryResult(
+            source_pc = source_pc_array,
+            target_pc = target_pc_array,
+            source_pc_mask = source_pc_mask,
+            target_pc_mask = target_pc_mask,
+            source_pose = source_pose,
+            target_pose = target_pose
+        )
 
     def _process_gt(self, result: GroundTruthPointFlow):
         flowed_source_pc = result.world_points[:, 1].astype(np.float32)
@@ -91,7 +127,7 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
         point_cls_array = result.cls_ids
         return flowed_source_pc, is_valid_mask, point_cls_array
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> BucketedSceneFlowItem:
         dataset_entry: Tuple[QuerySceneSequence, GroundTruthPointFlow] = self.dataset[idx]
         query, gt_result = dataset_entry
 
@@ -106,20 +142,7 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
             [pose.to_array() for pose in all_pc_poses_list], axis=0
         )
 
-        (
-            (
-                raw_source_pc,
-                raw_target_pc,
-            ),
-            (
-                raw_source_pc_mask,
-                raw_target_pc_mask,
-            ),
-            (
-                source_pose,
-                target_pose,
-            ),
-        ) = self._process_query(query)
+        processed_query_result = self._process_query(query)
 
         gt_flowed_source_pc, gt_valid_flow_mask, gt_point_classes = self._process_gt(gt_result)
 
@@ -127,12 +150,12 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
             dataset_log_id=query.scene_sequence.log_id,
             dataset_idx=idx,
             query_timestamp=query.query_particles.query_init_timestamp,
-            raw_source_pc=torch.from_numpy(raw_source_pc),
-            raw_source_pc_mask=torch.from_numpy(raw_source_pc_mask),
-            raw_target_pc=torch.from_numpy(raw_target_pc),
-            raw_target_pc_mask=torch.from_numpy(raw_target_pc_mask),
-            source_pose=source_pose,
-            target_pose=target_pose,
+            raw_source_pc=torch.from_numpy(processed_query_result.source_pc),
+            raw_source_pc_mask=torch.from_numpy(processed_query_result.source_pc_mask),
+            raw_target_pc=torch.from_numpy(processed_query_result.target_pc),
+            raw_target_pc_mask=torch.from_numpy(processed_query_result.target_pc_mask),
+            source_pose=processed_query_result.source_pose,
+            target_pose=processed_query_result.target_pose,
             all_percept_pcs_array_stack=torch.from_numpy(all_percept_pcs_array_stack),
             all_percept_pose_array_stack=torch.from_numpy(all_percept_pose_array_stack),
             raw_gt_flowed_source_pc=torch.from_numpy(gt_flowed_source_pc),

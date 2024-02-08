@@ -42,13 +42,41 @@ class FastFlow3DBucketedLoaderLoss:
         total_loss = 0
         # Iterate through the batch
         for input_item, output_item in zip(input_batch, model_results):
-            source_pc = input_item.source_pc
-            gt_flowed_pc = input_item.gt_flowed_source_pc
-            gt_flow = gt_flowed_pc - source_pc
-            valid_gt_flow = gt_flow[output_item.pc0_valid_point_indexes]
 
-            flow_difference = output_item.flow - valid_gt_flow
-            diff_l2 = torch.norm(flow_difference, dim=1, p=2).mean()
+            ############################################################
+            # Mask for extracting the eval points for the gt flow
+            ############################################################
+
+            # Ensure that all entries in the gt mask are included in the input mask
+            assert ((input_item.raw_gt_flowed_source_pc_mask & input_item.raw_source_pc_mask) == input_item.raw_gt_flowed_source_pc_mask).all(), f"{input_item.raw_gt_flowed_source_pc_mask} & {input_item.raw_source_pc_mask} != {input_item.raw_gt_flowed_source_pc_mask}"
+
+            # Start with raw source pc, which includes not ground points
+            raw_gt_evaluation_mask = input_item.raw_source_pc_mask.clone()
+            # Add in the mask for the valid points from the voxelizer
+            raw_gt_evaluation_mask[raw_gt_evaluation_mask.clone()] = output_item.pc0_valid_point_mask.to(raw_gt_evaluation_mask.device)
+            # Add in the mask for the valid points from the gt flow.
+            raw_gt_evaluation_mask = raw_gt_evaluation_mask & input_item.raw_gt_flowed_source_pc_mask
+
+            ############################################################
+            # Mask for extracting the eval points for the output flow
+            ############################################################
+
+            # Disable the mask for the points that are not in the voxelizer
+            output_evaluation_mask = input_item.raw_gt_flowed_source_pc_mask[input_item.raw_source_pc_mask] & output_item.pc0_valid_point_mask.to(raw_gt_evaluation_mask.device)
+
+            
+
+            
+            source_pc = input_item.raw_source_pc[raw_gt_evaluation_mask]
+            gt_flowed_pc = input_item.raw_gt_flowed_source_pc[raw_gt_evaluation_mask]
+            gt_flow = gt_flowed_pc - source_pc
+
+            est_flow = output_item.flow[output_evaluation_mask]
+
+            assert gt_flow.shape == est_flow.shape, f"Flow shapes are different: gt {gt_flow.shape} != est {est_flow.shape}"
+
+            loss_difference = est_flow - gt_flow
+            diff_l2 = torch.norm(loss_difference, dim=1, p=2).mean()
             total_loss += diff_l2
         return {
             "loss": total_loss,
@@ -141,6 +169,13 @@ class FastFlow3D(nn.Module):
             self.head = FastFlowDecoderStepDown(voxel_pillar_size=VOXEL_SIZE[:2], num_stepdowns=3)
         else:
             self.head = FastFlowDecoder(pseudoimage_channels=FEATURE_CHANNELS * 2)
+    
+
+    def _indices_to_mask(self, points, mask_indices):
+        mask = torch.zeros((points.shape[0], ), dtype=torch.bool)
+        assert mask_indices.max() < len(mask), f"Mask indices go outside of the tensor range. {mask_indices.max()} >= {len(mask)}"
+        mask[mask_indices] = True
+        return mask
 
     def _model_forward(
         self, pc0s: List[torch.FloatTensor], pc1s: List[torch.FloatTensor]
@@ -156,7 +191,7 @@ class FastFlow3D(nn.Module):
         pc1_before_pseudoimages, pc1_voxel_infos_lst = self.embedder(pc1s)
 
         grid_flow_pseudoimage = self.backbone(pc0_before_pseudoimages, pc1_before_pseudoimages)
-        flows = self.head(
+        valid_flows = self.head(
             torch.cat((pc0_before_pseudoimages, pc1_before_pseudoimages), dim=1),
             grid_flow_pseudoimage,
             pc0_voxel_infos_lst,
@@ -164,17 +199,26 @@ class FastFlow3D(nn.Module):
 
         batch_output = []
 
-        for pc0_voxel_info, pc1_voxel_info, flow in zip(
-            pc0_voxel_infos_lst, pc1_voxel_infos_lst, flows
+        for raw_pc0, raw_pc1, pc0_voxel_info, pc1_voxel_info, valid_flow in zip(
+            pc0s, pc1s, pc0_voxel_infos_lst, pc1_voxel_infos_lst, valid_flows
         ):
+            pc0_valid_point_indexes = pc0_voxel_info["point_idxes"]
+            pc1_valid_point_indexes = pc1_voxel_info["point_idxes"]
+
+            raw_pc0_valid_point_mask = self._indices_to_mask(raw_pc0, pc0_valid_point_indexes)
+            raw_pc1_valid_point_mask = self._indices_to_mask(raw_pc1, pc1_valid_point_indexes)
+
+            raw_flow = torch.zeros_like(raw_pc0)
+            raw_flow[raw_pc0_valid_point_mask] = valid_flow
+
             batch_output.append(
                 BucketedSceneFlowOutputItem(
-                    flow=flow,
-                    pc0_points=pc0_voxel_info["points"],
-                    pc0_valid_point_indexes=pc0_voxel_info["point_idxes"],
-                    pc1_points=pc1_voxel_info["points"],
-                    pc1_valid_point_indexes=pc1_voxel_info["point_idxes"],
-                    pc0_warped_points=pc0_voxel_info["points"] + flow,
+                    flow=raw_flow,
+                    pc0_points=raw_pc0,
+                    pc0_valid_point_mask=raw_pc0_valid_point_mask,
+                    pc1_points=raw_pc1,
+                    pc1_valid_point_mask=raw_pc1_valid_point_mask,
+                    pc0_warped_points=raw_pc0 + raw_flow,
                 )
             )
 

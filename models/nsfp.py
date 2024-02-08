@@ -204,7 +204,7 @@ class NSFP(nn.Module):
 
             batch_output.append(
                 BucketedSceneFlowOutputItem(
-                    flow=flow.squeeze(0),
+                    raw_flow=flow.squeeze(0),
                     pc0_points=pc0_points,
                     pc0_valid_point_indexes=pc0_valid_point_idx,
                     pc1_points=pc1_points,
