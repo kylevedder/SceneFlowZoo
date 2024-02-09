@@ -232,7 +232,6 @@ class ModelWrapper(pl.LightningModule):
         # Save scene trajectory output #
         ################################
 
-        breakpoint()
         for input_elem, output_elem in zip(input_batch, output_batch):
             # The valid input pc should be the same size as the raw output pc
             assert input_elem.source_pc.shape == output_elem.pc0_points.shape, (
@@ -314,7 +313,6 @@ class ModelWrapper(pl.LightningModule):
         # Get the output from each process
         torch.distributed.all_gather_object(gathered_evaluator_list, self.evaluator)
 
-        breakpoint()
         if self.global_rank != 0:
             return {}
 

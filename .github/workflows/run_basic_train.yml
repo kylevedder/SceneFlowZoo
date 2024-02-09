@@ -1,0 +1,22 @@
+name: Run Basic Train
+
+on: [push]
+
+jobs:
+  run_train:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
+    
+    - name: Run NSFP E2E one step
+      run: |
+        python test_pl.py tests/configs/nsfp_one_step.py --cpu
+
