@@ -1,13 +1,11 @@
 import time
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
 import torch.optim as optim
-import tqdm
 from bucketed_scene_flow_eval.datastructures import *
 
 import models
@@ -30,7 +28,11 @@ class ModelWrapper(pl.LightningModule):
     def __init__(self, cfg, evaluator):
         super().__init__()
         self.cfg = cfg
-        self.model = getattr(models, cfg.model.name)(**cfg.model.args)
+
+        if cfg.model.name == "CacheWrapper":
+            self.model = getattr(models, cfg.model.name)(cfg)
+        else:
+            self.model = getattr(models, cfg.model.name)(**cfg.model.args)
 
         if not hasattr(cfg, "is_trainable") or cfg.is_trainable:
             self.loss_fn = getattr(models, cfg.loss_fn.name)(**cfg.loss_fn.args)
@@ -82,8 +84,8 @@ class ModelWrapper(pl.LightningModule):
         self.optimizer = optim.Adam(self.parameters(), lr=self.lr)
         return self.optimizer
 
-    def training_step(self, input_batch, batch_idx):
-        model_res: List[BucketedSceneFlowOutputItem] = self.model(
+    def training_step(self, input_batch: list[BucketedSceneFlowItem], batch_idx: int) -> dict[str, float]:
+        model_res: list[BucketedSceneFlowOutputItem] = self.model(
             input_batch, **self.train_forward_args
         )
         loss_res = self.loss_fn(input_batch, model_res)
@@ -93,74 +95,10 @@ class ModelWrapper(pl.LightningModule):
             self.log(f"train/{k}", v, on_step=True)
         return {"loss": loss}
 
-    def _visualize_regressed_ground_truth_pcs(
-        self, pc0_pc, pc1_pc, regressed_flowed_pc0_to_pc1, ground_truth_flowed_pc0_to_pc1
-    ):
-        import numpy as np
-        import open3d as o3d
-
-        pc0_pc = pc0_pc.cpu().numpy()
-        pc1_pc = pc1_pc.cpu().numpy()
-        regressed_flowed_pc0_to_pc1 = regressed_flowed_pc0_to_pc1.cpu().numpy()
-        ground_truth_flowed_pc0_to_pc1 = ground_truth_flowed_pc0_to_pc1.cpu().numpy()
-        # make open3d visualizer
-        vis = o3d.visualization.Visualizer()
-        vis.create_window()
-        vis.get_render_option().point_size = 1.5
-        vis.get_render_option().background_color = (0, 0, 0)
-        vis.get_render_option().show_coordinate_frame = True
-        # set up vector
-        vis.get_view_control().set_up([0, 0, 1])
-
-        # Add input PC
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pc0_pc)
-        pc_color = np.zeros_like(pc0_pc)
-        pc_color[:, 0] = 1
-        pc_color[:, 1] = 1
-        pcd.colors = o3d.utility.Vector3dVector(pc_color)
-        vis.add_geometry(pcd)
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pc1_pc)
-        pc_color = np.zeros_like(pc1_pc)
-        pc_color[:, 1] = 1
-        pc_color[:, 2] = 1
-        pcd.colors = o3d.utility.Vector3dVector(pc_color)
-        vis.add_geometry(pcd)
-
-        # Add line set between pc0 and gt pc1
-        line_set = o3d.geometry.LineSet()
-        assert len(pc0_pc) == len(
-            ground_truth_flowed_pc0_to_pc1
-        ), f"{len(pc0_pc)} != {len(ground_truth_flowed_pc0_to_pc1)}"
-        line_set_points = np.concatenate([pc0_pc, ground_truth_flowed_pc0_to_pc1], axis=0)
-
-        lines = np.array([[i, i + len(ground_truth_flowed_pc0_to_pc1)] for i in range(len(pc0_pc))])
-        line_set.points = o3d.utility.Vector3dVector(line_set_points)
-        line_set.lines = o3d.utility.Vector2iVector(lines)
-        line_set.colors = o3d.utility.Vector3dVector([[0, 1, 0] for _ in range(len(lines))])
-        vis.add_geometry(line_set)
-
-        # Add line set between pc0 and regressed pc1
-        line_set = o3d.geometry.LineSet()
-        assert len(pc0_pc) == len(
-            regressed_flowed_pc0_to_pc1
-        ), f"{len(pc0_pc)} != {len(regressed_flowed_pc0_to_pc1)}"
-        line_set_points = np.concatenate([pc0_pc, regressed_flowed_pc0_to_pc1], axis=0)
-
-        lines = np.array([[i, i + len(regressed_flowed_pc0_to_pc1)] for i in range(len(pc0_pc))])
-        line_set.points = o3d.utility.Vector3dVector(line_set_points)
-        line_set.lines = o3d.utility.Vector2iVector(lines)
-        line_set.colors = o3d.utility.Vector3dVector([[0, 0, 1] for _ in range(len(lines))])
-        vis.add_geometry(line_set)
-
-        vis.run()
-
     def _save_output(
         self,
-        input_batch: List[BucketedSceneFlowItem],
-        output_batch: List[BucketedSceneFlowOutputItem],
+        input_batch: list[BucketedSceneFlowItem],
+        output_batch: list[BucketedSceneFlowOutputItem],
     ):
         """
         Save each element in the batch as a separate feather file.
@@ -209,10 +147,10 @@ class ModelWrapper(pl.LightningModule):
                 verbose=False,
             )
 
-    def validation_step(self, input_batch: List[BucketedSceneFlowItem], batch_idx):
+    def validation_step(self, input_batch: list[BucketedSceneFlowItem], batch_idx: int) -> None:
         forward_pass_before = time.time()
         start_time = time.time()
-        output_batch: List[BucketedSceneFlowOutputItem] = self.model(
+        output_batch: list[BucketedSceneFlowOutputItem] = self.model(
             input_batch, **self.val_forward_args
         )
         end_time = time.time()
@@ -242,7 +180,7 @@ class ModelWrapper(pl.LightningModule):
             pc0 = _to_numpy(output_elem.pc0_points)[output_valid_mask]
             flowed_pc0 = _to_numpy(output_elem.pc0_warped_points)[output_valid_mask]
 
-            
+
             masked_stacked_points = np.stack([pc0, flowed_pc0], axis=1)
 
             raw_valid_mask = _to_numpy(input_elem.raw_source_pc_mask)

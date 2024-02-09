@@ -105,7 +105,7 @@ class BucketedSceneFlowItem:
             self.raw_gt_pc_class_mask.shape == self.raw_gt_flowed_source_pc.shape[:1]
         ), f"Raw gt pc class mask shape is {self.raw_gt_pc_class_mask.shape}"
 
-        
+
 
     @property
     def source_pc(self) -> torch.FloatTensor:
@@ -123,7 +123,7 @@ class BucketedSceneFlowItem:
     def gt_pc_class_mask(self) -> torch.LongTensor:
         return self.raw_gt_pc_class_mask[self.raw_gt_flowed_source_pc_mask]
 
-    def to(self, device: str) -> None:
+    def to(self, device: str | torch.device) -> None:
         """
         Copy tensors in this batch to the target device.
 
@@ -150,30 +150,6 @@ class BucketedSceneFlowItem:
         return [self.full_percept(idx) for idx in range(len(self.all_percept_pcs_array_stack))]
 
 
-# @dataclass
-# class BucketedSceneFlowBatchOutput():
-#     """
-#     A standardized set of outputs for Bucketed Scene Flow evaluation.
-#     In this dataclass, N is the number of points in pc0, M is for pc1, and all lists have len = batch size.
-
-#     Args:
-#         flow: A list of <N, 3> tensors containing the flow for each point.
-#         pc0_points_list: A list of <N, 3> tensors containing pc0.
-#         pc0_valid_point_indexes: A list of <N> tensors containing a valid mask for the pointcloud pc0.
-#         pc1_points_list: A list of <M, 3> tensors containing pc1.
-#         pc1_valid_point_indexes: A list of <M> tensors containing a valid mask for the pointcloud pc1.
-#         pc0_warped_points_list: An optional list of <N, 3> tensors containing the points of pc0 with the flow vectors added to them.
-#         batch_delta_time: An optional float of the amount of time to compute flow for the batch.
-#     """
-#     flow: List[torch.FloatTensor]
-#     pc0_points_list: List[torch.FloatTensor]
-#     pc0_valid_point_indexes: List[torch.LongTensor]
-#     pc1_points_list: List[torch.FloatTensor]
-#     pc1_valid_point_indexes: List[torch.LongTensor]
-#     pc0_warped_points_list: Optional[List[torch.FloatTensor]]
-#     batch_delta_time: Optional[float]
-
-
 @dataclass
 class BucketedSceneFlowOutputItem:
     """
@@ -192,31 +168,26 @@ class BucketedSceneFlowOutputItem:
     flow: torch.FloatTensor
     pc0_points: torch.FloatTensor
     pc0_valid_point_mask: torch.BoolTensor
-    pc1_points: torch.FloatTensor
-    pc1_valid_point_mask: torch.BoolTensor
     pc0_warped_points: torch.FloatTensor
 
     def __post_init__(self):
         # Ensure the flow and pcs are  _ x 3
         assert self.flow.shape[1] == 3, f"Flow shape is {self.flow.shape}"
         assert self.pc0_points.shape[1] == 3, f"PC0 shape is {self.pc0_points.shape}"
-        assert self.pc1_points.shape[1] == 3, f"PC1 shape is {self.pc1_points.shape}"
         assert self.pc0_warped_points.shape[1] == 3, f"PC0 warped shape is {self.pc0_warped_points.shape}"
 
         # Ensure the point cloud masks are boolean
         assert self.pc0_valid_point_mask.dtype == torch.bool, f"PC0 mask dtype is {self.pc0_valid_point_mask.dtype}"
-        assert self.pc1_valid_point_mask.dtype == torch.bool, f"PC1 mask dtype is {self.pc1_valid_point_mask.dtype}"
 
         # Ensure the point cloud masks are the same length as the point clouds
         assert self.pc0_valid_point_mask.shape == self.pc0_points.shape[:1], f"PC0 mask shape is {self.pc0_valid_point_mask.shape}"
-        assert self.pc1_valid_point_mask.shape == self.pc1_points.shape[:1], f"PC1 mask shape is {self.pc1_valid_point_mask.shape}"
 
         # Ensure the warped PC0 is the same shape as PC0
         assert self.pc0_warped_points.shape == self.pc0_points.shape, f"PC0 warped shape is {self.pc0_warped_points.shape}"
 
         assert self.flow.shape == self.pc0_points.shape, f"Flow shape {self.flow.shape} does not match PC0 shape {self.pc0_points.shape}"
 
-    def to(self, device: str) -> 'BucketedSceneFlowOutputItem':
+    def to(self, device: str | torch.device) -> 'BucketedSceneFlowOutputItem':
         """
         Copy tensors in this batch to the target device.
 
@@ -225,8 +196,6 @@ class BucketedSceneFlowOutputItem:
         """
         self.flow = self.flow.to(device)
         self.pc0_points = self.pc0_points.to(device)
-        self.raw_pc0_valid_point_indexes = self.raw_pc0_valid_point_indexes.to(device)
-        self.pc1_points = self.pc1_points.to(device)
-        self.raw_pc1_valid_point_indexes = self.raw_pc1_valid_point_indexes.to(device)
+        self.pc0_valid_point_mask = self.pc0_valid_point_mask.to(device)
         self.pc0_warped_points = self.pc0_warped_points.to(device)
         return self

@@ -14,14 +14,14 @@ class FastFlow3DSelfSupervisedLoss:
     def __init__(self, device: str = None):
         super().__init__()
 
-    def _warped_loss(self, model_res: List[BucketedSceneFlowOutputItem]):
+    def _warped_loss(self, input_batch: list[BucketedSceneFlowItem], model_res: list[BucketedSceneFlowOutputItem]):
         warped_loss = 0
-        for output_item in model_res:
-            warped_loss += warped_pc_loss(output_item.pc0_warped_points, output_item.pc1_points)
+        for input_item, output_item in zip(input_batch, model_res):
+            warped_loss += warped_pc_loss(output_item.pc0_warped_points, input_item.target_pc)
         return warped_loss
 
-    def __call__(self, input_batch, model_results: List[BucketedSceneFlowOutputItem]):
-        return {"loss": self._warped_loss(model_results)}
+    def __call__(self, input_batch: list[BucketedSceneFlowItem], model_results: List[BucketedSceneFlowOutputItem]):
+        return {"loss": self._warped_loss(input_batch, model_results)}
 
 
 class FastFlow3DBucketedLoaderLoss:
@@ -64,9 +64,9 @@ class FastFlow3DBucketedLoaderLoss:
             # Disable the mask for the points that are not in the voxelizer
             output_evaluation_mask = input_item.raw_gt_flowed_source_pc_mask[input_item.raw_source_pc_mask] & output_item.pc0_valid_point_mask.to(raw_gt_evaluation_mask.device)
 
-            
 
-            
+
+
             source_pc = input_item.raw_source_pc[raw_gt_evaluation_mask]
             gt_flowed_pc = input_item.raw_gt_flowed_source_pc[raw_gt_evaluation_mask]
             gt_flow = gt_flowed_pc - source_pc
@@ -169,7 +169,7 @@ class FastFlow3D(nn.Module):
             self.head = FastFlowDecoderStepDown(voxel_pillar_size=VOXEL_SIZE[:2], num_stepdowns=3)
         else:
             self.head = FastFlowDecoder(pseudoimage_channels=FEATURE_CHANNELS * 2)
-    
+
 
     def _indices_to_mask(self, points, mask_indices):
         mask = torch.zeros((points.shape[0], ), dtype=torch.bool)
@@ -213,12 +213,10 @@ class FastFlow3D(nn.Module):
 
             batch_output.append(
                 BucketedSceneFlowOutputItem(
-                    flow=raw_flow,
+                    flow=raw_flow,  # type: ignore[arg-type]
                     pc0_points=raw_pc0,
                     pc0_valid_point_mask=raw_pc0_valid_point_mask,
-                    pc1_points=raw_pc1,
-                    pc1_valid_point_mask=raw_pc1_valid_point_mask,
-                    pc0_warped_points=raw_pc0 + raw_flow,
+                    pc0_warped_points=raw_pc0 + raw_flow,  # type: ignore[arg-type]
                 )
             )
 

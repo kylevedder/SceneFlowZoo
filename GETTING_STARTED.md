@@ -18,7 +18,7 @@ These mounts are
 -v `pwd`:/project
 ```
 
-runs `pwd` inside the script, getting the current directory, and ensures that it's mounted as `/project` inside the container. 
+runs `pwd` inside the script, getting the current directory, and ensures that it's mounted as `/project` inside the container.
 
 The `/efs/` mounts are for the Argoverse 2 and Waymo Open datasets. You must link Argoverse 2 so that inside the container it appears at `/efs/argoverse2` and Waymo Open so that inside the container it appears at `/efs/waymo_open_processed_flow`. If you have these datasets in a different location, you can modify the `/efs` mount in `launch.sh` to point to the correct location.
 

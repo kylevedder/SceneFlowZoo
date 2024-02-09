@@ -172,11 +172,9 @@ class NSFP(nn.Module):
 
             batch_output.append(
                 BucketedSceneFlowOutputItem(
-                    flow=full_flow,
+                    flow=full_flow,  # type: ignore[arg-type]
                     pc0_points=full_p0,
                     pc0_valid_point_mask=pc0_point_mask,
-                    pc1_points=full_p1,
-                    pc1_valid_point_mask=pc1_point_mask,
                     pc0_warped_points=warped_pc0,
                 )
             )
