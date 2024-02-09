@@ -13,7 +13,8 @@ def validate_and_archive_feather_files(root_folder_path: Path, validation_data, 
         for subfolder in tqdm.tqdm(sorted(root_folder_path.iterdir()), desc="Validating and archiving folders"):
             if subfolder.is_dir():  # Ensure it's a directory
                 expected_count = validation_data.get(subfolder.name)
-                actual_count = len(list(subfolder.glob('*.feather')))
+                feather_files = sorted(subfolder.glob('*.feather'))
+                actual_count = len(feather_files)
                 
                 if expected_count is not None:
                     if actual_count != expected_count:
@@ -22,11 +23,12 @@ def validate_and_archive_feather_files(root_folder_path: Path, validation_data, 
                     raise ValueError(f"No validation data for '{subfolder.name}'. Found {actual_count} items.")
                 
                 # Add every 5th .feather file to the zip, preserving the subfolder structure
-                for i, feather_file in enumerate(subfolder.glob('*.feather')):
+                for i, feather_file in enumerate(feather_files):
                     if i % 5 == 0:  # Add every 5th file
                         # Calculate path relative to the root folder to preserve structure
                         relative_path = feather_file.relative_to(root_folder_path)
-                        zipf.write(feather_file, arcname=str(relative_path))
+                        save_relative_path = relative_path.parent / f"{i:010d}.feather"
+                        zipf.write(feather_file, arcname=str(save_relative_path))
         print(f"Archive created at '{archive_path}'")
 
 def main():
@@ -44,6 +46,10 @@ def main():
     
     # Load validation data
     validation_data = load_validation_data(args.validation_json)
+
+    # Remove archive if it already exists
+    if args.archive_path.exists():
+        args.archive_path.unlink()
     
     # Validate folder counts and archive every 5th feather file
     validate_and_archive_feather_files(args.root_folder_path, validation_data, args.archive_path)
