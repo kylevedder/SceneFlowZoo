@@ -89,6 +89,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=Path)
     parser.add_argument("--gpus", type=int, default=torch.cuda.device_count())
+    parser.add_argument("--cpu", action="store_true")
     parser.add_argument("--resume_from_checkpoint", type=Path, default=None)
     parser.add_argument(
         "--checkpoint_dir_name",
@@ -141,8 +142,8 @@ def main():
     )
 
     trainer = pl.Trainer(
-        devices=args.gpus,
-        accelerator="gpu",
+        devices=args.gpus if not args.cpu else None,
+        accelerator="gpu" if not args.cpu else "cpu",
         logger=tbl,
         strategy=DDPStrategy(find_unused_parameters=False),
         num_sanity_val_steps=2,

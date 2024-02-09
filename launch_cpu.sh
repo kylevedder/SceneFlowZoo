@@ -1,7 +1,7 @@
 #!/bin/bash
 xhost +
 touch `pwd`/docker_history.txt
-docker run --gpus=all --rm -it \
+docker run --rm -it \
  --shm-size=16gb \
  -v `pwd`:/project \
  -v /efs:/efs \

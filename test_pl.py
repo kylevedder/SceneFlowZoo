@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('config', type=Path)
 parser.add_argument('--checkpoint', type=Path, default=None)
 parser.add_argument('--gpus', type=int, default=1)
+parser.add_argument('--cpu', action="store_true")
 args = parser.parse_args()
 
 assert args.config.exists(), f"Config file {args.config} does not exist"
@@ -79,7 +80,7 @@ print("Val dataloader length:", len(test_dataloader))
 
 model = setup_model(cfg, evaluator)
 trainer = pl.Trainer(devices=args.gpus,
-                     accelerator="gpu",
+                     accelerator="gpu" if not args.cpu else "cpu",
                      strategy=DDPStrategy(find_unused_parameters=False),
                      num_sanity_val_steps=2,
                      log_every_n_steps=2,

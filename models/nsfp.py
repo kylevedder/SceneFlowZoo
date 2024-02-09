@@ -17,30 +17,49 @@ class NSFP(nn.Module):
         VOXEL_SIZE,
         POINT_CLOUD_RANGE,
         SEQUENCE_LENGTH,
-        flow_save_folder: Path,
+        iterations: int = 5000,
     ) -> None:
         super().__init__()
         self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
+        self.VOXEL_SIZE = VOXEL_SIZE
+        self.POINT_CLOUD_RANGE = POINT_CLOUD_RANGE
         assert (
             self.SEQUENCE_LENGTH == 2
         ), "This implementation only supports a sequence length of 2."
-        self.voxelizer = DynamicVoxelizer(
-            voxel_size=VOXEL_SIZE, point_cloud_range=POINT_CLOUD_RANGE
+        self.nsfp_processor = NSFPProcessor(iterations=iterations)
+
+    def _range_limit_input(self, pc : torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        minx, miny, minz, maxx, maxy, maxz = self.POINT_CLOUD_RANGE
+        # Extend the X and Y ranges by an additional voxel size to ensure that the edge points are included
+        minx -= self.VOXEL_SIZE[0]
+        miny -= self.VOXEL_SIZE[1]
+        maxx += self.VOXEL_SIZE[0]
+        maxy += self.VOXEL_SIZE[1]
+
+        # Limit the point cloud to the specified range
+        in_range_mask = (
+            (pc[:, 0] >= minx)
+            & (pc[:, 0] <= maxx)
+            & (pc[:, 1] >= miny)
+            & (pc[:, 1] <= maxy)
+            & (pc[:, 2] >= minz)
+            & (pc[:, 2] <= maxz)
         )
-        self.nsfp_processor = NSFPProcessor()
-        self.flow_save_folder = Path(flow_save_folder)
-        self.flow_save_folder.mkdir(parents=True, exist_ok=True)
 
-    def _voxelize_batched_sequence(self, pc0s, pc1s):
-        pc0_voxel_infos_lst = self.voxelizer(pc0s)
-        pc1_voxel_infos_lst = self.voxelizer(pc1s)
+        in_range_pc = pc[in_range_mask]
+        return in_range_pc, in_range_mask
 
-        pc0_points_lst = [e["points"] for e in pc0_voxel_infos_lst]
-        pc0_valid_point_idxes = [e["point_idxes"] for e in pc0_voxel_infos_lst]
-        pc1_points_lst = [e["points"] for e in pc1_voxel_infos_lst]
-        pc1_valid_point_idxes = [e["point_idxes"] for e in pc1_voxel_infos_lst]
+    def _range_limit_input_list(self, pc0s : List[torch.Tensor], pc1s : List[torch.Tensor]) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
 
-        return pc0_points_lst, pc0_valid_point_idxes, pc1_points_lst, pc1_valid_point_idxes
+        pc0_results = [self._range_limit_input(pc) for pc in pc0s]
+        pc1_results = [self._range_limit_input(pc) for pc in pc1s]
+
+        return (
+            [pc for pc, _ in pc0_results],
+            [mask for _, mask in pc0_results],
+            [pc for pc, _ in pc1_results],
+            [mask for _, mask in pc1_results],
+        )
 
     def _visualize_result(self, pc0_points: torch.Tensor, warped_pc0_points: torch.Tensor):
         # if pc0_points is torch tensor, convert to numpy
@@ -85,9 +104,7 @@ class NSFP(nn.Module):
         log_ids = [e.dataset_log_id for e in batched_sequence]
         return self._model_forward(pc0s, pc1s, dataset_idxes, log_ids)
 
-    def _process_batch_entry(
-        self, pc0_points, pc1_points, pc0_valid_point_idx, dataset_idx, log_id
-    ) -> Tuple[np.ndarray, float]:
+    def _process_batch_entry(self, pc0_points, pc1_points) -> Tuple[np.ndarray, float]:
         """
         Process a pair of point clouds using NSFP to return flow
         """
@@ -113,22 +130,16 @@ class NSFP(nn.Module):
         flow = warped_pc0_points - pc0_points
 
         return flow.squeeze(0), delta_time
-    
-    def _indices_to_mask(self, points, mask_indices):
-        mask = torch.zeros((points.shape[0], ), dtype=torch.bool)
-        assert mask_indices.max() < len(mask), f"Mask indices go outside of the tensor range. {mask_indices.max()} >= {len(mask)}"
-        mask[mask_indices] = True
-        return mask
 
     def _model_forward(
-        self, full_pc0s, full_pc1s, dataset_idxes, log_ids
+        self, full_pc0s : List[torch.Tensor], full_pc1s : List[torch.Tensor], dataset_idxes, log_ids
     ) -> List[BucketedSceneFlowOutputItem]:
         (
             pc0_points_lst,
-            pc0_valid_point_idxes,
+            pc0_valid_point_masks,
             pc1_points_lst,
-            pc1_valid_point_idxes,
-        ) = self._voxelize_batched_sequence(full_pc0s, full_pc1s)
+            pc1_valid_point_masks,
+        ) = self._range_limit_input_list(full_pc0s, full_pc1s)
 
         # process minibatch
         batch_output: List[BucketedSceneFlowOutputItem] = []
@@ -137,8 +148,8 @@ class NSFP(nn.Module):
             full_p1,
             pc0_points,
             pc1_points,
-            pc0_valid_point_idx,
-            pc1_valid_point_idx,
+            pc0_point_mask,
+            pc1_point_mask,
             dataset_idx,
             log_id,
         ) in zip(
@@ -146,24 +157,22 @@ class NSFP(nn.Module):
             full_pc1s,
             pc0_points_lst,
             pc1_points_lst,
-            pc0_valid_point_idxes,
-            pc1_valid_point_idxes,
+            pc0_valid_point_masks,
+            pc1_valid_point_masks,
             dataset_idxes,
             log_ids,
         ):
-            flow, _ = self._process_batch_entry(
-                pc0_points, pc1_points, pc0_valid_point_idx, dataset_idx, log_id
-            )
+            valid_flow, _ = self._process_batch_entry(pc0_points, pc1_points)
 
-            pc0_point_mask = self._indices_to_mask(full_p0, pc0_valid_point_idx)
-            pc1_point_mask = self._indices_to_mask(full_p1, pc1_valid_point_idx)
+            full_flow = torch.zeros_like(full_p0)
+            full_flow[pc0_point_mask] = valid_flow
 
             warped_pc0 = full_p0.clone()
-            warped_pc0[pc0_point_mask] += flow
+            warped_pc0 += full_flow
 
             batch_output.append(
                 BucketedSceneFlowOutputItem(
-                    flow=flow,
+                    flow=full_flow,
                     pc0_points=full_p0,
                     pc0_valid_point_mask=pc0_point_mask,
                     pc1_points=full_p1,

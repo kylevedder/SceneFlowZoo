@@ -214,6 +214,8 @@ class BucketedSceneFlowOutputItem:
         # Ensure the warped PC0 is the same shape as PC0
         assert self.pc0_warped_points.shape == self.pc0_points.shape, f"PC0 warped shape is {self.pc0_warped_points.shape}"
 
+        assert self.flow.shape == self.pc0_points.shape, f"Flow shape {self.flow.shape} does not match PC0 shape {self.pc0_points.shape}"
+
     def to(self, device: str) -> 'BucketedSceneFlowOutputItem':
         """
         Copy tensors in this batch to the target device.

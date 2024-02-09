@@ -2,7 +2,6 @@ import time
 from pathlib import Path
 from typing import List
 
-import nntime
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
@@ -212,13 +211,11 @@ class ModelWrapper(pl.LightningModule):
 
     def validation_step(self, input_batch: List[BucketedSceneFlowItem], batch_idx):
         forward_pass_before = time.time()
-        nntime.timer_start(self, "validation_forward")
         start_time = time.time()
         output_batch: List[BucketedSceneFlowOutputItem] = self.model(
             input_batch, **self.val_forward_args
         )
         end_time = time.time()
-        nntime.timer_end(self, "validation_forward")
         forward_pass_after = time.time()
 
         assert len(output_batch) == len(
@@ -235,9 +232,8 @@ class ModelWrapper(pl.LightningModule):
         # Save scene trajectory output #
         ################################
 
+        breakpoint()
         for input_elem, output_elem in zip(input_batch, output_batch):
-            
-
             # The valid input pc should be the same size as the raw output pc
             assert input_elem.source_pc.shape == output_elem.pc0_points.shape, (
                 f"Input and output shapes do not match: {input_elem.source_pc.shape} != {output_elem.pc0_points.shape}"
@@ -270,11 +266,6 @@ class ModelWrapper(pl.LightningModule):
 
     def _save_validation_data(self, save_dict):
         save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
-        try:
-            timing_out = f"validation_results/{self.cfg.filename}_timing.csv"
-            nntime.export_timings(self, timing_out)
-        except AssertionError as e:
-            print(f"Could not export timings. Skipping.")
 
     def _log_validation_metrics(self, validation_result_dict, verbose=True):
         result_full_info = ResultInfo(
@@ -316,10 +307,14 @@ class ModelWrapper(pl.LightningModule):
             print(f"Full Nonmover EPE: {result_full_info.get_nonmover_point_epe()}")
 
     def on_validation_epoch_end(self):
+        if not self.has_labels:
+            return {}
+
         gathered_evaluator_list = [None for _ in range(torch.distributed.get_world_size())]
         # Get the output from each process
         torch.distributed.all_gather_object(gathered_evaluator_list, self.evaluator)
 
+        breakpoint()
         if self.global_rank != 0:
             return {}
 
@@ -328,6 +323,6 @@ class ModelWrapper(pl.LightningModule):
             assert output is not None, f"Output is None for idx {idx}"
 
         # Merge the outputs from each process into a single object
-        gathered_evaluator = self.evaluator.from_evaluator_list(gathered_evaluator_list)
+        gathered_evaluator = sum(gathered_evaluator_list)
         print("Gathered evaluator of length: ", len(gathered_evaluator))
         return gathered_evaluator.compute_results()

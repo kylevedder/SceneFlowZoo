@@ -1,22 +1,22 @@
-_base_ = ["../../pseudoimage.py"]
+_base_ = ["../../configs/pseudoimage.py"]
 
 is_trainable = False
-has_labels = False
 
-test_dataset_root = "/efs/argoverse2/train/"
-save_output_folder = "/efs/argoverse2/train_nsfp_flow/"
+test_dataset_root = "/tmp/argoverse2_tiny/val/"
+save_output_folder = "/tmp/argoverse2_tiny/val_nsfp_out/"
+
+epochs = 1
+learning_rate = 2e-6
+save_every = 500
+validate_every = 10
 
 SEQUENCE_LENGTH = 2
 
 model = dict(name="NSFP",
              args=dict(VOXEL_SIZE={{_base_.VOXEL_SIZE}},
                        POINT_CLOUD_RANGE={{_base_.POINT_CLOUD_RANGE}},
-                       SEQUENCE_LENGTH=SEQUENCE_LENGTH))
-
-epochs = 20
-learning_rate = 2e-6
-save_every = 500
-validate_every = 500
+                       SEQUENCE_LENGTH=SEQUENCE_LENGTH, 
+                       iterations=1))
 
 test_dataset = dict(name="BucketedSceneFlowDataset",
                     args=dict(dataset_name="Argoverse2SceneFlow",

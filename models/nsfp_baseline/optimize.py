@@ -238,7 +238,8 @@ def optimize(pc1, pc2, device, iterations=5000, lr=8e-3, min_delta=0.00005):
     optimizer = torch.optim.Adam(params, lr=0.008, weight_decay=0)
     position = 1
     if isinstance(device, torch.device):
-        position += device.index
+        if device.index is not None:
+            position += device.index
 
     net1_forward_time = 0
     net1_loss_forward_time = 0
@@ -298,27 +299,28 @@ def optimize(pc1, pc2, device, iterations=5000, lr=8e-3, min_delta=0.00005):
         loss_backwards_time += loss_backwards_after - loss_backwards_before
         optimizer_step_time += optimizer_step_afterwards - loss_backwards_after
 
-    # print(f'net1_forward_time: {net1_forward_time}')
-    # print(f'net1_loss_forward_time: {net1_loss_forward_time}')
-    # print(f'net2_forward_time: {net2_forward_time}')
-    # print(f'net2_loss_forward_time: {net2_loss_forward_time}')
-    # print(f'loss_backwards_time: {loss_backwards_time}')
-    # print(f'optimizer_step_time: {optimizer_step_time}')
+        # print(f'net1_forward_time: {net1_forward_time}')
+        # print(f'net1_loss_forward_time: {net1_loss_forward_time}')
+        # print(f'net2_forward_time: {net2_forward_time}')
+        # print(f'net2_loss_forward_time: {net2_loss_forward_time}')
+        # print(f'loss_backwards_time: {loss_backwards_time}')
+        # print(f'optimizer_step_time: {optimizer_step_time}')
 
-    # print(
-    #     f"Total time: {net1_forward_time + net1_loss_forward_time + net2_forward_time + net2_loss_forward_time + loss_backwards_time + optimizer_step_time}"
-    # )
+        # print(
+        #     f"Total time: {net1_forward_time + net1_loss_forward_time + net2_forward_time + net2_loss_forward_time + loss_backwards_time + optimizer_step_time}"
+        # )
 
     return best_forward
 
 
 class NSFPProcessor(nn.Module):
 
-    def __init__(self):
+    def __init__(self, iterations=5000):
         super().__init__()
+        self.iterations = iterations
 
     def forward(self, pc1, pc2, device):
-        res = optimize(pc1, pc2, device)
+        res = optimize(pc1, pc2, device, iterations=self.iterations)
         return res['warped_pc'], res['target_pc']
 
 
