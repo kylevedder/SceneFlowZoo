@@ -7,10 +7,10 @@ Currently, the Zoo supports the following datasets:
  - [Argoverse 2](https://www.argoverse.org/)
  - [Waymo Open](https://waymo.com/open/)
 
-The Zoo supports the following models:
+The Zoo supports the following methods:
 
  - [FastFlow3D](https://arxiv.org/abs/2103.01306) / [FastFlow3D XL](https://vedder.io/zeroflow)
- - [ZeroFlow and ZeroFlowXL](https://vedder.io/zeroflow)
+ - [ZeroFlow and ZeroFlow XL](https://vedder.io/zeroflow)
  - [Neural Scene Flow Prior](https://arxiv.org/abs/2111.01253)
 
 
