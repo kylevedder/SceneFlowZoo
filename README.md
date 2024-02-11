@@ -27,11 +27,11 @@ If you use this codebase, please cite the following paper:
 
 ## Pre-requisites / Getting Started
 
-Read the [Getting Started](./GETTING_STARTED.md) doc for detailed instructions to setup the AV2 and Waymo Open datasets and use the prepared docker environments.
+Read the [Getting Started](./GETTING_STARTED.md) doc for detailed instructions to setup the datasets and use the prepared docker environments.
 
 ## Pretrained weights
 
-Trained weights from the paper are available for download from [this repo](https://github.com/kylevedder/zeroflow_weights).
+Trained weights for ZeroFlow and FastFlow3D are available for download from [this repo](https://github.com/kylevedder/zeroflow_weights).
 
 ## Visualizing results
 
