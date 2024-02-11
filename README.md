@@ -51,7 +51,7 @@ Note that config files specify the batch size _per GPU_, so the effective batch 
 
 ## Testing a model
 
-Inside the main  (`./launch.sh`), run the `train_pl.py` with a path to a config (inside `configs/`), a path to a checkpoint, and the number of GPUs (defaults to a single GPU).
+Inside the main  (`./launch.sh`), run the `test_pl.py` with a path to a config (inside `configs/`), a path to a checkpoint, and the number of GPUs (defaults to a single GPU).
 
 ```
 python test_pl.py <my config path> <my checkpoint path> --gpus <num gpus>
@@ -61,6 +61,6 @@ python test_pl.py <my config path> <my checkpoint path> --gpus <num gpus>
 ## Submitting to the [AV2 2024 Scene Flow competition](https://www.argoverse.org/sceneflow)
 
 1. Dump the outputs of the model for the `test` split
-    - Run a dumper config with the `save_output_folder` set to the desired output folder, and the `test` set as the `val_split` (e.g. `configs/fastflow3d/argo/bucketed_nsfp_distillation_3x_test_dumper`)
+    - Run `test_pl.py` with a dumper config that has the `save_output_folder` set to the desired output folder, and the `test` set as the `val_split` (e.g. `configs/fastflow3d/argo/bucketed_nsfp_distillation_3x_test_dumper`)
 2. Build the competition submission the output with `python av2_scene_flow_competition_submit.py <path/to/dumped/output/folder/>`
 3. Submit the `submission.zip` to the competition website.
