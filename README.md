@@ -1,18 +1,20 @@
-# ZeroFlow: Fast Zero Label Scene Flow via Distillation
+# Scene Flow Zoo
 
-[Kyle Vedder](http://vedder.io), [Neehar Peri](http://www.neeharperi.com/), [Nathaniel Chodosh](https://scholar.google.com/citations?user=b4qKr7gAAAAJ&hl=en), [Ishan Khatri](https://ishan.khatri.io/), [Eric Eaton](https://www.seas.upenn.edu/~eeaton/), [Dinesh Jayaraman](https://www.seas.upenn.edu/~dineshj/), [Yang Liu](https://youngleox.github.io/), [Deva Ramanan](https://www.cs.cmu.edu/~deva/), and [James Hays](https://faculty.cc.gatech.edu/~hays/)
+Scene Flow Zoo is an open source scene flow benchmark and model zoo. Based on the [ZeroFlow codebase](http://github.com/kylevedder/zeroflow), it uses the [BucketedSceneFlowEval](https://github.com/kylevedder/BucketedSceneFlowEval) to load datasets and perform evaluation.
 
-Project webpage: [vedder.io/zeroflow](http://vedder.io/zeroflow)
+Currently, the Zoo supports the following datasets:
 
-arXiv link: [arxiv.org/abs/2305.10424](http://arxiv.org/abs/2305.10424)
+ - [Argoverse 2](https://www.argoverse.org/)
+ - [Waymo Open](https://waymo.com/open/)
 
-**News:**
-- Jan 16th, 2024: ZeroFlow has been accepted to ICLR 2024!
-- July 31st, 2023: The ZeroFlow XL student model is now **state-of-the-art** on the [Scene Flow Challenge](https://eval.ai/web/challenges/challenge-page/2010/overview)! See the [Getting Started](./GETTING_STARTED.md) document for details on setting up training on additional data.
- - June 18th, 2023: ZeroFlow was selected as a highlighted method in the CVPR 2023 _Workshop on Autonomous Driving_ [Scene Flow Challenge](https://eval.ai/web/challenges/challenge-page/2010/overview)!
- 
+The Zoo supports the following models:
 
-**Citation:**
+ - [FastFlow3D](https://arxiv.org/abs/2103.01306) / [FastFlow3D XL](https://vedder.io/zeroflow)
+ - [ZeroFlow and ZeroFlowXL](https://vedder.io/zeroflow)
+ - [Neural Scene Flow Prior](https://arxiv.org/abs/2111.01253)
+
+
+If you use this codebase, please cite the following paper:
 
 ```
 @article{Vedder2024zeroflow,
