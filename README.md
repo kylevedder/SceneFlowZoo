@@ -62,5 +62,8 @@ python test_pl.py <my config path> <my checkpoint path> --gpus <num gpus>
 
 1. Dump the outputs of the model for the `test` split
     - Run `test_pl.py` with a dumper config that has the `save_output_folder` set to the desired output folder, and the `test` set as the `val_split` (e.g. `configs/fastflow3d/argo/bucketed_nsfp_distillation_3x_test_dumper`)
+    - The dumper must be run with a single GPU (the default), as some batch entries may be skipped with multi-GPU inference.
 2. Build the competition submission the output with `python av2_scene_flow_competition_submit.py <path/to/dumped/output/folder/>`
-3. Submit the `submission.zip` to the competition website.
+    - This will create a zip file as a sibling in the filesystem to the output folder, named after it.
+3. Submit the zip to the competition website.
+    - EvalAI's CLI must be used, as the zip file exceeds the limit for web uploads.
