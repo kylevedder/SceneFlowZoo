@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import zipfile
 import tqdm
+from typing import Any, Optional
 
 
 def load_validation_data(validation_file_path: Path):
@@ -22,16 +23,16 @@ def solicit_is_supervised() -> bool:
             print("Invalid input. Please enter 'y' or 'n'.")
 
 
-def build_metadata() -> dict:
+def build_metadata(is_supervised: Optional[bool]) -> dict[str, Any]:
     return {
-        "Is Supervised?": solicit_is_supervised(),
+        "Is Supervised?": (is_supervised if is_supervised is not None else solicit_is_supervised()),
     }
 
 
-def validate_and_archive_feather_files(root_folder_path: Path, validation_data, archive_path: Path):
+def validate_and_archive_feather_files(
+    metadata: dict[str, Any], root_folder_path: Path, validation_data, archive_path: Path
+):
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        # Add metadata to the archive
-        metadata = build_metadata()
         zipf.writestr("metadata.json", json.dumps(metadata, indent=4))
 
         for subfolder in tqdm.tqdm(
@@ -76,7 +77,8 @@ def main():
     parser.add_argument(
         "--archive_path", type=Path, help="Path to the output archive zip file.", default=None
     )
-
+    # Argument to set if supervised
+    parser.add_argument("--is_supervised", type=bool, help="Is the model supervised?", default=None)
     args = parser.parse_args()
 
     if args.archive_path is None:
@@ -91,8 +93,13 @@ def main():
     if args.archive_path.exists():
         args.archive_path.unlink()
 
+    # Add metadata to the archive
+    metadata = build_metadata(args.is_supervised)
+
     # Validate folder counts and archive every 5th feather file
-    validate_and_archive_feather_files(args.root_folder_path, validation_data, args.archive_path)
+    validate_and_archive_feather_files(
+        metadata, args.root_folder_path, validation_data, args.archive_path
+    )
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-python av2_scene_flow_competition_submit.py /tmp/argoverse2_tiny/val_sceneflow_feather/ --validation_json tests/tiny_val_sceneflow_feather_counts.json
+python av2_scene_flow_competition_submit.py /tmp/argoverse2_tiny/val_sceneflow_feather/ --validation_json tests/tiny_val_sceneflow_feather_counts.json --is_supervised False
 
 # Unzip output /tmp/argoverse2_tiny/val_sceneflow_feather_av2_2024_sf_submission.zip to /tmp/comp_output
 rm -rf /tmp/comp_output
