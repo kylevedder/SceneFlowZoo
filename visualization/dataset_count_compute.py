@@ -3,18 +3,21 @@ import os
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
-import torch  # This is required to not have the parallel hang for some reason
 import pandas as pd
 import open3d as o3d
-from bucketed_scene_flow_eval.datasets.argoverse2 import ArgoverseSupervisedSceneFlowSequenceLoader, ArgoverseSupervisedSceneFlowSequence
+from bucketed_scene_flow_eval.datasets.argoverse2 import (
+    ArgoverseSceneFlowSequence,
+    ArgoverseSceneFlowSequenceLoader,
+)
 from bucketed_scene_flow_eval.datasets.waymoopen import WaymoSupervisedSceneFlowSequenceLoader
-from pointclouds import PointCloud, SE3
+from bucketed_scene_flow_eval.datastructures import PointCloud, SE3
 import numpy as np
 import tqdm
 import joblib
 import multiprocessing
 from loader_utils import save_pickle, save_json
 import matplotlib.pyplot as plt
+
 # Import color map for plotting
 from matplotlib import cm
 import matplotlib
@@ -22,32 +25,23 @@ from typing import Tuple, List, Callable, Dict, Optional, Iterable, Iterator
 from pathlib import Path
 from PIL import Image, ImageDraw
 import argparse
-import subprocess
 import cv2
 import hashlib
 
+# Use spawn for the multiprocessing start method to avoid issues.
+multiprocessing.set_start_method("spawn")
+
 # Take the save_dir as an argument
 parser = argparse.ArgumentParser()
-parser.add_argument('--save_dir',
-                    type=Path,
-                    default=Path("/efs/argoverse2/val_dataset_stats/"))
-parser.add_argument('--dataset_dir',
-                    type=Path,
-                    default=Path("/efs/argoverse2/val/"))
-parser.add_argument('--flow_dir',
-                    type=Path,
-                    default=Path("/efs/argoverse2/val_sceneflow/"))
-parser.add_argument('--num_workers',
-                    type=int,
-                    default=multiprocessing.cpu_count())
-parser.add_argument('--dataset',
-                    type=str,
-                    default="argo",
-                    choices=["argo", "waymo"])
-parser.add_argument('--range_limit',
-                    type=float,
-                    default=None,
-                    help="The range limit for the pointclouds in meters")
+parser.add_argument("--save_dir", type=Path, default=Path("/efs/argoverse2/val_dataset_stats/"))
+parser.add_argument("--dataset_dir", type=Path, default=Path("/efs/argoverse2/val/"))
+parser.add_argument("--flow_dir", type=Path, default=Path("/efs/argoverse2/val_sceneflow_feather/"))
+parser.add_argument("--num_workers", type=int, default=multiprocessing.cpu_count())
+parser.add_argument("--dataset", type=str, default="argo", choices=["argo", "waymo"])
+parser.add_argument(
+    "--range_limit", type=float, default=None, help="The range limit for the pointclouds in meters"
+)
+parser.add_argument("--skip_video", action="store_true", help="Skip the video generation")
 args = parser.parse_args()
 
 save_dir = args.save_dir
@@ -66,37 +60,51 @@ if range_limit is not None:
     assert range_limit > 0, f"range_limit must be > 0, but got {range_limit}"
 
 speed_bucket_ticks = [
-    0, 0.1, 0.5, 1, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.5, 10.0, 12.5, 15.0, 20.0,
-    np.inf
+    0,
+    0.1,
+    0.5,
+    1,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    4.0,
+    5.0,
+    7.5,
+    10.0,
+    12.5,
+    15.0,
+    20.0,
+    np.inf,
 ]
 
 
-class RenderedCanvas():
+class RenderedCanvas:
 
     @staticmethod
-    def extents_from_pc(pc: np.ndarray,
-                        margin: float) -> Tuple[float, float, float, float]:
+    def extents_from_pc(pc: np.ndarray, margin: float) -> Tuple[float, float, float, float]:
         assert pc.ndim == 2, f"pc must be (N, 3) shape, but got {pc.shape}"
         assert pc.shape[1] == 3, f"pc must be (N, 3) shape, but got {pc.shape}"
         min_x, min_y = np.min(pc[:, :2], axis=0) - margin
         max_x, max_y = np.max(pc[:, :2], axis=0) + margin
         return min_x, max_x, min_y, max_y
 
-    def __init__(self,
-                 global_pc: np.ndarray,
-                 colors: np.ndarray,
-                 pose_list: List[SE3],
-                 grid_cell_size: Tuple[float, float],
-                 margin: float,
-                 extents: Optional[Tuple[float, float, float, float]] = None):
+    def __init__(
+        self,
+        global_pc: np.ndarray,
+        colors: np.ndarray,
+        pose_list: List[SE3],
+        grid_cell_size: Tuple[float, float],
+        margin: float,
+        extents: Optional[Tuple[float, float, float, float]] = None,
+    ):
         assert global_pc.ndim == 2, f"global_pc must be (N, 3) shape, but got {global_pc.shape}"
-        assert global_pc.shape[
-            1] == 3, f"global_pc must be (N, 3) shape, but got {global_pc.shape}"
+        assert global_pc.shape[1] == 3, f"global_pc must be (N, 3) shape, but got {global_pc.shape}"
         assert colors.ndim == 2, f"colors must be (N, 3) shape, but got {colors.shape}"
-        assert colors.shape[
-            1] == 3, f"colors must be (N, 3) shape, but got {colors.shape}"
-        assert global_pc.shape[0] == colors.shape[
-            0], f"global_pc and colors must have the same number of points, but got {global_pc.shape[0]} and {colors.shape[0]}"
+        assert colors.shape[1] == 3, f"colors must be (N, 3) shape, but got {colors.shape}"
+        assert (
+            global_pc.shape[0] == colors.shape[0]
+        ), f"global_pc and colors must have the same number of points, but got {global_pc.shape[0]} and {colors.shape[0]}"
 
         # Check that the colors are between 0 and 1 inclusive
 
@@ -106,8 +114,7 @@ class RenderedCanvas():
         self.grid_cell_size = grid_cell_size
 
         if extents is None:
-            self.min_x, self.max_x, self.min_y, self.max_y = self.extents_from_pc(
-                global_pc, margin)
+            self.min_x, self.max_x, self.min_y, self.max_y = self.extents_from_pc(global_pc, margin)
         else:
             self.min_x, self.max_x, self.min_y, self.max_y = extents
 
@@ -116,8 +123,7 @@ class RenderedCanvas():
             int((self.max_y - self.min_y) / self.grid_cell_size[1]),
         )
 
-        self.canvas = np.ones((canvas_size[0], canvas_size[1], 3),
-                              dtype=np.float32)
+        self.canvas = np.ones((canvas_size[0], canvas_size[1], 3), dtype=np.float32)
         self._draw_pc(global_pc, colors)
         self._draw_poses(pose_list)
 
@@ -125,13 +131,13 @@ class RenderedCanvas():
         canvas_coords = self._points_to_canvas_coords(self.canvas, global_pc)
         self.canvas[canvas_coords[:, 0], canvas_coords[:, 1]] = colors
 
-    def _draw_pose(self,
-                   pose: SE3,
-                   color: Tuple[float, float, float] = (0.0, 0.0, 0.0),
-                   dot_radius: int = 3):
+    def _draw_pose(
+        self, pose: SE3, color: Tuple[float, float, float] = (0.0, 0.0, 0.0), dot_radius: int = 3
+    ):
         color_np = np.array(color)
         pose_canvas_center_coord = self._points_to_canvas_coords(
-            self.canvas, pose.translation[None, :])[0]
+            self.canvas, pose.translation[None, :]
+        )[0]
 
         # Create a small PIL image for the dot
         dot_image = Image.new("L", (dot_radius * 2, dot_radius * 2), 0)
@@ -148,9 +154,9 @@ class RenderedCanvas():
         top_left_x = max(0, pose_canvas_center_coord[1] - dot_radius)
 
         # Place the mask of the dot on the main canvas
-        self.canvas[top_left_y:top_left_y + dot_radius * 2,
-                    top_left_x:top_left_x +
-                    dot_radius * 2][dot_array > 0] = color_np
+        self.canvas[
+            top_left_y : top_left_y + dot_radius * 2, top_left_x : top_left_x + dot_radius * 2
+        ][dot_array > 0] = color_np
 
     def _draw_poses(self, pose_list: List[SE3]):
         color = np.array([1.0, 0.0, 0.0])
@@ -160,18 +166,17 @@ class RenderedCanvas():
 
     def _points_to_canvas_coords(self, canvas: np.ndarray, points: np.ndarray):
         assert points.ndim == 2, f"points must be (N, 3) shape, but got {points.shape}"
-        assert points.shape[
-            1] == 3, f"points must be (N, 3) shape, but got {points.shape}"
+        assert points.shape[1] == 3, f"points must be (N, 3) shape, but got {points.shape}"
         points_xy = points[:, :2]
         # Convert points from xy coordinates to canvas coordinates
         # First shift the points to be in the positive quadrant
         points_xy_shifted = points_xy - np.array([self.min_x, self.min_y])
         # Then scale the points to be in the canvas size
         points_xy_scaled = points_xy_shifted / np.array(
-            [self.max_x - self.min_x, self.max_y - self.min_y])
+            [self.max_x - self.min_x, self.max_y - self.min_y]
+        )
         # Then scale the points to be in the canvas size
-        points_canvas_coords = points_xy_scaled * np.array(
-            [canvas.shape[0], canvas.shape[1]])
+        points_canvas_coords = points_xy_scaled * np.array([canvas.shape[0], canvas.shape[1]])
         # Convert them to integers
         points_canvas_coords = points_canvas_coords.astype(np.int32)
         return points_canvas_coords
@@ -195,12 +200,14 @@ class RenderedCanvas():
             print(f"Saved {path} of shape {self.canvas.shape}")
 
 
-class BEVRenderer():
+class BEVRenderer:
 
-    def __init__(self,
-                 sequence: ArgoverseSupervisedSceneFlowSequence,
-                 grid_cell_size: Tuple[float, float] = (0.05, 0.05),
-                 margin: float = 1.0):
+    def __init__(
+        self,
+        sequence: ArgoverseSceneFlowSequence,
+        grid_cell_size: Tuple[float, float] = (0.05, 0.05),
+        margin: float = 1.0,
+    ):
         self.sequence = sequence
         self.grid_cell_size = grid_cell_size
         self.margin = margin
@@ -211,9 +218,12 @@ class BEVRenderer():
 
     def update(self, pc: PointCloud, ego_pose: SE3, category_ids: np.ndarray):
         # Ensure that the pointcloud matches the shape of the category ids
-        assert category_ids.ndim == 1, f"category_ids must be (N, ) shape, but got {category_ids.shape}"
-        assert pc.points.shape[0] == category_ids.shape[
-            0], f"pc and category_ids must have the same number of points, but got {pc.points.shape[0]} and {category_ids.shape[0]}"
+        assert (
+            category_ids.ndim == 1
+        ), f"category_ids must be (N, ) shape, but got {category_ids.shape}"
+        assert (
+            pc.points.shape[0] == category_ids.shape[0]
+        ), f"pc and category_ids must have the same number of points, but got {pc.points.shape[0]} and {category_ids.shape[0]}"
 
         self.pc_list.append(pc.points)
         self.pose_list.append(ego_pose)
@@ -222,9 +232,9 @@ class BEVRenderer():
     def render_video_frames(self) -> Iterator[RenderedCanvas]:
         global_pc = np.concatenate(self.pc_list, axis=0)
         extents = RenderedCanvas.extents_from_pc(global_pc, self.margin)
-        for frame_pc, frame_category_ids, pose in zip(self.pc_list,
-                                                      self.category_id_list,
-                                                      self.pose_list):
+        for frame_pc, frame_category_ids, pose in zip(
+            self.pc_list, self.category_id_list, self.pose_list
+        ):
             frame_colors = self._category_ids_to_rgbs(frame_category_ids)
 
             # Sort the global pc by z so that the points with larger Z are at the end of the array.
@@ -234,11 +244,9 @@ class BEVRenderer():
             frame_pc = frame_pc[sorted_order]
             frame_colors = frame_colors[sorted_order]
 
-            canvas = RenderedCanvas(frame_pc,
-                                    frame_colors, [pose],
-                                    self.grid_cell_size,
-                                    self.margin,
-                                    extents=extents)
+            canvas = RenderedCanvas(
+                frame_pc, frame_colors, [pose], self.grid_cell_size, self.margin, extents=extents
+            )
 
             yield canvas
 
@@ -257,25 +265,22 @@ class BEVRenderer():
         global_pc = global_pc[sorted_order]
         global_colors = global_colors[sorted_order]
 
-        canvas = RenderedCanvas(global_pc, global_colors, self.pose_list,
-                                self.grid_cell_size, self.margin)
+        canvas = RenderedCanvas(
+            global_pc, global_colors, self.pose_list, self.grid_cell_size, self.margin
+        )
 
         # Build color mapping for the legend
         unique_category_ids = np.unique(global_category_ids)
-        unique_category_id_colors = self._category_ids_to_rgbs(
-            unique_category_ids)
+        unique_category_id_colors = self._category_ids_to_rgbs(unique_category_ids)
 
         category_name_to_color = {
             category_id_to_name(id): color.tolist()
-            for id, color in zip(unique_category_ids,
-                                 unique_category_id_colors)
+            for id, color in zip(unique_category_ids, unique_category_id_colors)
         }
 
         return canvas, category_name_to_color
 
-    def _category_ids_to_rgbs(self,
-                              category_ids,
-                              color_map_name: str = "gist_rainbow"):
+    def _category_ids_to_rgbs(self, category_ids, color_map_name: str = "gist_rainbow"):
         """Convert a category ID to an RGB color for plotting"""
         assert category_ids is not None, f"category_ids must not be None"
         # Category ids have to be a numpy array for indexing
@@ -283,10 +288,11 @@ class BEVRenderer():
             category_ids, np.ndarray
         ), f"category_ids must be a numpy array, but got {type(category_ids)}"
         # Category ids have to be (N, ) shape
-        assert category_ids.ndim == 1, f"category_ids must be (N, ) shape, but got {category_ids.shape}"
+        assert (
+            category_ids.ndim == 1
+        ), f"category_ids must be (N, ) shape, but got {category_ids.shape}"
 
-        is_background_mask = (
-            category_ids == self.sequence.category_name_to_id("BACKGROUND"))
+        is_background_mask = category_ids == self.sequence.category_name_to_id("BACKGROUND")
 
         # We need to shatter classes because the color map is continuous and
         # many of the most common classes are close together.
@@ -296,9 +302,7 @@ class BEVRenderer():
 
         # Ensure start at 0
         category_idxes = category_ids - min_id
-        assert np.all(
-            category_idxes >= 0
-        ), f"category_idxes must be >= 0, but got {category_idxes}"
+        assert np.all(category_idxes >= 0), f"category_idxes must be >= 0, but got {category_idxes}"
         assert np.all(
             category_idxes < len(category_id_set)
         ), f"category_idxes must be < len(category_ids), but got {category_idxes} against {len(category_id_set)}"
@@ -314,8 +318,7 @@ class BEVRenderer():
         shattered_category_ids = shattered_id_set[category_idxes]
         assert shattered_category_ids.shape == category_ids.shape
 
-        normalized_colormap_entries = (shattered_category_ids -
-                                       min_id) / (max_id - min_id)
+        normalized_colormap_entries = (shattered_category_ids - min_id) / (max_id - min_id)
 
         color_map = matplotlib.colormaps[color_map_name]
         result = color_map(normalized_colormap_entries)[:, :3]
@@ -324,42 +327,33 @@ class BEVRenderer():
         return result
 
 
-class SpeedBucketResult():
+class SpeedBucketResult:
 
-    def __init__(self, category_id_list: List[int],
-                 speed_bucket_ticks: List[float]):
+    def __init__(self, category_id_list: List[int], speed_bucket_ticks: List[float]):
         self.category_id_list = category_id_list
         self.speed_bucket_ticks = speed_bucket_ticks
         self.count_array = np.zeros(
-            (len(self.category_id_list), len(self.speed_bucket_ranges())),
-            dtype=np.int64)
+            (len(self.category_id_list), len(self.speed_bucket_ranges())), dtype=np.int64
+        )
 
-        self.category_id_to_category_idx = {
-            id: idx
-            for idx, id in enumerate(self.category_id_list)
-        }
+        self.category_id_to_category_idx = {id: idx for idx, id in enumerate(self.category_id_list)}
 
-        self.category_idx_to_category_id = {
-            idx: id
-            for idx, id in enumerate(self.category_id_list)
-        }
+        self.category_idx_to_category_id = {idx: id for idx, id in enumerate(self.category_id_list)}
 
     def speed_bucket_ranges(self):
         return list(zip(self.speed_bucket_ticks, self.speed_bucket_ticks[1:]))
 
-    def update(self, pc: PointCloud, flowed_pc: PointCloud,
-               category_ids: np.ndarray):
+    def update(self, pc: PointCloud, flowed_pc: PointCloud, category_ids: np.ndarray):
         flow = flowed_pc.points - pc.points
         for category_id in np.unique(category_ids):
             category_idx = self.category_id_to_category_idx[category_id]
-            category_mask = (category_ids == category_id)
+            category_mask = category_ids == category_id
             category_flow = flow[category_mask]
             # convert to m/s
             category_speeds = np.linalg.norm(category_flow, axis=1) * 10.0
-            category_speed_buckets = np.digitize(category_speeds,
-                                                 self.speed_bucket_ticks) - 1
+            category_speed_buckets = np.digitize(category_speeds, self.speed_bucket_ticks) - 1
             for speed_bucket_idx in range(len(self.speed_bucket_ranges())):
-                bucket_mask = (category_speed_buckets == speed_bucket_idx)
+                bucket_mask = category_speed_buckets == speed_bucket_idx
                 num_points = np.sum(bucket_mask)
                 self.count_array[category_idx, speed_bucket_idx] += num_points
 
@@ -375,8 +369,7 @@ class SpeedBucketResult():
         assert np.all(
             self.speed_bucket_ticks == other.speed_bucket_ticks
         ), f"speed_bucket_ticks must be the same, but got {self.speed_bucket_ticks} and {other.speed_bucket_ticks}"
-        result = SpeedBucketResult(self.category_id_list,
-                                   self.speed_bucket_ticks)
+        result = SpeedBucketResult(self.category_id_list, self.speed_bucket_ticks)
         result.count_array = self.count_array + other.count_array
         return result
 
@@ -390,8 +383,8 @@ class SpeedBucketResult():
             category_name = category_id_to_name(category_id)
             category_count_array = self.count_array[category_idx]
             category_count_dict = dict(
-                (k, int(v))
-                for k, v in zip(self.speed_bucket_ticks, category_count_array))
+                (k, int(v)) for k, v in zip(self.speed_bucket_ticks, category_count_array)
+            )
             result[category_name] = category_count_dict
 
         return result
@@ -418,27 +411,27 @@ def save_bev_video(bev_renderer: BEVRenderer, video_save_folder: Path):
     # Call FFmpeg to create a video from these images
     # Adjust '-framerate' as needed
     command = [
-        '/usr/bin/ffmpeg',
-        '-framerate',
-        '10',  # Set the frame rate
-        '-i',
-        f'{video_save_folder}/frame_%05d.png',  # Input file pattern
-        '-vf',
-        'pad=ceil(iw/2)*2:ceil(ih/2)*2',  # Pad to even width and height
-        '-c:v',
-        'libx264',  # Codec
-        '-profile:v',
-        'high',
-        '-crf',
-        '18',  # Quality, lower is better, typical values range from 18 to 24
-        '-pix_fmt',
-        'yuv420p',  # Pixel format
-        '-threads',
-        '1',  # Threads
-        f'{output_mp4_path}'  # Output file
+        "/usr/bin/ffmpeg",
+        "-framerate",
+        "10",  # Set the frame rate
+        "-i",
+        f"{video_save_folder}/frame_%05d.png",  # Input file pattern
+        "-vf",
+        "pad=ceil(iw/2)*2:ceil(ih/2)*2",  # Pad to even width and height
+        "-c:v",
+        "libx264",  # Codec
+        "-profile:v",
+        "high",
+        "-crf",
+        "18",  # Quality, lower is better, typical values range from 18 to 24
+        "-pix_fmt",
+        "yuv420p",  # Pixel format
+        "-threads",
+        "1",  # Threads
+        f"{output_mp4_path}",  # Output file
     ]
 
-    command_str = ' '.join(command)
+    command_str = " ".join(command)
     # Save the command to a file for debugging
     with open(video_save_folder / "ffmpeg_command.sh", "w") as f:
         f.write(command_str)
@@ -450,41 +443,40 @@ def save_bev_video(bev_renderer: BEVRenderer, video_save_folder: Path):
     print(f"Saved video to {output_mp4_path}")
 
 
-def save_bev_thumbnail_info(sequence: ArgoverseSupervisedSceneFlowSequence,
-                            renderer: BEVRenderer,
-                            speed_buckets: SpeedBucketResult,
-                            thumbnail_dir: Path):
+def save_bev_thumbnail_info(
+    sequence: ArgoverseSceneFlowSequence,
+    renderer: BEVRenderer,
+    speed_buckets: SpeedBucketResult,
+    thumbnail_dir: Path,
+):
     thumbnail_dir = Path(thumbnail_dir)
     # Make the parent directory if it does not exist
     thumbnail_dir.mkdir(parents=True, exist_ok=True)
 
     # Save the counts array
-    save_json(thumbnail_dir / "category_count.json",
-              speed_buckets.to_named_dict(sequence.category_id_to_name),
-              verbose=False)
+    save_json(
+        thumbnail_dir / "category_count.json",
+        speed_buckets.to_named_dict(sequence.category_id_to_name),
+        verbose=False,
+    )
 
-    canvas, category_name_to_color = renderer.render(
-        sequence.category_id_to_name)
+    canvas, category_name_to_color = renderer.render(sequence.category_id_to_name)
 
     # Save the canvas as a PNG
     canvas.save(thumbnail_dir / "bev.png", verbose=False)
 
-    save_json(thumbnail_dir / "category_color.json",
-              category_name_to_color,
-              verbose=False)
+    save_json(thumbnail_dir / "category_color.json", category_name_to_color, verbose=False)
 
 
-def clean_process_sequence(
-        sequence: ArgoverseSupervisedSceneFlowSequence) -> SpeedBucketResult:
-    speed_bucket_result = SpeedBucketResult(sequence.category_ids(),
-                                            speed_bucket_ticks)
+def clean_process_sequence(sequence: ArgoverseSceneFlowSequence) -> SpeedBucketResult:
+    speed_bucket_result = SpeedBucketResult(sequence.category_ids(), speed_bucket_ticks)
     bev_renderer = BEVRenderer(sequence)
     for idx in range(len(sequence)):
         frame = sequence.load(idx, 0)
-        pc = frame['relative_pc']
-        flowed_pc = frame['relative_flowed_pc']
-        category_ids = frame['pc_classes']
-        ego_pose = frame['relative_pose']
+        pc = frame.relative_pc
+        flowed_pc = frame.relative_flowed_pc
+        category_ids = frame.pc_classes
+        ego_pose = frame.relative_pose
         if flowed_pc is None:
             continue
 
@@ -499,41 +491,43 @@ def clean_process_sequence(
         bev_renderer.update(pc, ego_pose, category_ids)
 
     sequence_save_dir = save_dir / f"range_{range_limit}" / f"{sequence.log_id}"
-    save_bev_thumbnail_info(sequence, bev_renderer, speed_bucket_result,
-                            sequence_save_dir)
+    save_bev_thumbnail_info(sequence, bev_renderer, speed_bucket_result, sequence_save_dir)
 
-    save_bev_video(bev_renderer, sequence_save_dir / "animation")
+    if not args.skip_video:
+        save_bev_video(bev_renderer, sequence_save_dir / "animation")
 
     return speed_bucket_result
 
 
 if args.dataset == "argo":
-    sequence_loader = ArgoverseSupervisedSceneFlowSequenceLoader(
-        raw_data_path=dataset_dir, flow_data_path=flow_dir, with_rgb=False)
+    sequence_loader = ArgoverseSceneFlowSequenceLoader(
+        raw_data_path=dataset_dir, flow_data_path=flow_dir, with_rgb=False
+    )
 elif args.dataset == "waymo":
     sequence_loader = WaymoSupervisedSceneFlowSequenceLoader(sequence_dir=dataset_dir)
 else:
     raise ValueError(f"Unknown dataset {args.dataset}")
 
 sequence_ids = sequence_loader.get_sequence_ids()
-sequences = [
-    sequence_loader.load_sequence(sequence_id) for sequence_id in sequence_ids
-]
+assert len(sequence_ids) > 0, f"No sequences found in {dataset_dir}"
+sequences = [sequence_loader.load_sequence(sequence_id) for sequence_id in sequence_ids]
 
 if args.num_workers <= 1:
     speed_bucket_result_lst = [
-        clean_process_sequence(sequence)
-        for sequence in tqdm.tqdm(sequences, position=1)
+        clean_process_sequence(sequence) for sequence in tqdm.tqdm(sequences, position=1)
     ]
 else:
     # process sequences in parallel with joblib
     speed_bucket_result_lst = joblib.Parallel(n_jobs=args.num_workers)(
-        joblib.delayed(clean_process_sequence)(sequence)
-        for sequence in tqdm.tqdm(sequences))
+        joblib.delayed(clean_process_sequence)(sequence) for sequence in tqdm.tqdm(sequences)
+    )
+assert len(speed_bucket_result_lst) == len(
+    sequences
+), f"Expected {len(sequences)} results, but got {len(speed_bucket_result_lst)}"
 summed_speed_bucket_result: SpeedBucketResult = sum(speed_bucket_result_lst)
 
 # save the counts array
 save_json(
-    save_dir / 'dataset_count_info.json',
-    summed_speed_bucket_result.to_named_dict(
-        sequence_loader.category_id_to_name))
+    save_dir / "dataset_count_info.json",
+    summed_speed_bucket_result.to_named_dict(sequence_loader.category_id_to_name),
+)
