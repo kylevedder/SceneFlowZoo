@@ -116,10 +116,9 @@ def draw_frames(reset_view=False):
     frame_list = full_frame_list[starter_idx : starter_idx + 2]
     color_scalar = np.linspace(0.5, 1, len(frame_list))
     for idx, frame_dict in enumerate(frame_list):
-        pc = frame_dict["relative_pc"]
-        pose = frame_dict["relative_pose"]
-        flowed_pc = frame_dict["relative_flowed_pc"]
-        # classes = frame_dict['pc_classes']
+        pc = frame_dict.relative_pc
+        pose = frame_dict.relative_pose
+        flowed_pc = frame_dict.relative_flowed_pc
 
         # Add base point cloud
         pcd = o3d.geometry.PointCloud()
