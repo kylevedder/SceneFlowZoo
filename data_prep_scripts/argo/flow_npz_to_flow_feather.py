@@ -7,66 +7,69 @@ import shutil
 import multiprocessing
 import joblib
 import tqdm
+from loader_utils import load_npz, save_feather
 
-from bucketed_scene_flow_eval.datasets import construct_dataset
-from bucketed_scene_flow_eval.datastructures import QuerySceneSequence, GroundTruthParticleTrajectories, O3DVisualizer
+from bucketed_scene_flow_eval.datasets.argoverse2 import (
+    ArgoverseNoFlowSequenceLoader,
+    ArgoverseNoFlowSequence,
+)
 
-parser = argparse.ArgumentParser(
-    description="Convert NPZ files to Feather format.")
+parser = argparse.ArgumentParser(description="Convert NPZ files to Feather format.")
+parser.add_argument("raw_data_dir", type=Path)
+parser.add_argument("npz_dir", type=Path)
 parser.add_argument("output_root_dir", type=Path)
-parser.add_argument("input_root_dirs", type=str, nargs='+')
+
 args = parser.parse_args()
 
-# Convert input_root_dirs from string to Path objects
-input_root_dirs = [Path(dir) for dir in args.input_root_dirs]
-
-# We want to iterate over the dataset and save each item as a feather file
-# using the dataset index as a name.
-dataset = construct_dataset(
-    "Argoverse2SceneFlow",
-    dict(root_dir=input_root_dirs,
-         use_gt_flow=False,
-         with_rgb=False,
-         with_ground=True))
+assert args.raw_data_dir.exists(), f"{args.raw_data_dir} does not exist."
+assert args.npz_dir.exists(), f"{args.npz_dir} does not exist."
+args.output_root_dir.mkdir(parents=True, exist_ok=True)
 
 
-def save_feather(entries: Dict[str, np.ndarray], output_path: Path):
-    df = pd.DataFrame(entries)
-    # Make parent dirs
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    # Remove the file if it exists
-    if output_path.exists():
-        output_path.unlink()
-    df.to_feather(output_path)
+def to_feather_dict(is_valid: np.ndarray, flow: np.ndarray) -> Dict[str, np.ndarray]:
+    return {
+        "is_valid": is_valid.astype(bool),
+        "flow_tx_m": flow[:, 0].astype(np.float32),
+        "flow_ty_m": flow[:, 1].astype(np.float32),
+        "flow_tz_m": flow[:, 2].astype(np.float32),
+    }
 
 
-def save_item(entry: Tuple[QuerySceneSequence,
-                           GroundTruthParticleTrajectories], idx: int):
-    query: QuerySceneSequence = entry[0]
-    gt: GroundTruthParticleTrajectories = entry[1]
-    # gt.world_points.shape is (N, 2, 3)
-    assert gt.world_points.shape[
-        1] == 2, f"Expected 2 frames, got {gt.world_points.shape[1]}."
-    world_flow = gt.world_points[:, 1] - gt.world_points[:, 0]
+def process_sequence(sequence_id: str):
+    sequence = sequence_loader.load_sequence(sequence_id)
+    npz_paths = sorted((args.npz_dir / f"{sequence_id}").glob("*.npz"))
 
-    assert gt.is_valid.shape[
-        1] == 2, f"Expected 2 frames, got {gt.is_valid.shape[1]}."
+    assert len(sequence) - 1 == len(
+        npz_paths
+    ), f"Expected {len(sequence) - 1} npz files, got {len(npz_paths)}."
+    for idx, npz_path in enumerate(npz_paths):
+        npz_data = load_npz(npz_path, verbose=False)
+        npz_flow = npz_data["flow"]
+        npz_valid_idxes = npz_data["valid_idxes"]
 
-    # We want to save the following:
-    is_valid = gt.is_valid[:, 0] & gt.is_valid[:, 1]
-    flow_tx_m = world_flow[:, 0]
-    flow_ty_m = world_flow[:, 1]
-    flow_tz_m = world_flow[:, 2]
+        # Only loading this to get the ground mask and valid mask
+        item = sequence.load(idx, idx + 1)
 
-    save_feather(
-        {
-            "is_valid": is_valid.astype(bool),
-            "flow_tx_m": flow_tx_m.astype(np.float32),
-            "flow_ty_m": flow_ty_m.astype(np.float32),
-            "flow_tz_m": flow_tz_m.astype(np.float32)
-        }, args.output_root_dir / query.scene_sequence.log_id /
-        f"{idx:010d}.feather")
+        is_valid_no_ground = np.zeros_like(item.in_range_mask, dtype=bool)
+        is_valid_no_ground[npz_valid_idxes] = True
+        flow_no_ground = np.zeros_like(item.ego_pc)
+        flow_no_ground[npz_valid_idxes] = npz_flow
+
+        is_valid_with_ground = np.zeros_like(item.is_ground_points, dtype=bool)
+        is_valid_with_ground[~item.is_ground_points] = is_valid_no_ground
+        flow_with_ground = np.zeros_like(item.ego_pc_with_ground)
+        flow_with_ground[~item.is_ground_points] = flow_no_ground
+
+        save_feather(
+            args.output_root_dir / sequence_id / f"{idx:010d}.feather",
+            to_feather_dict(is_valid_with_ground, flow_with_ground),
+            verbose=False,
+        )
 
 
-for idx, entry in enumerate(tqdm.tqdm(dataset)):
-    save_item(entry, idx)
+sequence_loader = ArgoverseNoFlowSequenceLoader(args.raw_data_dir)
+# Parallelize with multiprocessing
+joblib.Parallel(n_jobs=-1, verbose=10)(
+    joblib.delayed(process_sequence)(sequence_id)
+    for sequence_id in sorted(sequence_loader.get_sequence_ids())
+)

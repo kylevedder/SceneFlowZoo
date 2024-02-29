@@ -5,6 +5,8 @@ import subprocess
 import numpy as np
 import pandas as pd
 
+from typing import Union
+
 
 def _compute_size_metric(filepath: Path):
     size = filepath.stat().st_size
@@ -152,7 +154,9 @@ def load_feather(filename: Path, verbose: bool = True):
     return pd.read_feather(filename)
 
 
-def save_feather(filename: Path, contents, verbose: bool = True):
+def save_feather(filename: Path, contents : Union[pd.DataFrame, dict], verbose: bool = True):
+    if isinstance(contents, dict):
+        contents = pd.DataFrame(contents)
     filename = Path(filename)
     if verbose:
         print(f"Saving {filename}", end="")
