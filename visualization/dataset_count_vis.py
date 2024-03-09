@@ -2,12 +2,12 @@ from pathlib import Path
 from loader_utils import load_pickle, load_json
 import numpy as np
 from typing import Dict, List, Any
-from bucketed_scene_flow_eval.datasets.argoverse2.av2_metacategories import METACATAGORIES
+from bucketed_scene_flow_eval.datasets.argoverse2.av2_metacategories import BUCKETED_METACATAGORIES
 import matplotlib.pyplot as plt
 from visualization.figures.plot_lib import *
 
 # Load the saved count data
-raw_class_speed_count_info = load_json('/efs/argoverse2/val_dataset_stats/dataset_count_info.json')
+raw_class_speed_count_info = load_json("/efs/argoverse2/val_dataset_stats/dataset_count_info.json")
 
 
 def merge_classes(class_a: Dict[float, int], class_b: Dict[float, int]):
@@ -22,15 +22,13 @@ def merge_classes(class_a: Dict[float, int], class_b: Dict[float, int]):
 
 
 def collapse_into_meta_classes(
-        count_info: Dict[str, Dict[float,
-                                   int]]) -> Dict[str, Dict[float, int]]:
+    count_info: Dict[str, Dict[float, int]]
+) -> Dict[str, Dict[float, int]]:
     # Create a new dictionary to hold the meta classes
     meta_class_count_info = {}
     # For each meta class, merge the classes that belong to it
-    for meta_class_name, meta_class_entries in METACATAGORIES.items():
-        entries_list = [
-            count_info[category_name] for category_name in meta_class_entries
-        ]
+    for meta_class_name, meta_class_entries in BUCKETED_METACATAGORIES.items():
+        entries_list = [count_info[category_name] for category_name in meta_class_entries]
         # Merge the classes
         merged_class = entries_list[0]
         for class_to_merge in entries_list[1:]:
@@ -49,8 +47,7 @@ def collapse_speed_buckets(entry: Dict[float, int]) -> int:
 meta_class_speed_info = collapse_into_meta_classes(raw_class_speed_count_info)
 meta_class_count_info = {
     meta_class_name: collapse_speed_buckets(meta_class_speed_info)
-    for meta_class_name, meta_class_speed_info in
-    meta_class_speed_info.items()
+    for meta_class_name, meta_class_speed_info in meta_class_speed_info.items()
 }
 
 
@@ -60,39 +57,41 @@ def plot_meta_class_counts(meta_class_count_info: Dict[str, int]):
 
     total_points = sum(meta_class_count_info.values())
 
-    entries = sorted(meta_class_count_info.items(),
-                     key=lambda x: x[1],
-                     reverse=True)
+    entries = sorted(meta_class_count_info.items(), key=lambda x: x[1], reverse=True)
     labels, values = zip(*entries)
+    labels = [label.replace("_", " ") for label in labels]
 
     bars = ax.bar(labels, values, color=color(0, 1))
-    ax.set_xlabel("Meta Class")
-    ax.set_ylabel("Lidar points in semantic class")
-    ax.set_title("Meta Class Counts")
+    # ax.set_xlabel("Meta Class")
+    ax.set_ylabel("Lidar points in metaclass")
+    # ax.set_title("Meta Class Counts")
 
     # Make the X axis labels at 30 Degrees
-    plt.xticks(rotation=30, ha='right')
+    plt.xticks(rotation=30, ha="right")
     # Make the Y axis log scale
-    ax.set_yscale('log')
+    ax.set_yscale("log")
 
     # Annotate bars with percentage
     for bar in bars:
         height = bar.get_height()
         percentage = 100 * height / total_points
-        ax.text(bar.get_x() + bar.get_width() / 2,
-                height,
-                f'{percentage:.2f}%',
-                ha='center',
-                va='bottom')
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{percentage:.2f}%",
+            ha="center",
+            va="bottom",
+        )
 
     # fig.savefig("meta_class_counts.pdf", bbox_inches='tight')
     # Save as a png as well
-        
+
     # Remove the top and right axes
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
     savefig("validation_results", "meta_class_counts")
 
+set_font(12)
 
 plot_meta_class_counts(meta_class_count_info)
 

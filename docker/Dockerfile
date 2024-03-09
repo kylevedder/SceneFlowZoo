@@ -27,7 +27,7 @@ RUN pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfile
 RUN pip install yapf==0.40.1
 RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.4 imageio black isort nntime
 RUN pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.12.0/index.html
-RUN pip install bucketed-scene-flow-eval==1.0.1
+RUN pip install bucketed-scene-flow-eval==1.0.4
 RUN apt install -y unzip
 
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
