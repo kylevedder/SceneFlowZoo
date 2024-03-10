@@ -3,32 +3,30 @@ name: Run Basic Train
 on: [push]
 
 jobs:
-  run_train_nsfp:
+
+  prepare_runner:
     runs-on: ubuntu-latest
-    container:
-      image: kylevedder/zeroflow_bucketed
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v2
-
-    - name: Setup env
-      run: |
-        ./tests/setup.sh
-    
-    - name: Run NSFP E2E one step
-      run: |
-        python test_pl.py tests/configs/nsfp_one_step.py --cpu
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@master
+      with:
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
 
   run_competition_bundler:
     runs-on: ubuntu-latest
+    needs: prepare_runner
 
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -44,4 +42,24 @@ jobs:
     - name: Validate Competition Submit
       run: |
         ./tests/validate_competition_submit.sh
+
+  run_train_nsfp:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed
+    needs: prepare_runner
+    
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
+    
+    - name: Run NSFP E2E one step
+      run: |
+        python test_pl.py tests/configs/nsfp_one_step.py --cpu
+
 
