@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -9,9 +10,8 @@ import torch.optim as optim
 from bucketed_scene_flow_eval.datastructures import *
 
 import models
-from dataloaders import BucketedSceneFlowItem, BucketedSceneFlowOutputItem
+from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence, EvalWrapper
 from loader_utils import *
-from pointclouds import from_fixed_array
 
 
 def _to_numpy(x):
@@ -25,7 +25,7 @@ def _to_numpy(x):
 
 
 class ModelWrapper(pl.LightningModule):
-    def __init__(self, cfg, evaluator):
+    def __init__(self, cfg, evaluator: EvalWrapper):
         super().__init__()
         self.cfg = cfg
 
@@ -49,7 +49,7 @@ class ModelWrapper(pl.LightningModule):
             self.val_forward_args = {}
 
         self.has_labels = True if not hasattr(cfg, "has_labels") else cfg.has_labels
-        self.save_output_folder = (
+        self.save_output_folder: Optional[Path] = (
             None if not hasattr(cfg, "save_output_folder") else cfg.save_output_folder
         )
 
@@ -84,8 +84,10 @@ class ModelWrapper(pl.LightningModule):
         self.optimizer = optim.Adam(self.parameters(), lr=self.lr)
         return self.optimizer
 
-    def training_step(self, input_batch: list[BucketedSceneFlowItem], batch_idx: int) -> dict[str, float]:
-        model_res: list[BucketedSceneFlowOutputItem] = self.model(
+    def training_step(
+        self, input_batch: list[BucketedSceneFlowInputSequence], batch_idx: int
+    ) -> dict[str, float]:
+        model_res: list[BucketedSceneFlowOutputSequence] = self.model(
             input_batch, **self.train_forward_args
         )
         loss_res = self.loss_fn(input_batch, model_res)
@@ -95,13 +97,13 @@ class ModelWrapper(pl.LightningModule):
             self.log(f"train/{k}", v, on_step=True)
         return {"loss": loss}
 
-    def _save_output(
-        self,
-        input_batch: list[BucketedSceneFlowItem],
-        output_batch: list[BucketedSceneFlowOutputItem],
+    def _save_output_flat_structure(
+        self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence
     ):
         """
-        Save each element in the batch as a separate feather file.
+        Save each flow as a single result.
+
+        This assumes that the output is length is 1.
 
         The content of the feather file is a dataframe with the following columns:
          - is_valid
@@ -109,59 +111,64 @@ class ModelWrapper(pl.LightningModule):
          - flow_ty_m
          - flow_tz_m
 
-        The feather file is named {save_dir} / {dataset_log_id} / {dataset_idx}.feather
+        The feather file is named {save_dir} / {input_length} / {dataset_log_id} / {dataset_idx}.feather
         """
+        ego_flows = output.to_ego_lidar_flow_list()
+        assert len(ego_flows) == 1, f"Expected a single ego flow, but got {len(ego_flows)}"
+        ego_flow = ego_flows[0]
+        output_df = pd.DataFrame(
+            {
+                "is_valid": ego_flow.mask,
+                "flow_tx_m": ego_flow.full_flow[:, 0],
+                "flow_ty_m": ego_flow.full_flow[:, 1],
+                "flow_tz_m": ego_flow.full_flow[:, 2],
+            }
+        )
+        assert self.save_output_folder is not None, "self.save_output_folder is None"
+        save_path = (
+            Path(self.save_output_folder)
+            / f"sequence_len_{len(input):03d}"
+            / f"{input.sequence_log_id}"
+            / f"{input.dataset_idx:010d}.feather"
+        )
+        save_feather(
+            save_path,
+            output_df,
+            verbose=False,
+        )
+
+    def _save_output_sequence(
+        self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence
+    ):
+        if len(output.ego_flows) == 1:
+            self._save_output_flat_structure(input, output)
+            return
+        else:
+            raise NotImplementedError(
+                f"Saving multiple ego flows (given {len(output.ego_flows)}) is not yet implemented."
+            )
+
+    def _save_output_batch(
+        self,
+        input_batch: list[BucketedSceneFlowInputSequence],
+        output_batch: list[BucketedSceneFlowOutputSequence],
+    ):
         for input_elem, output_elem in zip(input_batch, output_batch):
-            raw_source_pc = _to_numpy(input_elem.raw_source_pc)
-            raw_source_pc_mask = _to_numpy(input_elem.raw_source_pc_mask)
-            valid_pc0_mask = _to_numpy(output_elem.pc0_valid_point_mask)
+            self._save_output_sequence(input_elem, output_elem)
 
-            full_flow_buffer = np.zeros_like(raw_source_pc)  # Default to zero vector
-            full_is_valid_buffer = np.zeros_like(raw_source_pc_mask)  # Default to False
-
-            cropped_flow_buffer = full_flow_buffer[raw_source_pc_mask].copy()
-            cropped_is_valid_buffer = full_is_valid_buffer[raw_source_pc_mask].copy()
-
-            assert cropped_flow_buffer.shape[0] == valid_pc0_mask.shape[0], (
-                f"Flow and valid mask shapes do not match: {cropped_flow_buffer.shape} != {valid_pc0_mask.shape}"
-            )
-            cropped_flow_buffer = _to_numpy(output_elem.flow)
-            cropped_is_valid_buffer[valid_pc0_mask] = True
-
-            full_flow_buffer[raw_source_pc_mask] = cropped_flow_buffer
-            full_is_valid_buffer[raw_source_pc_mask] = cropped_is_valid_buffer
-
-            assert full_is_valid_buffer.sum() == valid_pc0_mask.sum(), f"Invalid is_valid_buffer"
-            output_df = pd.DataFrame(
-                {
-                    "is_valid": full_is_valid_buffer,
-                    "flow_tx_m": full_flow_buffer[:, 0],
-                    "flow_ty_m": full_flow_buffer[:, 1],
-                    "flow_tz_m": full_flow_buffer[:, 2],
-                }
-            )
-            save_feather(
-                Path(self.save_output_folder)
-                / f"{input_elem.dataset_log_id}/{input_elem.dataset_idx:010d}.feather",
-                output_df,
-                verbose=False,
-            )
-
-    def validation_step(self, input_batch: list[BucketedSceneFlowItem], batch_idx: int) -> None:
-        forward_pass_before = time.time()
-        start_time = time.time()
-        output_batch: list[BucketedSceneFlowOutputItem] = self.model(
+    def validation_step(
+        self, input_batch: list[BucketedSceneFlowInputSequence], batch_idx: int
+    ) -> None:
+        output_batch: list[BucketedSceneFlowOutputSequence] = self.model(
             input_batch, **self.val_forward_args
         )
-        end_time = time.time()
-        forward_pass_after = time.time()
 
         assert len(output_batch) == len(
             input_batch
         ), f"output minibatch different size than input: {len(output_batch)} != {len(input_batch)}"
 
         if self.save_output_folder is not None:
-            self._save_output(input_batch, output_batch)
+            self._save_output_batch(input_batch, output_batch)
 
         if not self.has_labels:
             return
@@ -171,35 +178,7 @@ class ModelWrapper(pl.LightningModule):
         ################################
 
         for input_elem, output_elem in zip(input_batch, output_batch):
-            # The valid input pc should be the same size as the raw output pc
-            assert input_elem.source_pc.shape == output_elem.pc0_points.shape, (
-                f"Input and output shapes do not match: {input_elem.source_pc.shape} != {output_elem.pc0_points.shape}"
-            )
-
-            output_valid_mask = _to_numpy(output_elem.pc0_valid_point_mask)
-            pc0 = _to_numpy(output_elem.pc0_points)[output_valid_mask]
-            flowed_pc0 = _to_numpy(output_elem.pc0_warped_points)[output_valid_mask]
-
-
-            masked_stacked_points = np.stack([pc0, flowed_pc0], axis=1)
-
-            raw_valid_mask = _to_numpy(input_elem.raw_source_pc_mask)
-            raw_valid_mask[raw_valid_mask] = output_valid_mask
-
-            lookup = EstimatedPointFlow(
-                input_elem.gt_trajectories.num_entries,
-                input_elem.gt_trajectories.trajectory_timestamps,
-            )
-            lookup[raw_valid_mask] = masked_stacked_points
-
-            self.evaluator.eval(lookup, input_elem.gt_trajectories, input_elem.query_timestamp)
-
-        loop_data_after = time.time()
-
-        # print("Forward pass time:", end_time - start_time)
-        # print("Prepare data time:", prepare_data_after - forward_pass_after)
-        # print("Loop data time:", loop_data_after - prepare_data_after)
-        # print("Total time: ", loop_data_after - start_time)
+            self.evaluator.eval(input_elem, output_elem)
 
     def _save_validation_data(self, save_dict):
         save_pickle(f"validation_results/{self.cfg.filename}.pkl", save_dict)
@@ -247,7 +226,9 @@ class ModelWrapper(pl.LightningModule):
         if not self.has_labels:
             return {}
 
-        gathered_evaluator_list = [None for _ in range(torch.distributed.get_world_size())]
+        gathered_evaluator_list: list[EvalWrapper] = [
+            None for _ in range(torch.distributed.get_world_size())
+        ]
         # Get the output from each process
         torch.distributed.all_gather_object(gathered_evaluator_list, self.evaluator)
 
@@ -259,6 +240,6 @@ class ModelWrapper(pl.LightningModule):
             assert output is not None, f"Output is None for idx {idx}"
 
         # Merge the outputs from each process into a single object
-        gathered_evaluator = sum(gathered_evaluator_list)
+        gathered_evaluator = sum(e.evaluator for e in gathered_evaluator_list)
         print("Gathered evaluator of length: ", len(gathered_evaluator))
         return gathered_evaluator.compute_results()

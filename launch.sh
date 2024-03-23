@@ -9,9 +9,9 @@ docker run --gpus=all --rm -it \
  -v /bigdata:/bigdata \
  -v /tmp/.X11-unix:/tmp/.X11-unix \
  -v /tmp/frame_results:/tmp/frame_results \
+ -v /tmp:/tmp \
  -v `pwd`/docker_history.txt:/root/.bash_history \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \
  zeroflow_bucketed:latest
- 

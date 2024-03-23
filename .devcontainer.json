@@ -1,7 +1,7 @@
 {
     "name": "zeroflow:latest",
     "initializeCommand": "touch ${localWorkspaceFolder}/docker_history.txt; mkdir -p /tmp/frame_results",
-	"build": { "dockerfile": "docker/Dockerfile" },
+	"build": { "dockerfile": "docker/Dockerfile_cuda" },
     "privileged": true,
 	"workspaceMount": "source=${localWorkspaceFolder},target=/project,type=bind,consistency=default",
     "workspaceFolder": "/project",
@@ -22,7 +22,8 @@
         "source=/bigdata,target=/bigdata,type=bind,consistency=default",
         "source=/efs,target=/efs,type=bind,consistency=default",
         "source=/tmp/frame_results,target=/tmp/frame_results,type=bind,consistency=default",
-        "source=${localWorkspaceFolder}/docker_history.txt,target=/root/.bash_history,type=bind,consistency=default"
+        "source=${localWorkspaceFolder}/docker_history.txt,target=/root/.bash_history,type=bind,consistency=default",
+        "source=${localWorkspaceFolder}/../bucketed_scene_flow_eval,target=/bucketed_scene_flow_eval,type=bind,consistency=default"
     ],
     "runArgs": [
         "--gpus=all",

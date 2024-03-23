@@ -6,9 +6,10 @@ import torch
 import torch.nn as nn
 
 import models
-from dataloaders import BucketedSceneFlowItem, BucketedSceneFlowOutputItem
+from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 
 from loader_utils.loaders import load_feather
+
 
 class CacheWrapper(nn.Module):
     """A wrapper class that loads inference results from disk if they exist.
@@ -19,6 +20,7 @@ class CacheWrapper(nn.Module):
     This wrapper module is really only intended to be used with runtime optimization methods (such as NSFP).
     Feedforward methods don't default to saving their inference results to disk, and can be cheaply re-run.
     """
+
     def __init__(self, cfg) -> None:
         """Initialize the cache wrapper. Expects the full training config.
 
@@ -40,11 +42,16 @@ class CacheWrapper(nn.Module):
             None if not hasattr(cfg, "save_output_folder") else Path(cfg.save_output_folder)
         )
 
-    def forward(self, input_batch: list[BucketedSceneFlowItem]) -> list[BucketedSceneFlowOutputItem]:
+    def forward(
+        self, input_batch: list[BucketedSceneFlowInputSequence]
+    ) -> list[BucketedSceneFlowOutputSequence]:
         if self.save_output_folder and self.save_output_folder.exists():
-            output_batch: list[BucketedSceneFlowOutputItem] = []
+            output_batch: list[BucketedSceneFlowOutputSequence] = []
             for input_elem in input_batch:
-                frame_output_path = Path(self.save_output_folder)/f"{input_elem.dataset_log_id}/{input_elem.dataset_idx:010d}.feather"
+                frame_output_path = (
+                    Path(self.save_output_folder)
+                    / f"{input_elem.sequence_log_id}/{input_elem.sequence_idx:010d}.feather"
+                )
                 output_pandas_dataframe = load_feather(frame_output_path)
                 # convert output frame to bucketed scene flow output item
                 xs = output_pandas_dataframe["flow_tx_m"].values
@@ -56,7 +63,7 @@ class CacheWrapper(nn.Module):
                 cropped_flow = cropped_flow.to(input_elem.source_pc.device)
                 cropped_mask = torch.Tensor(is_valid_arr)[input_elem.raw_source_pc_mask]
                 cropped_mask = cropped_mask.to(dtype=torch.bool)
-                output_item = BucketedSceneFlowOutputItem(
+                output_item = BucketedSceneFlowOutputSequence(
                     flow=cropped_flow,  # type: ignore[arg-type]
                     pc0_points=input_elem.source_pc,
                     pc0_valid_point_mask=cropped_mask,  # type: ignore[arg-type]

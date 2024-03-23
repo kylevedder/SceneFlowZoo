@@ -17,13 +17,28 @@ The Zoo supports the following methods:
 If you use this codebase, please cite the following paper:
 
 ```
-@article{Vedder2024zeroflow,
+@article{vedder2024zeroflow,
     author    = {Kyle Vedder and Neehar Peri and Nathaniel Chodosh and Ishan Khatri and Eric Eaton and Dinesh Jayaraman and Yang Liu Deva Ramanan and James Hays},
     title     = {{ZeroFlow: Fast Zero Label Scene Flow via Distillation}},
     journal   = {International Conference on Learning Representations (ICLR)},
     year      = {2024},
 }
 ```
+
+If you use the evaluation results, please cite the following paper:
+
+```
+@misc{khatri2024trackflow,
+    author = {Ishan Khatri and Kyle Vedder and Neehar Peri and Deva Ramanan and James Hays},
+    title = {I Can't Believe It's Not Scene Flow!},
+    journal = {arXiv},
+    eprint = {2403.04739},
+    year = {2024},
+    pdf = {https://arxiv.org/abs/2403.04739}
+}
+```
+
+If you use any of the methods in the Zoo, please cite the appropriate paper for that method.
 
 ## Pre-requisites / Getting Started
 

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from dataloaders import BucketedSceneFlowItem, BucketedSceneFlowOutputItem
+from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from models.embedders import DynamicVoxelizer
 from models.nsfp_baseline import NSFPProcessor
 
@@ -14,83 +14,25 @@ from models.nsfp_baseline import NSFPProcessor
 class NSFP(nn.Module):
     def __init__(
         self,
-        VOXEL_SIZE,
-        POINT_CLOUD_RANGE,
         SEQUENCE_LENGTH,
         iterations: int = 5000,
     ) -> None:
         super().__init__()
         self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
-        self.VOXEL_SIZE = VOXEL_SIZE
-        self.POINT_CLOUD_RANGE = POINT_CLOUD_RANGE
         assert (
             self.SEQUENCE_LENGTH == 2
         ), "This implementation only supports a sequence length of 2."
         self.nsfp_processor = NSFPProcessor(iterations=iterations)
 
-    def _range_limit_input(self, pc : torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        minx, miny, minz, maxx, maxy, maxz = self.POINT_CLOUD_RANGE
-        # Extend the X and Y ranges by an additional voxel size to ensure that the edge points are included
-        minx -= self.VOXEL_SIZE[0]
-        miny -= self.VOXEL_SIZE[1]
-        maxx += self.VOXEL_SIZE[0]
-        maxy += self.VOXEL_SIZE[1]
-
-        # Limit the point cloud to the specified range
-        in_range_mask = (
-            (pc[:, 0] >= minx)
-            & (pc[:, 0] <= maxx)
-            & (pc[:, 1] >= miny)
-            & (pc[:, 1] <= maxy)
-            & (pc[:, 2] >= minz)
-            & (pc[:, 2] <= maxz)
-        )
-
-        in_range_pc = pc[in_range_mask]
-        return in_range_pc, in_range_mask
-
-    def _range_limit_input_list(self, pc0s : List[torch.Tensor], pc1s : List[torch.Tensor]) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
-
-        pc0_results = [self._range_limit_input(pc) for pc in pc0s]
-        pc1_results = [self._range_limit_input(pc) for pc in pc1s]
-
-        return (
-            [pc for pc, _ in pc0_results],
-            [mask for _, mask in pc0_results],
-            [pc for pc, _ in pc1_results],
-            [mask for _, mask in pc1_results],
-        )
-
-    def _visualize_result(self, pc0_points: torch.Tensor, warped_pc0_points: torch.Tensor):
-        # if pc0_points is torch tensor, convert to numpy
-        if isinstance(pc0_points, torch.Tensor):
-            pc0_points = pc0_points.cpu().numpy()[0]
-        if isinstance(warped_pc0_points, torch.Tensor):
-            warped_pc0_points = warped_pc0_points.cpu().numpy()[0]
-
-        import open3d as o3d
-
-        line_set = o3d.geometry.LineSet()
-        assert len(pc0_points) == len(
-            warped_pc0_points
-        ), f"pc and flowed_pc must have same length, but got {len(pc0_pcd)} and {len(warped_pc0_points)}"
-        line_set_points = np.concatenate([pc0_points, warped_pc0_points], axis=0)
-
-        pc0_pcd = o3d.geometry.PointCloud()
-        pc0_pcd.points = o3d.utility.Vector3dVector(pc0_points)
-        warped_pc0_pcd = o3d.geometry.PointCloud()
-        warped_pc0_pcd.points = o3d.utility.Vector3dVector(warped_pc0_points)
-
-        line_set = o3d.geometry.LineSet()
-        line_set.points = o3d.utility.Vector3dVector(line_set_points)
-        lines = np.array([[i, i + len(pc0_points)] for i in range(len(pc0_points))])
-        line_set.lines = o3d.utility.Vector2iVector(lines)
-
-        o3d.visualization.draw_geometries([pc0_pcd, warped_pc0_pcd, line_set])
+    def _validate_input(self, batched_sequence: list[BucketedSceneFlowInputSequence]) -> None:
+        for sequence in batched_sequence:
+            assert (
+                len(sequence) == self.SEQUENCE_LENGTH
+            ), f"Expected sequence length of {self.SEQUENCE_LENGTH}, but got {len(sequence)}."
 
     def forward(
-        self, batched_sequence: List[BucketedSceneFlowItem]
-    ) -> List[BucketedSceneFlowOutputItem]:
+        self, batched_sequence: list[BucketedSceneFlowInputSequence]
+    ) -> list[BucketedSceneFlowOutputSequence]:
         """
         Args:
             batched_sequence: A list (len=batch size) of BucketedSceneFlowItems.
@@ -98,13 +40,16 @@ class NSFP(nn.Module):
         Returns:
             A list (len=batch size) of BucketedSceneFlowOutputItems.
         """
-        pc0s = [e.source_pc for e in batched_sequence]
-        pc1s = [e.target_pc for e in batched_sequence]
-        dataset_idxes = [e.dataset_idx for e in batched_sequence]
-        log_ids = [e.dataset_log_id for e in batched_sequence]
-        return self._model_forward(pc0s, pc1s, dataset_idxes, log_ids)
+        self._validate_input(batched_sequence)
+        pc0s = [(e.get_full_global_pc(-2), e.get_full_pc_mask(-2)) for e in batched_sequence]
+        pc0_transforms = [e.get_pc_transform_matrices(-2) for e in batched_sequence]
+        pc1s = [(e.get_full_global_pc(-1), e.get_full_pc_mask(-1)) for e in batched_sequence]
+        pc1_transforms = [e.get_pc_transform_matrices(-1) for e in batched_sequence]
+        return self._model_forward(pc0s, pc1s, pc0_transforms, pc1_transforms)
 
-    def _process_batch_entry(self, pc0_points, pc1_points) -> Tuple[np.ndarray, float]:
+    def optimize_single_frame_pair(
+        self, pc0_points: torch.Tensor, pc1_points: torch.Tensor
+    ) -> torch.Tensor:
         """
         Process a pair of point clouds using NSFP to return flow
         """
@@ -125,57 +70,56 @@ class NSFP(nn.Module):
                 )
                 after_time = time.time()
 
-        delta_time = after_time - before_time  # How long to do the optimization
-        # self._visualize_result(pc0_points, warped_pc0_points)
         flow = warped_pc0_points - pc0_points
-
-        return flow.squeeze(0), delta_time
+        return flow.squeeze(0)
 
     def _model_forward(
-        self, full_pc0s : List[torch.Tensor], full_pc1s : List[torch.Tensor], dataset_idxes, log_ids
-    ) -> List[BucketedSceneFlowOutputItem]:
-        (
-            pc0_points_lst,
-            pc0_valid_point_masks,
-            pc1_points_lst,
-            pc1_valid_point_masks,
-        ) = self._range_limit_input_list(full_pc0s, full_pc1s)
+        self,
+        full_pc0s: list[tuple[torch.Tensor, torch.Tensor]],
+        full_pc1s: list[tuple[torch.Tensor, torch.Tensor]],
+        pc0_transforms: list[tuple[torch.Tensor, torch.Tensor]],
+        pc1_transforms: list[tuple[torch.Tensor, torch.Tensor]],
+    ) -> list[BucketedSceneFlowOutputSequence]:
 
         # process minibatch
-        batch_output: List[BucketedSceneFlowOutputItem] = []
+        batch_output: list[BucketedSceneFlowOutputSequence] = []
         for (
-            full_p0,
-            full_p1,
-            pc0_points,
-            pc1_points,
-            pc0_point_mask,
-            pc1_point_mask,
-            dataset_idx,
-            log_id,
+            (full_p0, full_p0_mask),
+            (full_p1, full_p1_mask),
+            (pc0_sensor_to_ego, pc0_ego_to_global),
+            (pc1_sensor_to_ego, pc1_ego_to_global),
         ) in zip(
             full_pc0s,
             full_pc1s,
-            pc0_points_lst,
-            pc1_points_lst,
-            pc0_valid_point_masks,
-            pc1_valid_point_masks,
-            dataset_idxes,
-            log_ids,
+            pc0_transforms,
+            pc1_transforms,
         ):
-            valid_flow, _ = self._process_batch_entry(pc0_points, pc1_points)
+            masked_p0 = full_p0[full_p0_mask]
+            masked_p1 = full_p1[full_p1_mask]
+            masked_flow = self.optimize_single_frame_pair(masked_p0, masked_p1)
 
             full_flow = torch.zeros_like(full_p0)
-            full_flow[pc0_point_mask] = valid_flow
+            full_flow[full_p0_mask] = masked_flow
 
-            warped_pc0 = full_p0.clone()
-            warped_pc0 += full_flow
+            warped_full_pc0 = full_p0.clone() + full_flow
+
+            # Everything is in the ego frame of PC1.
+            # We must to transform both warped_full_pc0 and full_p0 to the ego frame of PC0
+
+            # To do this, we must go PC1 -> global -> PC0.
+            # We get this by composing PC1 ego_to_global with torch.inv(PC0 ego_to_global).
+            transform_matrix = pc1_ego_to_global @ torch.inverse(pc0_ego_to_global)
+            # Warp both the full point cloud and the warped point cloud to the ego frame of PC0
+            # Translation is irrelevant for the flow, so we only use the rotation part of the transform matrix
+            warped_full_pc0 = torch.einsum("ij,nj->ni", transform_matrix[:3, :3], warped_full_pc0)
+            full_p0 = torch.einsum("ij,nj->ni", transform_matrix[:3, :3], full_p0)
+
+            ego_flow = warped_full_pc0 - full_p0
 
             batch_output.append(
-                BucketedSceneFlowOutputItem(
-                    flow=full_flow,  # type: ignore[arg-type]
-                    pc0_points=full_p0,
-                    pc0_valid_point_mask=pc0_point_mask,
-                    pc0_warped_points=warped_pc0,
+                BucketedSceneFlowOutputSequence(
+                    ego_flows=torch.unsqueeze(ego_flow, 0),
+                    valid_flow_mask=torch.unsqueeze(full_p0_mask, 0),
                 )
             )
 

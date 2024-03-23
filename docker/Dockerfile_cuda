@@ -1,0 +1,51 @@
+FROM kylevedder/cudagl:11.8.0-devel-ubuntu22.04
+SHELL ["/bin/bash", "-c"]
+# Set the timezone info because otherwise tzinfo blocks install
+# flow and ignores the non-interactive frontend command 🤬🤬🤬
+RUN ln -snf /usr/share/zoneinfo/America/New_York /etc/localtime && echo "/usr/share/zoneinfo/America/New_York" > /etc/timezone
+
+# Core system packages
+RUN apt-get update --fix-missing
+RUN apt install -y software-properties-common wget curl gpg gcc git make g++ unzip apt-utils
+
+# Install miniconda to /miniconda
+RUN curl -LO http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+RUN bash Miniconda3-latest-Linux-x86_64.sh -p /miniconda -b
+RUN rm Miniconda3-latest-Linux-x86_64.sh
+ENV PATH=/miniconda/bin:${PATH}
+RUN conda update -y conda
+
+
+ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
+ENV FORCE_CUDA="1"
+RUN conda install -y numpy python=3.11 pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
+
+# Install PyTorch3d from source
+RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
+WORKDIR /pytorch3d
+# Checkout 0.7.6
+RUN git checkout f34104cf6ebefacd7b7e07955ee7aaa823e616ac
+RUN conda install -y ninja -c conda-forge
+ENV MAX_JOBS=48
+RUN pip install -v .
+
+# YAPF versions newer than this break the MMCV config system
+RUN pip install yapf==0.40.1
+RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.4 imageio black isort nntime
+RUN pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.1/index.html
+
+# Install nuscenes-devkit, but knock out the pegged Matplotlib version which lacks a wheel for Python 3.11
+RUN git clone https://github.com/nutonomy/nuscenes-devkit.git /nuscenes-devkit
+WORKDIR /nuscenes-devkit
+RUN git checkout 9df79f48bac3cc713f4dbd2b48049be845605c51
+# On line 4 of setup/requirements/requirements_base.txt, change matplotlib<3.6.0 to matplotlib
+RUN sed -i 's/matplotlib<3.6.0/matplotlib/' setup/requirements/requirements_base.txt
+RUN pip install -e setup
+
+
+RUN pip install bucketed-scene-flow-eval==2.0.0
+
+
+ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
+COPY bashrc /root/.bashrc
+WORKDIR /project

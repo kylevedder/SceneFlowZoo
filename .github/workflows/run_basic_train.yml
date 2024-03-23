@@ -17,6 +17,7 @@ jobs:
         remove-codeql: 'true'
         remove-docker-images: 'true'
 
+  # Runs on base system
   run_competition_bundler:
     runs-on: ubuntu-latest
     needs: prepare_runner
@@ -41,12 +42,14 @@ jobs:
 
     - name: Validate Competition Submit
       run: |
-        ./tests/validate_competition_submit.sh
+        ./tests/validate_comp_submit/run.sh
 
-  run_train_nsfp:
+  # Runs inside docker image
+  # Docker image pull does not cache, so running these in parallel kills the machine.
+  run_container_tests:
     runs-on: ubuntu-latest
     container:
-      image: kylevedder/zeroflow_bucketed
+      image: kylevedder/zeroflow_bucketed_cpu
     needs: prepare_runner
     
 
@@ -57,9 +60,15 @@ jobs:
     - name: Setup env
       run: |
         ./tests/setup.sh
+
+    - name: Run constant baseline 
+      run: |
+        ./tests/constant_baseline/run.sh
     
     - name: Run NSFP E2E one step
       run: |
-        python test_pl.py tests/configs/nsfp_one_step.py --cpu
-
+        ./tests/nsfp_one_step/run.sh
+  
+  
+  
 
