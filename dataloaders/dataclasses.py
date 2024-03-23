@@ -86,15 +86,32 @@ class BucketedSceneFlowInputSequence:
         """
         return from_fixed_array_torch(self.full_pc[idx])
 
+    def get_full_ego_pc_gt_flowed(self, idx: int) -> torch.Tensor:
+        """
+        Get the point cloud gt flow at the specified index.
+        """
+        return from_fixed_array_torch(self.full_pc_gt_flowed[idx])
+
     def get_full_pc_mask(self, idx: int) -> torch.Tensor:
         """
         Get the point cloud mask at the specified index.
         """
         return from_fixed_array_torch(self.full_pc_mask[idx]) > 0
 
+    def get_full_pc_gt_flow_mask(self, idx: int) -> torch.Tensor:
+        """
+        Get the point cloud gt flow mask at the specified index.
+        """
+        return from_fixed_array_torch(self.full_pc_gt_flowed_mask[idx]) > 0
+
     def get_ego_pc(self, idx: int) -> torch.Tensor:
         full_pc = self.get_full_ego_pc(idx)
         full_mask = self.get_full_pc_mask(idx)
+        return full_pc[full_mask]
+
+    def get_ego_pc_gt_flowed(self, idx: int) -> torch.Tensor:
+        full_pc = self.get_full_ego_pc_gt_flowed(idx)
+        full_mask = self.get_full_pc_gt_flow_mask(idx)
         return full_pc[full_mask]
 
     def get_full_global_pc(self, idx: int) -> torch.Tensor:
@@ -105,9 +122,22 @@ class BucketedSceneFlowInputSequence:
         ego_pc = torch.cat([ego_pc, torch.ones(ego_pc.shape[0], 1, device=ego_pc.device)], dim=1)
         return torch.matmul(sensor_to_global, ego_pc.T).T[:, :3]
 
+    def get_full_global_pc_gt_flowed(self, idx: int) -> torch.Tensor:
+        ego_pc = self.get_full_ego_pc_gt_flowed(idx)
+        sensor_to_ego, ego_to_global = self.get_pc_transform_matrices(idx)
+        sensor_to_global = torch.matmul(ego_to_global, sensor_to_ego)
+        # Ego PC is Nx3, we need to add another entry to make it Nx4 for the transformation
+        ego_pc = torch.cat([ego_pc, torch.ones(ego_pc.shape[0], 1, device=ego_pc.device)], dim=1)
+        return torch.matmul(sensor_to_global, ego_pc.T).T[:, :3]
+
     def get_global_pc(self, idx: int) -> torch.Tensor:
         full_pc = self.get_full_global_pc(idx)
         full_mask = self.get_full_pc_mask(idx)
+        return full_pc[full_mask]
+
+    def get_global_pc_gt_flowed(self, idx: int) -> torch.Tensor:
+        full_pc = self.get_full_global_pc_gt_flowed(idx)
+        full_mask = self.get_full_pc_gt_flow_mask(idx)
         return full_pc[full_mask]
 
     def get_pc_transform_matrices(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -337,6 +367,18 @@ class BucketedSceneFlowOutputSequence:
 
     ego_flows: torch.Tensor  # (K - 1, PadN, 3)
     valid_flow_mask: torch.Tensor  # (K - 1, PadN, )
+
+    def get_full_ego_flow(self, idx: int) -> torch.Tensor:
+        """
+        Get the ego flow at the specified index.
+        """
+        return from_fixed_array_torch(self.ego_flows[idx])
+
+    def get_full_flow_mask(self, idx: int) -> torch.Tensor:
+        """
+        Get the flow mask at the specified index.
+        """
+        return from_fixed_array_torch(self.valid_flow_mask[idx]) > 0
 
     def __post_init__(self):
         # Check the shape of the ego flows

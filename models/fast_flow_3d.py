@@ -7,8 +7,9 @@ import torch.nn as nn
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from models.backbones import FastFlowUNet, FastFlowUNetXL
 from models.embedders import DynamicEmbedder
-from models.heads import FastFlowDecoder, FastFlowDecoderStepDown
+from models.heads import FastFlowDecoder, FastFlowDecoderStepDown, ConvGRUDecoder
 from pointclouds.losses import warped_pc_loss
+import enum
 
 
 class FastFlow3DSelfSupervisedLoss:
@@ -20,9 +21,18 @@ class FastFlow3DSelfSupervisedLoss:
         input_batch: list[BucketedSceneFlowInputSequence],
         model_res: list[BucketedSceneFlowOutputSequence],
     ):
+
+        # Input batch length should be the same as the estimated flows
+        assert len(input_batch) == len(
+            model_res
+        ), f"input_batch {len(input_batch)} != model_res {len(model_res)}"
         warped_loss = 0
         for input_item, output_item in zip(input_batch, model_res):
-            warped_loss += warped_pc_loss(output_item.pc0_warped_points, input_item.target_pc)
+
+            target_pc = input_item.get_global_pc(-1)
+            warped_pc = input_item.get_full_global_pc(-2) + output_item.get_full_ego_flow(0)
+
+            warped_loss += warped_pc_loss(warped_pc, target_pc)
         return warped_loss
 
     def __call__(
@@ -51,6 +61,13 @@ class FastFlow3DBucketedLoaderLoss:
         total_loss = 0
         # Iterate through the batch
         for input_item, output_item in zip(input_batch, model_results):
+            assert (
+                len(output_item) == 1
+            ), f"Expected a single output flow, but got {len(output_item)}"
+
+            assert len(input_item) >= 2, f"Expected at least two frames, but got {len(input_item)}"
+
+            source_idx = len(input_item) - 2
 
             ############################################################
             # Mask for extracting the eval points for the gt flow
@@ -58,46 +75,42 @@ class FastFlow3DBucketedLoaderLoss:
 
             # Ensure that all entries in the gt mask are included in the input mask
             assert (
-                (input_item.raw_gt_flowed_source_pc_mask & input_item.raw_source_pc_mask)
-                == input_item.raw_gt_flowed_source_pc_mask
-            ).all(), f"{input_item.raw_gt_flowed_source_pc_mask} & {input_item.raw_source_pc_mask} != {input_item.raw_gt_flowed_source_pc_mask}"
+                (
+                    input_item.get_full_pc_gt_flow_mask(source_idx)
+                    & input_item.get_full_pc_mask(source_idx)
+                )
+                == input_item.get_full_pc_gt_flow_mask(source_idx)
+            ).all(), "GT mask is not a subset of the input mask."
 
-            # Start with raw source pc, which includes not ground points
-            raw_gt_evaluation_mask = input_item.raw_source_pc_mask.clone()
-            # Add in the mask for the valid points from the voxelizer
-            raw_gt_evaluation_mask[raw_gt_evaluation_mask.clone()] = (
-                output_item.pc0_valid_point_mask.to(raw_gt_evaluation_mask.device)
+            # Valid only if valid GT flow and valid PC and valid from the voxelizer
+            valid_loss_mask = (
+                input_item.get_full_pc_gt_flow_mask(source_idx)
+                & input_item.get_full_pc_mask(source_idx)
+                & output_item.get_full_flow_mask(0)
             )
-            # Add in the mask for the valid points from the gt flow.
-            raw_gt_evaluation_mask = (
-                raw_gt_evaluation_mask & input_item.raw_gt_flowed_source_pc_mask
+
+            gt_flow = input_item.get_full_ego_pc_gt_flowed(source_idx) - input_item.get_full_ego_pc(
+                source_idx
             )
-
-            ############################################################
-            # Mask for extracting the eval points for the output flow
-            ############################################################
-
-            # Disable the mask for the points that are not in the voxelizer
-            output_evaluation_mask = input_item.raw_gt_flowed_source_pc_mask[
-                input_item.raw_source_pc_mask
-            ] & output_item.pc0_valid_point_mask.to(raw_gt_evaluation_mask.device)
-
-            source_pc = input_item.raw_source_pc[raw_gt_evaluation_mask]
-            gt_flowed_pc = input_item.raw_gt_flowed_source_pc[raw_gt_evaluation_mask]
-            gt_flow = gt_flowed_pc - source_pc
-
-            est_flow = output_item.flow[output_evaluation_mask]
-
-            assert (
-                gt_flow.shape == est_flow.shape
-            ), f"Flow shapes are different: gt {gt_flow.shape} != est {est_flow.shape}"
-
-            loss_difference = est_flow - gt_flow
+            est_flow = output_item.get_full_ego_flow(0)
+            flow_difference = est_flow - gt_flow
+            loss_difference = flow_difference[valid_loss_mask]
             diff_l2 = torch.norm(loss_difference, dim=1, p=2).mean()
             total_loss += diff_l2
         return {
             "loss": total_loss,
         }
+
+
+class FastFlow3DHeadType(enum.Enum):
+    LINEAR = "linear"
+    STEPDOWN = "stepdown"
+    DEFLOW_GRU = "deflow_gru"
+
+
+class FastFlow3DBackboneType(enum.Enum):
+    UNET = "unet"
+    UNET_XL = "unet_xl"
 
 
 class FastFlow3D(nn.Module):
@@ -117,8 +130,8 @@ class FastFlow3D(nn.Module):
         POINT_CLOUD_RANGE,
         FEATURE_CHANNELS,
         SEQUENCE_LENGTH,
-        bottleneck_head=False,
-        xl_backbone=False,
+        bottleneck_head: FastFlow3DHeadType = FastFlow3DHeadType.LINEAR,
+        xl_backbone: FastFlow3DBackboneType = FastFlow3DBackboneType.UNET,
     ) -> None:
         super().__init__()
         self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
@@ -131,14 +144,26 @@ class FastFlow3D(nn.Module):
             point_cloud_range=POINT_CLOUD_RANGE,
             feat_channels=FEATURE_CHANNELS,
         )
-        if xl_backbone:
-            self.backbone = FastFlowUNetXL()
-        else:
-            self.backbone = FastFlowUNet()
-        if bottleneck_head:
-            self.head = FastFlowDecoderStepDown(voxel_pillar_size=VOXEL_SIZE[:2], num_stepdowns=3)
-        else:
-            self.head = FastFlowDecoder(pseudoimage_channels=FEATURE_CHANNELS * 2)
+
+        match xl_backbone:
+            case FastFlow3DBackboneType.UNET_XL:
+                self.backbone: nn.Module = FastFlowUNetXL()
+            case FastFlow3DBackboneType.UNET:
+                self.backbone: nn.Module = FastFlowUNet()
+            case _:
+                raise ValueError(f"Invalid backbone type: {xl_backbone}")
+
+        match bottleneck_head:
+            case FastFlow3DHeadType.LINEAR:
+                self.head: nn.Module = FastFlowDecoder(pseudoimage_channels=FEATURE_CHANNELS * 2)
+            case FastFlow3DHeadType.STEPDOWN:
+                self.head: nn.Module = FastFlowDecoderStepDown(
+                    voxel_pillar_size=VOXEL_SIZE[:2], num_stepdowns=3
+                )
+            case FastFlow3DHeadType.DEFLOW_GRU:
+                self.head: nn.Module = ConvGRUDecoder(num_iters=4)
+            case _:
+                raise ValueError(f"Invalid head type: {bottleneck_head}")
 
     def _indices_to_mask(self, points, mask_indices):
         mask = torch.zeros((points.shape[0],), dtype=torch.bool, device=points.device)

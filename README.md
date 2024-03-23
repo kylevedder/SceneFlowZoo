@@ -12,7 +12,7 @@ The Zoo supports the following methods:
  - [FastFlow3D](https://arxiv.org/abs/2103.01306) / [FastFlow3D XL](https://vedder.io/zeroflow)
  - [ZeroFlow and ZeroFlow XL](https://vedder.io/zeroflow)
  - [Neural Scene Flow Prior](https://arxiv.org/abs/2111.01253)
-
+ - [DeFlow](https://arxiv.org/abs/2401.16122)
 
 If you use this codebase, please cite the following paper:
 
@@ -46,7 +46,10 @@ Read the [Getting Started](./GETTING_STARTED.md) doc for detailed instructions t
 
 ## Pretrained weights
 
-Trained weights for ZeroFlow and FastFlow3D are available for download from [this repo](https://github.com/kylevedder/zeroflow_weights).
+Trained weights are available for the following methods:
+ 
+ - [ZeroFlow and FastFlow3D](https://github.com/kylevedder/zeroflow_weights)
+ - [DeFlow](https://github.com/KTH-RPL/DeFlow)
 
 ## Visualizing results
 
@@ -60,7 +63,7 @@ The `visualization/visualize_flow.py` script can visualize the ground truth flow
 python train_pl.py <my config path> --gpus <num gpus>
 ```
 
-The script will start by verifying the val dataloader works, and then launch the train job. 
+The script will start by verifying the val dataloader works, and then launch the train job.
 
 Note that config files specify the batch size _per GPU_, so the effective batch size will be `batch_size * num_gpus`. In order to replicate our results, you _must_ use the effective batch size of 64 for the normal sized FastFlow3D-style model and an effective batch size of 12 for the XL model. Our configs are setup to run on 4 x A6000s for the normal model and 6 x A6000s for the XL model. If your system differs, set the `accumulate_grad_batches` parameter in the config to accumulate gradients over multiple batches to reach the same size effective batch.
 
