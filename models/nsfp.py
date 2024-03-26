@@ -14,21 +14,21 @@ from models.nsfp_baseline import NSFPProcessor
 class NSFP(nn.Module):
     def __init__(
         self,
-        SEQUENCE_LENGTH,
+        sequence_length,
         iterations: int = 5000,
     ) -> None:
         super().__init__()
-        self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
+        self.sequence_length = sequence_length
         assert (
-            self.SEQUENCE_LENGTH == 2
+            self.sequence_length == 2
         ), "This implementation only supports a sequence length of 2."
         self.nsfp_processor = NSFPProcessor(iterations=iterations)
 
     def _validate_input(self, batched_sequence: list[BucketedSceneFlowInputSequence]) -> None:
         for sequence in batched_sequence:
             assert (
-                len(sequence) == self.SEQUENCE_LENGTH
-            ), f"Expected sequence length of {self.SEQUENCE_LENGTH}, but got {len(sequence)}."
+                len(sequence) == self.sequence_length
+            ), f"Expected sequence length of {self.sequence_length}, but got {len(sequence)}."
 
     def forward(
         self, batched_sequence: list[BucketedSceneFlowInputSequence]

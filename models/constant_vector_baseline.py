@@ -25,7 +25,9 @@ class ConstantVectorBaseline(nn.Module):
             frame_full_pc_mask.dtype == torch.bool
         ), f"Expected boolean tensor, got {frame_full_pc_mask.dtype}."
         N = frame_full_pc_mask.shape[0]
-        flow_vector_buffer = self.default_vector.expand((N, 3)).contiguous()
+        flow_vector_buffer = (
+            self.default_vector.expand((N, 3)).contiguous().to(frame_full_pc_mask.device)
+        )
         flow_vector_buffer[~frame_full_pc_mask] = 0
         return flow_vector_buffer
 
@@ -54,7 +56,6 @@ class ConstantVectorBaseline(nn.Module):
 
         ego_flows = torch.unsqueeze(dense_flow, dim=0)
         valid_flow = torch.unsqueeze(dense_valid_flow, dim=0)
-
         return BucketedSceneFlowOutputSequence(
             ego_flows=ego_flows,
             valid_flow_mask=valid_flow,

@@ -3,7 +3,7 @@ import os
 # Set Open MP's num threads to 1
 os.environ["OMP_NUM_THREADS"] = "1"
 
-from loader_utils import load_npy, save_npz
+from core_utils import load_npy, save_npz
 from pathlib import Path
 import multiprocessing
 import tqdm

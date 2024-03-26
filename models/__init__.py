@@ -1,4 +1,3 @@
-from .cache_wrapper import CacheWrapper
 from .constant_vector_baseline import ConstantVectorBaseline
 from .deflow import DeFlow
 from .fast_flow_3d import (
@@ -9,7 +8,6 @@ from .fast_flow_3d import (
 from .nsfp import NSFP
 
 __all__ = [
-    "CacheWrapper",
     "DeFlow",
     "FastFlow3D",
     "FastFlow3DBucketedLoaderLoss",

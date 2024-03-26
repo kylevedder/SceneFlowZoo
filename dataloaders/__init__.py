@@ -2,7 +2,8 @@ from .scene_trajectory_benchmark_scene_flow_dataset import BucketedSceneFlowData
 from .dataclasses import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 
 __all__ = [
-    "BucketedSceneFlowDataset",
-    "BucketedSceneFlowInputSequence",
-    "BucketedSceneFlowOutputSequence",
+    'BucketedSceneFlowDataset',
+    'EvalWrapper',
+    'BucketedSceneFlowInputSequence',
+    'BucketedSceneFlowOutputSequence'
 ]

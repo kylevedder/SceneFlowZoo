@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 import numpy as np
 from typing import Tuple, List, Dict
 from pointclouds import PointCloud, SE3, SE2
-from loader_utils import load_json, save_pickle
+from core_utils import load_json, save_pickle
 
 from waymo_open_dataset import dataset_pb2
 from waymo_open_dataset.utils import frame_utils

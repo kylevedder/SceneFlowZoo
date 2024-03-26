@@ -1,5 +1,5 @@
 import numpy as np
-from loader_utils import load_npz
+from core_utils import load_npz
 from pathlib import Path
 from typing import List, Tuple, Dict, Any
 

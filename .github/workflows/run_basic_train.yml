@@ -15,7 +15,6 @@ jobs:
         remove-android: 'true'
         remove-haskell: 'true'
         remove-codeql: 'true'
-        remove-docker-images: 'true'
 
   # Runs on base system
   run_competition_bundler:
@@ -44,9 +43,7 @@ jobs:
       run: |
         ./tests/validate_comp_submit/run.sh
 
-  # Runs inside docker image
-  # Docker image pull does not cache, so running these in parallel kills the machine.
-  run_container_tests:
+  run_constant_baseline:
     runs-on: ubuntu-latest
     container:
       image: kylevedder/zeroflow_bucketed_cpu
@@ -64,10 +61,42 @@ jobs:
     - name: Run constant baseline 
       run: |
         ./tests/constant_baseline/run.sh
+
+  run_nsfp:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed_cpu
+    needs: prepare_runner
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
     
     - name: Run NSFP E2E one step
       run: |
         ./tests/nsfp_one_step/run.sh
+
+  run_cache_test:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed_cpu
+    needs: prepare_runner
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
+    
+    - name: Run Cache Test
+      run: |
+        ./tests/cache_test/run.sh
   
   
   

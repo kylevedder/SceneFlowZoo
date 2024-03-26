@@ -4,7 +4,7 @@ sys.path.append('.')
 
 import torch
 
-from loader_utils import save_npy
+from core_utils import save_npy
 
 from dataloaders import WaymoRawSequence, WaymoRawSequenceLoader
 from pointclouds import PointCloud, SE3

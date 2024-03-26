@@ -1,5 +1,5 @@
 from pathlib import Path
-from loader_utils import load_pickle, load_json
+from core_utils import load_pickle, load_json
 import numpy as np
 from typing import Dict, List, Any
 from bucketed_scene_flow_eval.datasets.argoverse2.av2_metacategories import BUCKETED_METACATAGORIES

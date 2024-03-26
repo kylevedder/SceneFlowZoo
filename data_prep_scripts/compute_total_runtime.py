@@ -1,5 +1,5 @@
 import argparse
-from loader_utils import load_npz
+from core_utils import load_npz
 from pathlib import Path
 import tqdm
 from multiprocessing import Pool, cpu_count

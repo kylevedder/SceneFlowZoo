@@ -7,7 +7,7 @@ import shutil
 import multiprocessing
 import joblib
 import tqdm
-from loader_utils import load_npz, save_feather
+from core_utils import load_npz, save_feather
 
 from bucketed_scene_flow_eval.datasets.argoverse2 import (
     ArgoverseNoFlowSequenceLoader,

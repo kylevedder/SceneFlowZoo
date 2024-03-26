@@ -1,4 +1,4 @@
-_base_ = "./pseudolabel_train_cached.py"
+_base_ = "./val_cached.py"
 
 test_dataset_root = "/efs/argoverse2_tiny/val/"
 save_output_folder = "/tmp/argoverse2_tiny/val_nsfp_flow/"

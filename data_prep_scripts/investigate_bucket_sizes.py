@@ -7,7 +7,7 @@ import numpy as np
 import tqdm
 import joblib
 import multiprocessing
-from loader_utils import save_pickle
+from core_utils import save_pickle
 import open3d as o3d
 from pointclouds import PointCloud
 import torch

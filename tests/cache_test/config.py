@@ -1,7 +1,10 @@
 is_trainable = False
 
 test_dataset_root = "/tmp/argoverse2_tiny/val/"
-save_output_folder = "/tmp/argoverse2_tiny/val_constant_baseline_out/"
+
+cache_validation_outputs = True
+save_output_folder = "/tmp/argoverse2_tiny/val_constant_baseline_cache_out/"
+
 
 epochs = 1
 learning_rate = 2e-6

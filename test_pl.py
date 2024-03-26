@@ -6,11 +6,12 @@ from pathlib import Path
 import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.strategies import DDPStrategy
+from bucketed_scene_flow_eval.interfaces import AbstractDataset, AbstractSequenceLoader
 
 from tqdm import tqdm
 import dataloaders
 
-from model_wrapper import ModelWrapper
+from core_utils import ModelWrapper
 
 from pathlib import Path
 
@@ -21,10 +22,10 @@ except ImportError:
 
 # Get config file from command line
 parser = argparse.ArgumentParser()
-parser.add_argument('config', type=Path)
-parser.add_argument('--checkpoint', type=Path, default=None)
-parser.add_argument('--gpus', type=int, default=1)
-parser.add_argument('--cpu', action="store_true")
+parser.add_argument("config", type=Path)
+parser.add_argument("--checkpoint", type=Path, default=None)
+parser.add_argument("--gpus", type=int, default=1)
+parser.add_argument("--cpu", action="store_true")
 args = parser.parse_args()
 
 assert args.config.exists(), f"Config file {args.config} does not exist"
@@ -40,17 +41,16 @@ def make_test_dataloader(cfg):
 
     if hasattr(cfg, "test_loader"):
         # Handle case 1
-        test_sequence_loader = getattr(
-            dataloaders, cfg.test_loader.name)(**cfg.test_loader.args)
+        test_sequence_loader: AbstractSequenceLoader = getattr(dataloaders, cfg.test_loader.name)(
+            **cfg.test_loader.args
+        )
         test_dataset_args["sequence_loader"] = test_sequence_loader
 
-    test_dataset = getattr(dataloaders,
-                           cfg.test_dataset.name)(**test_dataset_args)
+    test_dataset: AbstractDataset = getattr(dataloaders, cfg.test_dataset.name)(**test_dataset_args)
 
     test_dataloader = torch.utils.data.DataLoader(
-        test_dataset,
-        **cfg.test_dataloader.args,
-        collate_fn=test_dataset.collate_fn)
+        test_dataset, **cfg.test_dataloader.args, collate_fn=test_dataset.collate_fn
+    )
 
     return test_dataloader, test_dataset.evaluator()
 
@@ -60,15 +60,12 @@ def setup_model(cfg, evaluator):
         model = ModelWrapper(cfg, evaluator=evaluator)
     else:
         assert args.checkpoint is not None, "Must provide checkpoint for validation"
-        assert args.checkpoint.exists(
-        ), f"Checkpoint file {args.checkpoint} does not exist"
-        model = ModelWrapper.load_from_checkpoint(args.checkpoint,
-                                                  cfg=cfg,
-                                                  evaluator=evaluator)
+        assert args.checkpoint.exists(), f"Checkpoint file {args.checkpoint} does not exist"
+        model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg, evaluator=evaluator)
 
     if hasattr(cfg, "compile_pytorch2") and cfg.compile_pytorch2:
         print("PyTorch 2 compile()ing model!")
-        model = torch.compile(model, mode="reduce-overhead")
+        model = torch.compile(model)
     return model
 
 
@@ -79,15 +76,11 @@ test_dataloader, evaluator = make_test_dataloader(cfg)
 print("Val dataloader length:", len(test_dataloader))
 
 model = setup_model(cfg, evaluator)
-trainer = pl.Trainer(devices=args.gpus,
-                     accelerator="gpu" if not args.cpu else "cpu",
-                     strategy=DDPStrategy(find_unused_parameters=False),
-                     num_sanity_val_steps=2,
-                     log_every_n_steps=2,
-                     val_check_interval=cfg.validate_every,
-                     max_epochs=cfg.epochs,
-                     accumulate_grad_batches=cfg.accumulate_grad_batches
-                     if hasattr(cfg, "accumulate_grad_batches") else 1,
-                     gradient_clip_val=cfg.gradient_clip_val if hasattr(
-                         cfg, "gradient_clip_val") else 0.0)
+trainer = pl.Trainer(
+    devices=args.gpus,
+    accelerator="gpu" if not args.cpu else "cpu",
+    strategy=DDPStrategy(find_unused_parameters=False),
+    num_sanity_val_steps=2,
+    log_every_n_steps=2,
+)
 trainer.validate(model, dataloaders=test_dataloader)

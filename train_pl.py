@@ -15,7 +15,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from tqdm import tqdm
 import dataloaders
-from model_wrapper import ModelWrapper
+from core_utils import ModelWrapper
 
 from pathlib import Path
 

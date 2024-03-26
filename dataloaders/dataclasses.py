@@ -368,6 +368,31 @@ class BucketedSceneFlowOutputSequence:
     ego_flows: torch.Tensor  # (K - 1, PadN, 3)
     valid_flow_mask: torch.Tensor  # (K - 1, PadN, )
 
+    @staticmethod
+    def from_ego_lidar_flow_list(
+        ego_lidar_flows: list[EgoLidarFlow], max_len: int
+    ) -> "BucketedSceneFlowOutputSequence":
+        """
+        Create a BucketedSceneFlowOutputSequence from a list of EgoLidarFlow objects.
+        """
+
+        ego_flows = torch.stack(
+            [
+                torch.from_numpy(to_fixed_array_np(flow.full_flow, max_len=max_len))
+                for flow in ego_lidar_flows
+            ]
+        )
+        valid_flow_mask = torch.stack(
+            [
+                torch.from_numpy(to_fixed_array_np(flow.mask, max_len=max_len))
+                for flow in ego_lidar_flows
+            ]
+        )
+
+        return BucketedSceneFlowOutputSequence(
+            ego_flows=ego_flows.float(), valid_flow_mask=valid_flow_mask.float()
+        )
+
     def get_full_ego_flow(self, idx: int) -> torch.Tensor:
         """
         Get the ego flow at the specified index.
@@ -393,6 +418,11 @@ class BucketedSceneFlowOutputSequence:
         assert (
             self.valid_flow_mask.shape == self.ego_flows.shape[:2]
         ), f"Shape mismatch: ego_flows {self.ego_flows.shape[:2]} vs valid_flow_mask {self.valid_flow_mask.shape}"
+
+        # Check that the ego flows and valid flow mask have the same device
+        assert (
+            self.ego_flows.device == self.valid_flow_mask.device
+        ), f"Device mismatch: {self.ego_flows.device} vs {self.valid_flow_mask.device}"
 
     def __len__(self) -> int:
         return self.ego_flows.shape[0]

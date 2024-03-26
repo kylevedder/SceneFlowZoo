@@ -58,6 +58,17 @@ class EvalWrapper:
         else:
             raise ValueError(f"Unknown loader type: {self.dataset.loader_type()}")
 
+    def eval_batch(
+        self,
+        inputs: List[BucketedSceneFlowInputSequence],
+        outputs: List[BucketedSceneFlowOutputSequence],
+    ):
+        assert len(inputs) == len(
+            outputs
+        ), f"Expected the same number of inputs and outputs, but got {len(inputs)} inputs and {len(outputs)} outputs."
+        for input, output in zip(inputs, outputs):
+            self.eval(input, output)
+
     def compute_results(self, save_results: bool = True) -> dict:
         return self.evaluator.compute_results(save_results=save_results)
 
@@ -81,9 +92,10 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx) -> BucketedSceneFlowInputSequence:
         assert isinstance(idx, int), f"Index must be an integer. Got {type(idx)}."
         assert 0 <= idx < len(self), "Index out of range."
+        frame_list = self.dataset[idx]
         return BucketedSceneFlowInputSequence.from_frame_list(
             idx,
-            self.dataset[idx],
+            frame_list,
             pc_max_len=self.max_pc_points,
             loader_type=self.dataset.loader_type(),
         )

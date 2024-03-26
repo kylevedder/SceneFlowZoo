@@ -34,7 +34,7 @@ RUN git checkout 9df79f48bac3cc713f4dbd2b48049be845605c51
 RUN sed -i 's/matplotlib<3.6.0/matplotlib/' setup/requirements/requirements_base.txt
 RUN pip install -e setup
 
-RUN pip install bucketed-scene-flow-eval==2.0.0
+RUN pip install bucketed-scene-flow-eval==2.0.1
 
 
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}

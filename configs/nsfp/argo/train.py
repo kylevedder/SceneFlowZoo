@@ -6,7 +6,7 @@ save_output_folder = "/efs/argoverse2/train_nsfp_flow/"
 
 SEQUENCE_LENGTH = 2
 
-model = dict(name="NSFP", args=dict(SEQUENCE_LENGTH=SEQUENCE_LENGTH))
+model = dict(name="NSFP", args=dict(sequence_length=SEQUENCE_LENGTH))
 
 epochs = 20
 learning_rate = 2e-6
@@ -16,7 +16,7 @@ validate_every = 500
 test_dataset = dict(
     name="BucketedSceneFlowDataset",
     args=dict(
-        dataset_name="Argoverse2SceneFlow",
+        dataset_name="Argoverse2NonCausalSceneFlow",
         root_dir=test_dataset_root,
         with_ground=False,
         with_rgb=False,
@@ -25,4 +25,4 @@ test_dataset = dict(
     ),
 )
 
-test_dataloader = dict(args=dict(batch_size=1, num_workers=1, shuffle=False, pin_memory=True))
+test_dataloader = dict(args=dict(batch_size=1, num_workers=0, shuffle=False, pin_memory=True))

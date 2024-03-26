@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 import numpy as np
-from loader_utils import load_npz, save_npz
+from core_utils import load_npz, save_npz
 import joblib
 import multiprocessing
 

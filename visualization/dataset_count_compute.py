@@ -15,7 +15,7 @@ import numpy as np
 import tqdm
 import joblib
 import multiprocessing
-from loader_utils import save_pickle, save_json
+from core_utils import save_pickle, save_json
 import matplotlib.pyplot as plt
 
 # Import color map for plotting
