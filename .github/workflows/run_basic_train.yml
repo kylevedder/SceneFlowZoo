@@ -98,6 +98,23 @@ jobs:
       run: |
         ./tests/cache_test/run.sh
   
+  run_unit_test:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed_cpu
+    needs: prepare_runner
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
+    
+    - name: Run Cache Test
+      run: |
+        pytest tests/unit_tests/*.py
   
   
 

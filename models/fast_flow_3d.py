@@ -9,6 +9,7 @@ from models.backbones import FastFlowUNet, FastFlowUNetXL
 from models.embedders import DynamicEmbedder
 from models.heads import FastFlowDecoder, FastFlowDecoderStepDown, ConvGRUDecoder
 from pointclouds.losses import warped_pc_loss
+from .base_model import BaseModel
 import enum
 
 
@@ -113,7 +114,7 @@ class FastFlow3DBackboneType(enum.Enum):
     UNET_XL = "unet_xl"
 
 
-class FastFlow3D(nn.Module):
+class FastFlow3D(BaseModel):
     """
     FastFlow3D based on the paper:
     https://arxiv.org/abs/2103.01306v5
@@ -181,18 +182,6 @@ class FastFlow3D(nn.Module):
         homogenious_pc = torch.cat((pc, torch.ones((pc.shape[0], 1), device=pc.device)), dim=1)
         return torch.matmul(transform, homogenious_pc.T).T[:, :3]
 
-    def _global_to_ego_flow(
-        self,
-        global_full_pc0: torch.Tensor,
-        global_warped_full_pc0: torch.Tensor,
-        pc0_ego_to_global: torch.Tensor,
-    ) -> torch.Tensor:
-
-        ego_full_pc0 = self._transform_pc(global_full_pc0, pc0_ego_to_global)
-        ego_warped_full_pc0 = self._transform_pc(global_warped_full_pc0, pc0_ego_to_global)
-
-        return ego_warped_full_pc0 - ego_full_pc0
-
     def _model_forward(
         self,
         full_pc0s: list[tuple[torch.Tensor, torch.Tensor]],
@@ -252,8 +241,7 @@ class FastFlow3D(nn.Module):
             full_flow_mask = full_p0_mask.clone()
             full_flow_mask[full_p0_mask] = masked_pc0_valid_point_mask
 
-            warped_full_pc0 = full_p0 + full_flow
-            ego_flow = self._global_to_ego_flow(full_p0, warped_full_pc0, pc0_ego_to_global)
+            ego_flow = self.global_to_ego_flow(full_p0, full_flow, pc0_ego_to_global)
 
             batch_output.append(
                 BucketedSceneFlowOutputSequence(

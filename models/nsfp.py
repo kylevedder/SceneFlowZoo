@@ -1,17 +1,14 @@
 import time
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
-from models.embedders import DynamicVoxelizer
 from models.nsfp_baseline import NSFPProcessor
+from .base_model import BaseModel
 
 
-class NSFP(nn.Module):
+class NSFP(BaseModel):
     def __init__(
         self,
         sequence_length,
@@ -73,6 +70,26 @@ class NSFP(nn.Module):
         flow = warped_pc0_points - pc0_points
         return flow.squeeze(0)
 
+    def _transform_pc(self, pc: torch.Tensor, transform: torch.Tensor) -> torch.Tensor:
+        """
+        Transform an Nx3 point cloud by a 4x4 transformation matrix.
+        """
+
+        homogenious_pc = torch.cat((pc, torch.ones((pc.shape[0], 1), device=pc.device)), dim=1)
+        return torch.matmul(transform, homogenious_pc.T).T[:, :3]
+
+    def _global_to_ego_flow(
+        self,
+        global_full_pc0: torch.Tensor,
+        global_warped_full_pc0: torch.Tensor,
+        pc0_ego_to_global: torch.Tensor,
+    ) -> torch.Tensor:
+
+        ego_full_pc0 = self._transform_pc(global_full_pc0, pc0_ego_to_global)
+        ego_warped_full_pc0 = self._transform_pc(global_warped_full_pc0, pc0_ego_to_global)
+
+        return ego_warped_full_pc0 - ego_full_pc0
+
     def _model_forward(
         self,
         full_pc0s: list[tuple[torch.Tensor, torch.Tensor]],
@@ -101,20 +118,7 @@ class NSFP(nn.Module):
             full_flow = torch.zeros_like(full_p0)
             full_flow[full_p0_mask] = masked_flow
 
-            warped_full_pc0 = full_p0.clone() + full_flow
-
-            # Everything is in the ego frame of PC1.
-            # We must to transform both warped_full_pc0 and full_p0 to the ego frame of PC0
-
-            # To do this, we must go PC1 -> global -> PC0.
-            # We get this by composing PC1 ego_to_global with torch.inv(PC0 ego_to_global).
-            transform_matrix = pc1_ego_to_global @ torch.inverse(pc0_ego_to_global)
-            # Warp both the full point cloud and the warped point cloud to the ego frame of PC0
-            # Translation is irrelevant for the flow, so we only use the rotation part of the transform matrix
-            warped_full_pc0 = torch.einsum("ij,nj->ni", transform_matrix[:3, :3], warped_full_pc0)
-            full_p0 = torch.einsum("ij,nj->ni", transform_matrix[:3, :3], full_p0)
-
-            ego_flow = warped_full_pc0 - full_p0
+            ego_flow = self.global_to_ego_flow(full_p0, full_flow, pc0_ego_to_global)
 
             batch_output.append(
                 BucketedSceneFlowOutputSequence(

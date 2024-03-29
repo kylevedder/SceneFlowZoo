@@ -104,3 +104,25 @@ def from_fixed_array_torch(array: torch.Tensor) -> torch.Tensor:
     assert isinstance(array, torch.Tensor), f"Expected torch tensor, got {type(array)}"
     are_valid_points = from_fixed_array_valid_mask_torch(array)
     return array[are_valid_points]
+
+
+def transform_pc(pc: torch.Tensor, transform: torch.Tensor) -> torch.Tensor:
+    """
+    Transform an Nx3 point cloud by a 4x4 transformation matrix.
+    """
+
+    homogenious_pc = torch.cat((pc, torch.ones((pc.shape[0], 1), device=pc.device)), dim=1)
+    homogenious_pc = homogenious_pc @ transform.T
+    return homogenious_pc[:, :3]
+
+
+def global_to_ego_flow(
+    global_full_pc: torch.Tensor,
+    global_warped_full_pc: torch.Tensor,
+    global_to_ego: torch.Tensor,
+) -> torch.Tensor:
+
+    ego_full_pc0 = transform_pc(global_full_pc, global_to_ego)
+    ego_warped_full_pc0 = transform_pc(global_warped_full_pc, global_to_ego)
+
+    return ego_warped_full_pc0 - ego_full_pc0
