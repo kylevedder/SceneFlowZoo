@@ -4,9 +4,10 @@ from typing import List
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from bucketed_scene_flow_eval.interfaces import LoaderType
 from pointclouds import to_fixed_array_torch
+from .base_model import BaseModel
 
 
-class ConstantVectorBaseline(nn.Module):
+class ConstantVectorBaseline(BaseModel):
 
     def __init__(self, default_vector: torch.Tensor = torch.zeros(3)) -> None:
         super().__init__()
