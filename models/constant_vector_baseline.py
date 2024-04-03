@@ -62,7 +62,7 @@ class ConstantVectorBaseline(BaseModel):
             valid_flow_mask=valid_flow,
         )
 
-    def _make_output(
+    def forward_single(
         self, input: BucketedSceneFlowInputSequence
     ) -> BucketedSceneFlowOutputSequence:
 
@@ -72,8 +72,3 @@ class ConstantVectorBaseline(BaseModel):
             return self._make_causal_output(input)
         else:
             raise ValueError(f"Unknown loader type: {input.loader_type}")
-
-    def forward(
-        self, batched_sequence: List[BucketedSceneFlowInputSequence]
-    ) -> List[BucketedSceneFlowOutputSequence]:
-        return [self._make_output(item) for item in batched_sequence]

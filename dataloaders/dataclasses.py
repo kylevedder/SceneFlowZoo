@@ -354,6 +354,66 @@ class BucketedSceneFlowInputSequence:
 
         return self
 
+    def clone(self) -> "BucketedSceneFlowInputSequence":
+        """
+        Clone this object.
+        """
+        return BucketedSceneFlowInputSequence(
+            dataset_idx=self.dataset_idx,
+            sequence_log_id=self.sequence_log_id,
+            sequence_idx=self.sequence_idx,
+            full_pc=self.full_pc.clone(),
+            full_pc_mask=self.full_pc_mask.clone(),
+            full_pc_gt_flowed=self.full_pc_gt_flowed.clone(),
+            full_pc_gt_flowed_mask=self.full_pc_gt_flowed_mask.clone(),
+            full_pc_gt_class=self.full_pc_gt_class.clone(),
+            pc_poses_sensor_to_ego=self.pc_poses_sensor_to_ego.clone(),
+            pc_poses_ego_to_global=self.pc_poses_ego_to_global.clone(),
+            rgb_images=self.rgb_images.clone(),
+            rgb_poses_sensor_to_ego=self.rgb_poses_sensor_to_ego.clone(),
+            rgb_poses_ego_to_global=self.rgb_poses_ego_to_global.clone(),
+            loader_type=self.loader_type,
+        )
+
+    def detach(self) -> "BucketedSceneFlowInputSequence":
+        """
+        Detach all tensors in this object.
+        """
+        self.full_pc = self.full_pc.detach()
+        self.full_pc_mask = self.full_pc_mask.detach()
+        self.full_pc_gt_flowed = self.full_pc_gt_flowed.detach()
+        self.full_pc_gt_flowed_mask = self.full_pc_gt_flowed_mask.detach()
+        self.full_pc_gt_class = self.full_pc_gt_class.detach()
+        self.pc_poses_sensor_to_ego = self.pc_poses_sensor_to_ego.detach()
+        self.pc_poses_ego_to_global = self.pc_poses_ego_to_global.detach()
+        self.rgb_images = self.rgb_images.detach()
+        self.rgb_poses_sensor_to_ego = self.rgb_poses_sensor_to_ego.detach()
+        self.rgb_poses_ego_to_global = self.rgb_poses_ego_to_global.detach()
+        return self
+
+    def requires_grad_(self, requires_grad: bool) -> "BucketedSceneFlowInputSequence":
+        """
+        Set the requires_grad attribute of all tensors in this object.
+        """
+        self.full_pc.requires_grad_(requires_grad)
+        self.full_pc_mask.requires_grad_(requires_grad)
+        self.full_pc_gt_flowed.requires_grad_(requires_grad)
+        self.full_pc_gt_flowed_mask.requires_grad_(requires_grad)
+        self.full_pc_gt_class.requires_grad_(requires_grad)
+        self.pc_poses_sensor_to_ego.requires_grad_(requires_grad)
+        self.pc_poses_ego_to_global.requires_grad_(requires_grad)
+        self.rgb_images.requires_grad_(requires_grad)
+        self.rgb_poses_sensor_to_ego.requires_grad_(requires_grad)
+        self.rgb_poses_ego_to_global.requires_grad_(requires_grad)
+        return self
+
+    @property
+    def device(self) -> torch.device:
+        """
+        Get the device of the tensors in this object.
+        """
+        return self.full_pc.device
+
 
 @dataclass
 class BucketedSceneFlowOutputSequence:

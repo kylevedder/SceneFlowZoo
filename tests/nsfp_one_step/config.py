@@ -11,7 +11,7 @@ validate_every = 10
 SEQUENCE_LENGTH = 2
 
 model = dict(
-    name="NSFP",
+    name="NSFPModel",
     args=dict(
         sequence_length=SEQUENCE_LENGTH,
         iterations=1,

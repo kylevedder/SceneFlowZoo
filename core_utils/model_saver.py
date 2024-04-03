@@ -137,6 +137,12 @@ class FlowSave(ModelOutSaver):
         return self._single_save_file(input).exists()
 
     def save(self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence):
+        assert isinstance(
+            input, BucketedSceneFlowInputSequence
+        ), f"Expected BucketedSceneFlowInputSequence, got {type(input)}"
+        assert isinstance(
+            output, BucketedSceneFlowOutputSequence
+        ), f"Expected BucketedSceneFlowOutputSequence, got {type(output)}"
         match input.loader_type:
             case LoaderType.CAUSAL:
                 self._save_single_flow(input, output)

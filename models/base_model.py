@@ -10,10 +10,14 @@ class BaseModel(ABC, nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-    @abstractmethod
     def forward(
         self, batched_sequence: list[BucketedSceneFlowInputSequence]
     ) -> list[BucketedSceneFlowOutputSequence]:
+        return [self.forward_single(input_sequence) for input_sequence in batched_sequence]
+
+    def forward_single(
+        self, input_sequence: BucketedSceneFlowInputSequence
+    ) -> BucketedSceneFlowOutputSequence:
         raise NotImplementedError()
 
     def global_to_ego_flow(

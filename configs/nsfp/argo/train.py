@@ -6,7 +6,7 @@ save_output_folder = "/efs/argoverse2/train_nsfp_flow/"
 
 SEQUENCE_LENGTH = 2
 
-model = dict(name="NSFP", args=dict(sequence_length=SEQUENCE_LENGTH))
+model = dict(name="NSFPModel", args=dict(sequence_length=SEQUENCE_LENGTH))
 
 epochs = 20
 learning_rate = 2e-6
