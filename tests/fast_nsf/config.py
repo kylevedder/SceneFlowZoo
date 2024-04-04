@@ -14,7 +14,7 @@ model = dict(
     name="FastNSFModel",
     args=dict(
         sequence_length=SEQUENCE_LENGTH,
-        iterations=100,
+        iterations=10,
     ),
 )
 

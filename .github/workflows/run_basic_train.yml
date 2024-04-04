@@ -94,7 +94,7 @@ jobs:
       run: |
         ./tests/setup.sh
     
-    - name: Run NSFP E2E one step
+    - name: Run Fast NSF for several steps
       run: |
         ./tests/fast_nsf/run.sh
 
