@@ -80,6 +80,24 @@ jobs:
       run: |
         ./tests/nsfp_one_step/run.sh
 
+  run_fast_nsf:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed_cpu
+    needs: prepare_runner
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
+    
+    - name: Run NSFP E2E one step
+      run: |
+        ./tests/fast_nsf/run.sh
+
   run_cache_test:
     runs-on: ubuntu-latest
     container:

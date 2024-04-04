@@ -34,6 +34,8 @@ RUN git checkout 9df79f48bac3cc713f4dbd2b48049be845605c51
 RUN sed -i 's/matplotlib<3.6.0/matplotlib/' setup/requirements/requirements_base.txt
 RUN pip install -e setup
 
+RUN pip install FastGeodis==1.0.5 --no-build-isolation
+
 RUN pip install bucketed-scene-flow-eval==2.0.3
 
 

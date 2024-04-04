@@ -6,7 +6,7 @@ import torch.nn as nn
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from .base_model import BaseModel
 from models.optimization import OptimizationLoop
-from models.neural_reps import NSFP
+from models.neural_reps import NSFPCycleConsistency
 
 
 class NSFPModel(BaseModel):
@@ -35,5 +35,6 @@ class NSFPModel(BaseModel):
         with torch.inference_mode(False):
             with torch.enable_grad():
                 return self.optimization_loop.optimize(
-                    model=NSFP().to(input_sequence.device).train(), problem=input_sequence
+                    model=NSFPCycleConsistency().to(input_sequence.device).train(),
+                    problem=input_sequence,
                 )
