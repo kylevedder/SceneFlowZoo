@@ -12,6 +12,7 @@ The Zoo supports the following methods:
  - [FastFlow3D](https://arxiv.org/abs/2103.01306) / [FastFlow3D XL](https://vedder.io/zeroflow)
  - [ZeroFlow and ZeroFlow XL](https://vedder.io/zeroflow)
  - [Neural Scene Flow Prior](https://arxiv.org/abs/2111.01253)
+ - [Fast NSF](https://arxiv.org/abs/2304.09121)
  - [DeFlow](https://arxiv.org/abs/2401.16122)
 
 If you use this codebase, please cite the following paper:
