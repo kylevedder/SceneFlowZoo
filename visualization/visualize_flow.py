@@ -1,7 +1,8 @@
 import torch
 import pandas as pd
 import open3d as o3d
-from bucketed_scene_flow_eval.datasets.shared_datastructures import AbstractSequence, SceneFlowItem
+from bucketed_scene_flow_eval.interfaces import AbstractSequence
+from bucketed_scene_flow_eval.datastructures import TimeSyncedSceneFlowFrame, TimeSyncedAVLidarData
 from bucketed_scene_flow_eval.datasets.argoverse2 import (
     ArgoverseSceneFlowSequenceLoader,
     ArgoverseSceneFlowSequence,
@@ -55,7 +56,7 @@ class LazyFrameMatrix:
     def shape(self):
         return len(self.sequences), len(self.sequences[0])
 
-    def __getitem__(self, idx_tuple: tuple[int, int]) -> list[SceneFlowItem]:
+    def __getitem__(self, idx_tuple: tuple[int, int]) -> list[tuple[TimeSyncedSceneFlowFrame, TimeSyncedAVLidarData]]:
         sequence_idx, frame_idx = idx_tuple
         sequence = self.sequences[sequence_idx]
         return [
@@ -92,7 +93,7 @@ vis.get_view_control().set_up([0, 0, 1])
 def get_flow_folder_name(sequence_idx: int) -> str:
     flow_folder = flow_folders[sequence_idx]
     name = flow_folder.name
-    if name == "submission":
+    if name == "submission" or "sequence_len" in name:
         return flow_folder.parent.name
     return name
 
@@ -205,9 +206,10 @@ def draw_frames(reset_view=False):
         return o3d.utility.Vector3dVector(pc_color)
 
     for idx, frame_dict in enumerate(frame_list):
-        pc = frame_dict.relative_pc
-        pose = frame_dict.relative_pose
-        flowed_pc = frame_dict.relative_flowed_pc
+        flow_frame, lidar_data = frame_dict
+        pc = flow_frame.pc.global_pc
+        pose = flow_frame.pc.global_pose
+        flowed_pc = flow_frame.pc.flow(flow_frame.flow).global_pc
 
         # Add base point cloud
         pcd = o3d.geometry.PointCloud()
