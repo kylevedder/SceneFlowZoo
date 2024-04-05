@@ -21,7 +21,11 @@ class OptimizationLoop:
         self.min_delta = min_delta
 
     def optimize(
-        self, model: BaseNeuralRep, problem: BucketedSceneFlowInputSequence
+        self,
+        model: BaseNeuralRep,
+        problem: BucketedSceneFlowInputSequence,
+        title: str = "Optimizing Neur Rep",
+        leave: bool = False,
     ) -> BucketedSceneFlowOutputSequence:
         model = model.train()
         problem = problem.clone().detach().requires_grad_(True)
@@ -31,7 +35,7 @@ class OptimizationLoop:
         lowest_cost = torch.inf
         best_output = None
 
-        bar = tqdm.tqdm(range(self.iterations), leave=True, desc="Optimizing Neur Rep")
+        bar = tqdm.tqdm(range(self.iterations), leave=leave, desc=title)
         for epoch in bar:
             optimizer.zero_grad()
             cost_problem = model.optim_forward_single(problem)

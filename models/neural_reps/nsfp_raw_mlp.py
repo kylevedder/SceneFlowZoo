@@ -15,6 +15,7 @@ class NSFPRawMLP(nn.Module):
     def __init__(
         self,
         input_dim: int = 3,
+        output_dim: int = 3,
         latent_dim: int = 128,
         act_fn: ActivationFn = ActivationFn.RELU,
         layer_size: int = 8,
@@ -22,6 +23,7 @@ class NSFPRawMLP(nn.Module):
         super().__init__()
         self.layer_size = layer_size
         self.input_dim = input_dim
+        self.output_dim = output_dim
         self.latent_dim = latent_dim
         self.act_fn = act_fn
         self.nn_layers = torch.nn.Sequential(*self._make_model())
@@ -37,7 +39,7 @@ class NSFPRawMLP(nn.Module):
     def _make_model(self) -> torch.nn.ModuleList:
         nn_layers = torch.nn.ModuleList([])
         if self.layer_size <= 1:
-            nn_layers.append(torch.nn.Sequential(torch.nn.Linear(self.input_dim, self.input_dim)))
+            nn_layers.append(torch.nn.Sequential(torch.nn.Linear(self.input_dim, self.output_dim)))
             return nn_layers
 
         nn_layers.append(torch.nn.Sequential(torch.nn.Linear(self.input_dim, self.latent_dim)))
@@ -45,7 +47,7 @@ class NSFPRawMLP(nn.Module):
         for _ in range(self.layer_size - 1):
             nn_layers.append(torch.nn.Sequential(torch.nn.Linear(self.latent_dim, self.latent_dim)))
             nn_layers.append(self._get_activation_fn())
-        nn_layers.append(torch.nn.Linear(self.latent_dim, self.input_dim))
+        nn_layers.append(torch.nn.Linear(self.latent_dim, self.output_dim))
 
         return nn_layers
 

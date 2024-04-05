@@ -10,9 +10,9 @@
         "vscode": {
             "extensions": [
                 "ms-python.python",
-                "ms-python.black-formatter",
                 "ms-python.vscode-pylance",
                 "ms-python.mypy-type-checker",
+                "ms-python.black-formatter",
                 "ms-azuretools.vscode-docker",
             ]
         }

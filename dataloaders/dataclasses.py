@@ -407,6 +407,47 @@ class BucketedSceneFlowInputSequence:
         self.rgb_poses_ego_to_global.requires_grad_(requires_grad)
         return self
 
+    def slice(self, start_idx: int, end_idx: int) -> "BucketedSceneFlowInputSequence":
+        # Slice the tensors in this object
+        # For K length tensors, the slice is [start_idx:end_idx]
+        # For K - 1 length tensors, the slice is [start_idx:end_idx - 1]
+
+        return BucketedSceneFlowInputSequence(
+            dataset_idx=self.dataset_idx,
+            sequence_log_id=self.sequence_log_id,
+            sequence_idx=self.sequence_idx,
+            full_pc=self.full_pc[start_idx:end_idx],
+            full_pc_mask=self.full_pc_mask[start_idx:end_idx],
+            full_pc_gt_flowed=self.full_pc_gt_flowed[start_idx : end_idx - 1],
+            full_pc_gt_flowed_mask=self.full_pc_gt_flowed_mask[start_idx : end_idx - 1],
+            full_pc_gt_class=self.full_pc_gt_class[start_idx : end_idx - 1],
+            pc_poses_sensor_to_ego=self.pc_poses_sensor_to_ego[start_idx:end_idx],
+            pc_poses_ego_to_global=self.pc_poses_ego_to_global[start_idx:end_idx],
+            rgb_images=self.rgb_images[start_idx:end_idx],
+            rgb_poses_sensor_to_ego=self.rgb_poses_sensor_to_ego[start_idx:end_idx],
+            rgb_poses_ego_to_global=self.rgb_poses_ego_to_global[start_idx:end_idx],
+            loader_type=self.loader_type,
+        )
+
+    def reverse(self) -> "BucketedSceneFlowInputSequence":
+        # Reverse the first dimension of all tensors in this object
+        return BucketedSceneFlowInputSequence(
+            dataset_idx=self.dataset_idx,
+            sequence_log_id=self.sequence_log_id,
+            sequence_idx=self.sequence_idx,
+            full_pc=self.full_pc.flip(0),
+            full_pc_mask=self.full_pc_mask.flip(0),
+            full_pc_gt_flowed=self.full_pc_gt_flowed.flip(0),
+            full_pc_gt_flowed_mask=self.full_pc_gt_flowed_mask.flip(0),
+            full_pc_gt_class=self.full_pc_gt_class.flip(0),
+            pc_poses_sensor_to_ego=self.pc_poses_sensor_to_ego.flip(0),
+            pc_poses_ego_to_global=self.pc_poses_ego_to_global.flip(0),
+            rgb_images=self.rgb_images.flip(0),
+            rgb_poses_sensor_to_ego=self.rgb_poses_sensor_to_ego.flip(0),
+            rgb_poses_ego_to_global=self.rgb_poses_ego_to_global.flip(0),
+            loader_type=self.loader_type,
+        )
+
     @property
     def device(self) -> torch.device:
         """
@@ -517,3 +558,35 @@ class BucketedSceneFlowOutputSequence:
             _to_ego_lidar_flow(flow, mask)
             for flow, mask in zip(self.ego_flows, self.valid_flow_mask)
         ]
+
+    def reverse(self) -> "BucketedSceneFlowOutputSequence":
+        # Reverse the first dimension of all tensors in this object, and reverse the actual flow direction
+        return BucketedSceneFlowOutputSequence(
+            ego_flows=-self.ego_flows.flip(0),
+            valid_flow_mask=self.valid_flow_mask.flip(0),
+        )
+
+    def clone(self) -> "BucketedSceneFlowOutputSequence":
+        """
+        Clone this object.
+        """
+        return BucketedSceneFlowOutputSequence(
+            ego_flows=self.ego_flows.clone(),
+            valid_flow_mask=self.valid_flow_mask.clone(),
+        )
+
+    def detach(self) -> "BucketedSceneFlowOutputSequence":
+        """
+        Detach all tensors in this object.
+        """
+        self.ego_flows = self.ego_flows.detach()
+        self.valid_flow_mask = self.valid_flow_mask.detach()
+        return self
+
+    def requires_grad_(self, requires_grad: bool) -> "BucketedSceneFlowOutputSequence":
+        """
+        Set the requires_grad attribute of all tensors in this object.
+        """
+        self.ego_flows.requires_grad_(requires_grad)
+        self.valid_flow_mask.requires_grad_(requires_grad)
+        return self

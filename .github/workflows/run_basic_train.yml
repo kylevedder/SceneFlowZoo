@@ -98,6 +98,24 @@ jobs:
       run: |
         ./tests/fast_nsf/run.sh
 
+  run_liu_2024:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed_cpu
+    needs: prepare_runner
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
+    
+    - name: Run Liu et al. 2024 for several steps
+      run: |
+        ./tests/liu_2024/run.sh
+
   run_cache_test:
     runs-on: ubuntu-latest
     container:

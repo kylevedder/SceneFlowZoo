@@ -12,22 +12,14 @@ from models.neural_reps import NSFPCycleConsistency
 class NSFPModel(BaseModel):
     def __init__(
         self,
-        sequence_length: int = 2,
         iterations: int = 5000,
     ) -> None:
         super().__init__()
-        self.sequence_length = sequence_length
         self.optimization_loop = OptimizationLoop(iterations=iterations)
 
     def _validate_input(self, batched_sequence: list[BucketedSceneFlowInputSequence]) -> None:
-        assert (
-            self.sequence_length == 2
-        ), "This implementation only supports a sequence length of 2."
-
         for sequence in batched_sequence:
-            assert (
-                len(sequence) == self.sequence_length
-            ), f"Expected sequence length of {self.sequence_length}, but got {len(sequence)}."
+            assert len(sequence) == 2, f"Expected sequence length of 2, but got {len(sequence)}."
 
     def forward_single(
         self, input_sequence: BucketedSceneFlowInputSequence

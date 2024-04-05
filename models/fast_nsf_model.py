@@ -15,4 +15,5 @@ class FastNSFModel(NSFPModel):
                 return self.optimization_loop.optimize(
                     model=FastNSF(input_sequence).to(input_sequence.device).train(),
                     problem=input_sequence,
+                    title="Optimizing FastNSF",
                 )

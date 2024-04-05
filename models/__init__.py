@@ -8,6 +8,7 @@ from .fast_flow_3d import (
 from .base_model import BaseModel
 from .nsfp_model import NSFPModel
 from .fast_nsf_model import FastNSFModel
+from .liu_2024_model import Liu2024Model
 
 __all__ = [
     "DeFlow",
@@ -16,6 +17,7 @@ __all__ = [
     "FastFlow3DSelfSupervisedLoss",
     "NSFPModel",
     "FastNSFModel",
+    "Liu2024Model",
     "ConstantVectorBaseline",
     "BaseModel",
 ]

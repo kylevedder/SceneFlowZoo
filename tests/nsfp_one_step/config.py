@@ -13,7 +13,6 @@ SEQUENCE_LENGTH = 2
 model = dict(
     name="NSFPModel",
     args=dict(
-        sequence_length=SEQUENCE_LENGTH,
         iterations=1,
     ),
 )

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from .dataclasses import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional
 
 import numpy as np
 import torch
@@ -74,11 +74,21 @@ class EvalWrapper:
 
 
 class BucketedSceneFlowDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset_name: str, root_dir: Path, max_pc_points: int = 120000, **kwargs):
+    def __init__(
+        self,
+        dataset_name: str,
+        root_dir: Path,
+        max_pc_points: int = 120000,
+        set_length: Optional[int] = None,
+        **kwargs,
+    ):
         self.dataset = construct_dataset(dataset_name, dict(root_dir=root_dir, **kwargs))
         self.max_pc_points = max_pc_points
+        self.set_length = set_length
 
     def __len__(self):
+        if self.set_length is not None:
+            return self.set_length
         return len(self.dataset)
 
     def evaluator(self) -> EvalWrapper:
