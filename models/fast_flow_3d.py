@@ -132,7 +132,7 @@ class FastFlow3D(BaseModel):
         FEATURE_CHANNELS,
         SEQUENCE_LENGTH,
         bottleneck_head: FastFlow3DHeadType = FastFlow3DHeadType.LINEAR,
-        xl_backbone: FastFlow3DBackboneType = FastFlow3DBackboneType.UNET,
+        backbone: FastFlow3DBackboneType = FastFlow3DBackboneType.UNET,
     ) -> None:
         super().__init__()
         self.SEQUENCE_LENGTH = SEQUENCE_LENGTH
@@ -146,13 +146,13 @@ class FastFlow3D(BaseModel):
             feat_channels=FEATURE_CHANNELS,
         )
 
-        match xl_backbone:
+        match backbone:
             case FastFlow3DBackboneType.UNET_XL:
                 self.backbone: nn.Module = FastFlowUNetXL()
             case FastFlow3DBackboneType.UNET:
                 self.backbone: nn.Module = FastFlowUNet()
             case _:
-                raise ValueError(f"Invalid backbone type: {xl_backbone}")
+                raise ValueError(f"Invalid backbone type: {backbone}")
 
         match bottleneck_head:
             case FastFlow3DHeadType.LINEAR:

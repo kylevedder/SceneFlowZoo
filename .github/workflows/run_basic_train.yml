@@ -80,6 +80,24 @@ jobs:
       run: |
         ./tests/fastflow3d/run.sh
 
+  run_deflow:
+    runs-on: ubuntu-latest
+    container:
+      image: kylevedder/zeroflow_bucketed_cpu
+    needs: prepare_runner
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup env
+      run: |
+        ./tests/setup.sh
+    
+    - name: Run DeFlow
+      run: |
+        ./tests/deflow/run.sh
+
   run_nsfp:
     runs-on: ubuntu-latest
     container:
