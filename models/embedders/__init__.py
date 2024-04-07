@@ -3,9 +3,15 @@ from .process_voxels import HardSimpleVFE, PillarFeatureNet, DynamicPillarFeatur
 from .scatter import PointPillarsScatter
 
 from .embedder_model import HardEmbedder, DynamicEmbedder
+from .dynamic_scatter_wrapper import DynamicScatterWrapper
 
 __all__ = [
-    'HardEmbedder', 'DynamicEmbedder', 'HardVoxelizer', 'HardSimpleVFE',
-    'PillarFeatureNet', 'PointPillarsScatter', 'DynamicVoxelizer',
-    'DynamicPillarFeatureNet'
+    "HardEmbedder",
+    "DynamicEmbedder",
+    "HardVoxelizer",
+    "HardSimpleVFE",
+    "PillarFeatureNet",
+    "PointPillarsScatter",
+    "DynamicVoxelizer",
+    "DynamicPillarFeatureNet",
 ]

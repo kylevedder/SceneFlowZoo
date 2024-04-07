@@ -24,7 +24,9 @@ RUN pip install yapf==0.40.1
 RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.4 imageio black isort nntime
 # This is required for Open3D to not blow up on startup
 RUN apt install -y freeglut3-dev
-RUN conda install -y mmcv=2.1.0 -c conda-forge
+RUN conda install -y ninja -c conda-forge
+ENV MAX_JOBS=46
+RUN pip install mmcv==2.1.0
 
 # Install nuscenes-devkit, but knock out the pegged Matplotlib version which lacks a wheel for Python 3.11
 RUN git clone https://github.com/nutonomy/nuscenes-devkit.git /nuscenes-devkit
