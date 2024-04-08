@@ -5,10 +5,7 @@ import zipfile
 import tqdm
 from typing import Any, Optional
 
-
-def load_validation_data(validation_file_path: Path):
-    with validation_file_path.open("r") as file:
-        return json.load(file)
+from util_scripts import load_sequence_name_to_size_map, validate_sequence
 
 
 def solicit_is_supervised() -> bool:
@@ -30,7 +27,10 @@ def build_metadata(is_supervised: Optional[bool]) -> dict[str, Any]:
 
 
 def validate_and_archive_feather_files(
-    metadata: dict[str, Any], root_folder_path: Path, validation_data, archive_path: Path
+    metadata: dict[str, Any],
+    root_folder_path: Path,
+    sequence_to_size_map: dict[str, int],
+    archive_path: Path,
 ):
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         zipf.writestr("metadata.json", json.dumps(metadata, indent=4))
@@ -39,22 +39,10 @@ def validate_and_archive_feather_files(
             sorted(root_folder_path.iterdir()), desc="Validating and archiving folders"
         ):
             if subfolder.is_dir():  # Ensure it's a directory
-                expected_count = validation_data.get(subfolder.name)
-                feather_files = sorted(subfolder.glob("*.feather"))
-                actual_count = len(feather_files)
-
-                if expected_count is not None:
-                    if actual_count != expected_count:
-                        raise ValueError(
-                            f"Validation failed for '{subfolder.name}': expected {expected_count}, found {actual_count}"
-                        )
-                else:
-                    raise ValueError(
-                        f"No validation data for '{subfolder.name}'. Found {actual_count} items."
-                    )
-
+                glob_pattern = "*.feather"
+                validate_sequence(subfolder, glob_pattern, sequence_to_size_map)
                 # Add every 5th .feather file to the zip, preserving the subfolder structure
-                for i, feather_file in enumerate(feather_files):
+                for i, feather_file in enumerate(sorted(subfolder.glob(glob_pattern))):
                     if i % 5 == 0:  # Add every 5th file
                         # Calculate path relative to the root folder to preserve structure
                         relative_path = feather_file.relative_to(root_folder_path)
@@ -87,7 +75,7 @@ def main():
         args.archive_path = args.root_folder_path.parent / default_archive_name
 
     # Load validation data
-    validation_data = load_validation_data(args.validation_json)
+    validation_data = load_sequence_name_to_size_map(args.validation_json)
 
     # Remove archive if it already exists
     if args.archive_path.exists():
