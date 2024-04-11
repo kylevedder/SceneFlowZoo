@@ -39,9 +39,7 @@ def backend_ngc(
     command_content = f"""ngc batch run --instance {instance} --team {team} --name {name} --image {image} --result {result}"""
     for user, host_path in workspace:
         command_content += f" --workspace {user}:{host_path}"
-    command_content += (
-        f' --commandline "/workspace/entrypoint.sh; echo STARTING USER CODE; {command}"'
-    )
+    command_content += f' --commandline "/workspace/entrypoint.sh; cd /project; echo STARTING USER CODE; {command}"'
 
     print(command_content)
 
