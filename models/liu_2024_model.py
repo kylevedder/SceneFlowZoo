@@ -16,6 +16,14 @@ class Liu2024Model(NSFPModel):
         self, input_sequence: BucketedSceneFlowInputSequence
     ) -> BucketedSceneFlowOutputSequence:
 
+        # Taken from first party code: https://github.com/shenqildr/Multi-Frame-Neural-Scene-Flow/blob/c35a835f1cf929af4c5dbd89d847532c61b6768d/optimization.py#L645
+        min_delta = 0.0001
+
+        # Taken from email correspondence with authors
+        forward_early_patience = 10
+        reverse_early_patience = 10
+        fusion_early_patience = 30
+
         assert (
             len(input_sequence) == 3
         ), f"Expected sequence length of 3, but got {len(input_sequence)}."
@@ -34,11 +42,15 @@ class Liu2024Model(NSFPModel):
                     model=FastNSF(forward_input).to(input_sequence.device).train(),
                     problem=forward_input,
                     title="Optimizing Forward Flow",
+                    patience=forward_early_patience,
+                    min_delta=min_delta,
                 )
                 reverse_res = self.optimization_loop.optimize(
                     model=FastNSF(reverse_input).to(input_sequence.device).train(),
                     problem=reverse_input,
                     title="Optimizing Reverse Flow",
+                    patience=reverse_early_patience,
+                    min_delta=min_delta,
                 )
                 return self.optimization_loop.optimize(
                     model=Liu2024(
@@ -50,4 +62,6 @@ class Liu2024Model(NSFPModel):
                     .train(),
                     problem=forward_input,
                     title="Optimizing Fusion Flow",
+                    patience=fusion_early_patience,
+                    min_delta=min_delta,
                 )

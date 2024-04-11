@@ -4,6 +4,7 @@ from ..neural_reps import BaseNeuralRep
 from .cost_functions import BaseCostProblem
 from .utils import EarlyStopping
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from typing import Optional
 
 
 class OptimizationLoop:
@@ -13,29 +14,31 @@ class OptimizationLoop:
         iterations: int = 5000,
         lr: float = 0.008,
         weight_decay: float = 0,
-        min_delta: float = 0.00005,
     ):
         self.iterations = iterations
         self.lr = lr
         self.weight_decay = weight_decay
-        self.min_delta = min_delta
 
     def optimize(
         self,
         model: BaseNeuralRep,
         problem: BucketedSceneFlowInputSequence,
-        title: str = "Optimizing Neur Rep",
+        patience: int = 100,
+        min_delta: float = 0.00005,
+        title: Optional[str] = "Optimizing Neur Rep",
         leave: bool = False,
     ) -> BucketedSceneFlowOutputSequence:
         model = model.train()
         problem = problem.clone().detach().requires_grad_(True)
-        early_stopping = EarlyStopping(patience=100, min_delta=self.min_delta)
+        early_stopping = EarlyStopping(patience=patience, min_delta=min_delta)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
         lowest_cost = torch.inf
         best_output = None
 
-        bar = tqdm.tqdm(range(self.iterations), leave=leave, desc=title)
+        bar = range(self.iterations)
+        if title is not None:
+            bar = tqdm.tqdm(range(self.iterations), leave=leave, desc=title)
         for epoch in bar:
             optimizer.zero_grad()
             cost_problem = model.optim_forward_single(problem)
