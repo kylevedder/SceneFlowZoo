@@ -1,3 +1,5 @@
+print("Starting test_pl.py", flush=True)
+
 import torch
 import torch.distributed as dist
 import torch.nn as nn

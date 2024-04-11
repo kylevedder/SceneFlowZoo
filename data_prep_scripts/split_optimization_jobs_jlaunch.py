@@ -98,6 +98,9 @@ def build_splits(
     assert base_config.is_file(), f"Config file {base_config} does not exist"
     assert num_jobs > 0, f"Number of jobs must be positive"
 
+    # Make the launch files directory absolute
+    launch_files_dir = launch_files_dir.absolute()
+
     # Create a directory to store the jlaunch files
     launch_files_dir.mkdir(exist_ok=True, parents=True)
 
