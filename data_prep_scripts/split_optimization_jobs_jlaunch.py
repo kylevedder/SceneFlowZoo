@@ -28,8 +28,11 @@ def build_jlaunch(
 ):
     assert job_config.is_file(), f"Config file {job_config} does not exist"
 
+    jlaunch_script = Path("data_prep_scripts/jlaunch.py").absolute()
+    test_script = Path("test_pl.py").absolute()
+
     jlaunch_content = f"""#!/bin/bash
-python data_prep_scripts/jlaunch.py backend-{backend} "python test_pl.py {job_config}" --name {job_name} {' '.join(jlaunch_args)}
+python {jlaunch_script} backend-{backend} "python {test_script} {job_config}" --name {job_name} {' '.join(jlaunch_args)}
 """
 
     with open(jlaunch_save_path, "w") as f:
