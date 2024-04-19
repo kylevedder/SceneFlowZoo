@@ -70,7 +70,6 @@ class DistanceTransform:
             0.0,
             iterations,
         ).squeeze()
-        breakpoint()
 
     @staticmethod
     def from_pointclouds(
@@ -167,7 +166,14 @@ class DistanceTransform:
 
     def to_bev_image(self) -> np.ndarray:
         image_3d = self.D.cpu().numpy()
-        return image_3d.mean(2)
+        return image_3d.sum(2)
+
+    def visualize_bev(self):
+        import matplotlib.pyplot as plt
+
+        plt.imshow(self.to_bev_image())
+        plt.colorbar()
+        plt.show()
 
 
 @dataclass
