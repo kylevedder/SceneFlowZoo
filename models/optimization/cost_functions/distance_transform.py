@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from dataclasses import dataclass
 from .base_cost_function import BaseCostProblem
+import numpy as np
 
 
 class DistanceTransform:
@@ -69,6 +70,7 @@ class DistanceTransform:
             0.0,
             iterations,
         ).squeeze()
+        breakpoint()
 
     @staticmethod
     def from_pointclouds(
@@ -162,6 +164,10 @@ class DistanceTransform:
             target, sample_.view(1, -1, 1, 1, 3), mode="bilinear", align_corners=True
         ).view(-1)
         return dist
+
+    def to_bev_image(self) -> np.ndarray:
+        image_3d = self.D.cpu().numpy()
+        return image_3d.mean(2)
 
 
 @dataclass
