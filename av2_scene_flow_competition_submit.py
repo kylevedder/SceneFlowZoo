@@ -5,7 +5,7 @@ import zipfile
 import tqdm
 from typing import Any, Optional
 
-from util_scripts import load_sequence_name_to_size_map, validate_sequence
+from util_scripts.validation import load_sequence_name_to_size_map, validate_sequence
 
 
 def solicit_is_supervised() -> bool:
