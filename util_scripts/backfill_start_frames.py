@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from sequence_validation import (
+from util_scripts.validation import (
     load_sequence_name_to_pc_dims_map,
     validate_sequence,
 )

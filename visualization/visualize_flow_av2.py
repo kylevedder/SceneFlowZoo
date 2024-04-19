@@ -36,10 +36,14 @@ for flow_folder in flow_folders:
 
 
 def flow_folder_to_method_name(flow_folder: Path) -> str:
-    name = flow_folder.name
-    if "sequence_len" in name:
-        name = flow_folder.parent.name
-    return name
+
+    relevant_folder = flow_folder
+
+    skip_strings = ["sequence_len", "LoaderType"]
+    while any(skip_string in relevant_folder.name for skip_string in skip_strings):
+        relevant_folder = relevant_folder.parent
+
+    return relevant_folder.name
 
 
 def load_sequences(
@@ -55,16 +59,19 @@ def load_sequences(
     ]
 
     sequences = [sequence_loader.load_sequence(sequence_id) for sequence_loader in sequence_loaders]
+    names = [flow_folder_to_method_name(flow_folder) for flow_folder in flow_folders]
 
-    lengths = [len(sequence) for sequence in sequences]
-    assert all(
-        length == lengths[0] for length in lengths
-    ), f"All sequences must have the same length; intead got {lengths}."
+    sequence_and_names = list(zip(names, sequences))
 
-    return [
-        (flow_folder_to_method_name(flow_folder), sequence)
-        for sequence, flow_folder in zip(sequences, flow_folders)
-    ]
+    sequence_lengths = [len(sequence) for sequence in sequences]
+    if not all(length == sequence_lengths[0] for length in sequence_lengths):
+        length_strs = "\n".join(
+            [f"{name}:\t{length}" for name, length in zip(names, sequence_lengths)]
+        )
+        # Warning:
+        print(f"Warning: Not all sequences have the same length. Lengths:\n{length_strs}")
+
+    return sequence_and_names
 
 
 sequences = load_sequences(args.sequence_folder, flow_folders, sequence_id)

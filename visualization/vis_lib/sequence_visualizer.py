@@ -4,7 +4,7 @@ from bucketed_scene_flow_eval.interfaces import (
     AbstractSequenceLoader,
     AbstractAVLidarSequence,
 )
-from .lazy_frame_matrix import CausalLazyFrameMatrix
+from .lazy_frame_matrix import CausalLazyFrameMatrix, NonCausalLazyFrameMatrix
 
 from dataclasses import dataclass
 from .lazy_frame_matrix import AbstractFrameMatrix
@@ -12,6 +12,7 @@ from pathlib import Path
 import enum
 import numpy as np
 from typing import Optional
+from bucketed_scene_flow_eval.interfaces import LoaderType
 
 
 class ColorEnum(enum.Enum):
@@ -78,7 +79,7 @@ class SequenceVisualizer(O3DVisualizer):
         self.name_lst = [name for name, _ in name_sequence_list]
         sequence_lst = [sequence for _, sequence in name_sequence_list]
         self.vis_state = VisState(
-            full_frame_matrix=CausalLazyFrameMatrix(
+            full_frame_matrix=NonCausalLazyFrameMatrix(
                 sequences=sequence_lst, subsequence_length=subsequence_length
             ),
             frame_idx=frame_idx,
@@ -128,28 +129,24 @@ class SequenceVisualizer(O3DVisualizer):
         self.vis_state.sequence_idx += 1
         if self.vis_state.sequence_idx >= len(self.vis_state.full_frame_matrix):
             self.vis_state.sequence_idx = 0
-        print("Sequence:", self.vis_state.sequence_idx, self.get_current_method_name())
         self.draw_everything(vis, reset_view=False)
 
     def decrease_sequence_idx(self, vis):
         self.vis_state.sequence_idx -= 1
         if self.vis_state.sequence_idx < 0:
             self.vis_state.sequence_idx = len(self.vis_state.full_frame_matrix) - 1
-        print("Sequence: ", self.vis_state.sequence_idx, self.get_current_method_name())
         self.draw_everything(vis, reset_view=False)
 
     def increase_frame_idx(self, vis):
         self.vis_state.frame_idx += self.vis_state.frame_step_size
         if self.vis_state.frame_idx >= self.vis_state.full_frame_matrix.shape[1] - 1:
             self.vis_state.frame_idx = 0
-        print("Index: ", self.vis_state.frame_idx)
         self.draw_everything(vis, reset_view=False)
 
     def decrease_frame_idx(self, vis):
         self.vis_state.frame_idx -= self.vis_state.frame_step_size
         if self.vis_state.frame_idx < 0:
             self.vis_state.frame_idx = self.vis_state.full_frame_matrix.shape[1] - 2
-        print("Index: ", self.vis_state.frame_idx)
         self.draw_everything(vis, reset_view=False)
 
     def toggle_flow_lines(self, vis):
@@ -158,7 +155,9 @@ class SequenceVisualizer(O3DVisualizer):
 
     def draw_everything(self, vis, reset_view=False):
         self.geometry_list.clear()
-        print(f"Vis State: {self.get_current_method_name()}, frame {self.vis_state.frame_idx}")
+        print(
+            f"Vis State: {self.get_current_method_name()}, frame {self.vis_state.frame_idx} - {self.vis_state.frame_idx + self.vis_state.full_frame_matrix.subsequence_length - 1}"
+        )
         frame_list = self.vis_state.full_frame_matrix[
             self.vis_state.sequence_idx,
             self.vis_state.frame_idx,
