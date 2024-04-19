@@ -10,7 +10,11 @@ docker run --gpus=all --rm -it \
  -v /tmp/.X11-unix:/tmp/.X11-unix \
  -v /tmp/frame_results:/tmp/frame_results \
  -v /tmp:/tmp \
- -v `pwd`/docker_history.txt:/root/.bash_history \
+ -v /sshfs_mounts/:/sshfs_mounts \
+ -v `pwd`/docker_history.txt:/payload_files/bash_history \
+ -u $(id -u):$(id -g) \
+ -v /etc/passwd:/etc/passwd:ro \
+ -v /etc/group:/etc/group:ro \
  -e DISPLAY=$DISPLAY \
  -h $HOSTNAME \
  --privileged \

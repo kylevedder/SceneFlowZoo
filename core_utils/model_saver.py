@@ -101,6 +101,7 @@ class FlowSave(ModelOutSaver):
     def _multi_save_files(self, input: BucketedSceneFlowInputSequence) -> list[Path]:
         return [
             Path(self.save_root)
+            / f"{input.loader_type}"
             / f"sequence_len_{len(input):03d}"
             / f"{input.sequence_log_id}"
             / f"{input.dataset_idx:06d}"

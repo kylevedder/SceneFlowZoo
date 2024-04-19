@@ -1,4 +1,5 @@
 .mypy_cache/
+.pytest_cache/
 .vscode/
 **/__pycache__/
 docker_history.txt

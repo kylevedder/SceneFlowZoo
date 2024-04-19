@@ -18,10 +18,10 @@ class NSFPRawMLP(nn.Module):
         output_dim: int = 3,
         latent_dim: int = 128,
         act_fn: ActivationFn = ActivationFn.RELU,
-        layer_size: int = 8,
+        num_layers: int = 8,
     ):
         super().__init__()
-        self.layer_size = layer_size
+        self.layer_size = num_layers
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.latent_dim = latent_dim

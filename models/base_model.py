@@ -33,6 +33,10 @@ class BaseModel(ABC, nn.Module):
             4,
         ), f"Expected 4x4 transformation matrix, got {ego_to_global.shape}"
 
+        assert (
+            global_pc.shape == global_flow.shape
+        ), f"Expected same shape, got {global_pc.shape} != {global_flow.shape}"
+
         flowed_global_pc = global_pc + global_flow
 
         # Transform both the point cloud and the flowed point cloud into the ego frame

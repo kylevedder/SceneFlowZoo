@@ -1,23 +1,30 @@
 import argparse
 from pathlib import Path
-from sequence_validation import load_sequence_name_to_size_map, validate_sequence
+from sequence_validation import (
+    load_sequence_name_to_pc_dims_map,
+    validate_sequence,
+)
 import shutil
 import tqdm
 
 
 def validate_complete_root_folder(
-    root_folder: Path, validation_data: dict[str, int], glob_pattern: str = "*.feather"
+    root_folder: Path,
+    sequence_to_pc_dims_lst_map: dict[str, list[int]],
+    glob_pattern: str = "*.feather",
 ):
 
     subfolders = sorted([subfolder for subfolder in root_folder.iterdir() if subfolder.is_dir()])
     subfolder_names = set(subfolder.name for subfolder in subfolders)
 
     # Ensure that all validation data keys are present in the subfolders
-    missing_subfolders = set(validation_data.keys()) - subfolder_names
+    missing_subfolders = set(sequence_to_pc_dims_lst_map.keys()) - subfolder_names
     assert len(missing_subfolders) == 0, f"Missing subfolders: {missing_subfolders}"
 
+    sequence_to_len_map = {key: len(value) for key, value in sequence_to_pc_dims_lst_map.items()}
+
     for subfolder in subfolders:
-        validate_sequence(subfolder, glob_pattern, validation_data)
+        validate_sequence(subfolder, glob_pattern, sequence_to_len_map, sequence_to_pc_dims_lst_map)
 
 
 def rename_files_in_folder(folder: Path, start_index: int, glob_pattern: str = "*.feather"):
@@ -40,7 +47,7 @@ def get_first_n_files_from_folder(folder: Path, n: int, glob_pattern: str = "*.f
 def backfill_from_complete_folder(
     complete_root_folder: Path,
     partial_root_folder: Path,
-    validation_data: dict[str, int],
+    sequence_to_pc_dims_lst_map: dict[str, list[int]],
     glob_pattern: str = "*.feather",
 ):
     # Ensure that the complete root folder and the partial root folder have the same subfolders
@@ -60,7 +67,7 @@ def backfill_from_complete_folder(
 
     # For each partial subfolder, compute the number of missing files.
     missing_files_per_folder = [
-        validation_data[subfolder.name] - len(list(subfolder.glob(glob_pattern)))
+        len(sequence_to_pc_dims_lst_map[subfolder.name]) - len(list(subfolder.glob(glob_pattern)))
         for subfolder in partial_subfolders
     ]
 
@@ -94,7 +101,7 @@ def main():
     parser.add_argument("complete_root_folder", type=Path, help="Path to the complete root folder.")
     parser.add_argument("output_root_folder", type=Path, help="Path to the output root folder.")
     parser.add_argument(
-        "--validation_json",
+        "--sequence_pc_sizes_json",
         type=Path,
         default="data_prep_scripts/argo/av2_test_sizes.json",
         help="Path to the validation JSON file.",
@@ -103,10 +110,10 @@ def main():
     args = parser.parse_args()
 
     # Load validation data
-    validation_data = load_sequence_name_to_size_map(args.validation_json)
+    sequence_to_pc_dims_lst_map = load_sequence_name_to_pc_dims_map(args.sequence_pc_sizes_json)
 
     # Validate the complete root folder, as that is the one that contains all the data
-    validate_complete_root_folder(args.complete_root_folder, validation_data)
+    validate_complete_root_folder(args.complete_root_folder, sequence_to_pc_dims_lst_map)
 
     # Delete the output folder if it already exists
     if args.output_root_folder.exists():
@@ -121,12 +128,12 @@ def main():
     print("Copying complete. Starting backfill...")
 
     backfill_from_complete_folder(
-        args.complete_root_folder, args.output_root_folder, validation_data
+        args.complete_root_folder, args.output_root_folder, sequence_to_pc_dims_lst_map
     )
 
     print("Validating backfilled folder...")
 
-    validate_complete_root_folder(args.output_root_folder, validation_data)
+    validate_complete_root_folder(args.output_root_folder, sequence_to_pc_dims_lst_map)
 
     print(f"Backfill of {args.output_root_folder} complete.")
 

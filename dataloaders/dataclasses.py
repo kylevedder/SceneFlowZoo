@@ -80,6 +80,12 @@ class BucketedSceneFlowInputSequence:
     # Operation Mode
     loader_type: LoaderType
 
+    def get_pad_n(self) -> int:
+        """
+        Get the padded number of points per point cloud.
+        """
+        return self.full_pc.shape[1]
+
     def get_full_ego_pc(self, idx: int) -> torch.Tensor:
         """
         Get the point cloud at the specified index.

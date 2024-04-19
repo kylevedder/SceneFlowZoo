@@ -13,9 +13,13 @@ class NSFPModel(BaseModel):
     def __init__(
         self,
         iterations: int = 5000,
+        patience: int = 100,
+        min_delta: float = 0.00005,
     ) -> None:
         super().__init__()
-        self.optimization_loop = OptimizationLoop(iterations=iterations)
+        self.optimization_loop = OptimizationLoop(
+            iterations=iterations, min_delta=min_delta, patience=patience
+        )
 
     def _validate_input(self, batched_sequence: list[BucketedSceneFlowInputSequence]) -> None:
         for sequence in batched_sequence:

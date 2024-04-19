@@ -23,7 +23,7 @@ class Liu2024FusionRawMLP(NSFPRawMLP):
             output_dim=output_dim,
             latent_dim=latent_dim,
             act_fn=act_fn,
-            layer_size=layer_size,
+            num_layers=layer_size,
         )
 
 

@@ -44,9 +44,19 @@ RUN pip install -e setup
 
 RUN pip install FastGeodis==1.0.5 --no-build-isolation
 
-RUN pip install bucketed-scene-flow-eval==2.0.3
+RUN pip install bucketed-scene-flow-eval==2.0.6
 
 
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
-COPY bashrc /root/.bashrc
+
+# Setup environment to support running as non-root user
+ENV HOME=/home/user
+RUN mkdir /payload_files
+RUN chmod 777 /payload_files
+COPY bashrc /payload_files/bashrc
 WORKDIR /project
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 777 /entrypoint.sh
+RUN chmod 777 /home
+
+ENTRYPOINT ["/entrypoint.sh"]

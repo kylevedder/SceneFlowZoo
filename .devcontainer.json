@@ -1,7 +1,7 @@
 {
     "name": "zeroflow:latest",
-    "initializeCommand": "touch ${localWorkspaceFolder}/docker_history.txt; mkdir -p /tmp/frame_results",
-	"build": { "dockerfile": "docker/Dockerfile_cuda" },
+    "initializeCommand": "touch ${localWorkspaceFolder}/docker_history.txt; mkdir -p /tmp/frame_results; ./.devcontainer/setup_env.sh",
+	"build": { "dockerfile": "docker/Dockerfile_cuda", },
     "privileged": true,
 	"workspaceMount": "source=${localWorkspaceFolder},target=/project,type=bind,consistency=default",
     "workspaceFolder": "/project",
@@ -17,16 +17,21 @@
             ]
         }
     },
-	"postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+	"postStartCommand": "/entrypoint.sh; git config --global --add safe.directory ${containerWorkspaceFolder}",
     "mounts": [
         "source=/bigdata,target=/bigdata,type=bind,consistency=default",
         "source=/efs,target=/efs,type=bind,consistency=default",
         "source=/tmp/frame_results,target=/tmp/frame_results,type=bind,consistency=default",
         "source=${localWorkspaceFolder}/docker_history.txt,target=/root/.bash_history,type=bind,consistency=default",
+        "source=/etc/passwd,target=/etc/passwd,type=bind,consistency=default,ro=true",
+        "source=/etc/group,target=/etc/group,type=bind,consistency=default,ro=true",
+
     ],
     "runArgs": [
         "--gpus=all",
         "-h=zeroflow",
-        "--shm-size=16gb"
-    ]
+        "--shm-size=16gb",
+    ],
+    "containerUser": "${localEnv:MY_UID}:${localEnv:MY_GID}",
+    "updateRemoteUserUID" : true,
 }

@@ -13,23 +13,38 @@ class OptimizationLoop:
         self,
         iterations: int = 5000,
         lr: float = 0.008,
+        patience: int = 100,
+        min_delta: float = 0.00005,
         weight_decay: float = 0,
+        compile: bool = True,
     ):
         self.iterations = iterations
         self.lr = lr
         self.weight_decay = weight_decay
+        self.patience = patience
+        self.min_delta = min_delta
+        self.compile = compile
 
     def optimize(
         self,
         model: BaseNeuralRep,
         problem: BucketedSceneFlowInputSequence,
-        patience: int = 100,
-        min_delta: float = 0.00005,
+        patience: Optional[int] = None,
+        min_delta: Optional[float] = None,
         title: Optional[str] = "Optimizing Neur Rep",
         leave: bool = False,
     ) -> BucketedSceneFlowOutputSequence:
         model = model.train()
+        if self.compile:
+            model = torch.compile(model)
         problem = problem.clone().detach().requires_grad_(True)
+
+        if patience is None:
+            patience = self.patience
+
+        if min_delta is None:
+            min_delta = self.min_delta
+
         early_stopping = EarlyStopping(patience=patience, min_delta=min_delta)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
@@ -39,7 +54,7 @@ class OptimizationLoop:
         bar = range(self.iterations)
         if title is not None:
             bar = tqdm.tqdm(range(self.iterations), leave=leave, desc=title)
-        for epoch in bar:
+        for _ in bar:
             optimizer.zero_grad()
             cost_problem = model.optim_forward_single(problem)
             cost = cost_problem.cost()

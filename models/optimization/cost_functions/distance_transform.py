@@ -104,12 +104,40 @@ class DistanceTransform:
             grid_factor,
         )
 
+    @staticmethod
+    def from_pointcloud(pc1: torch.Tensor, grid_factor: float = 10.0) -> "DistanceTransform":
+        # If pc1 dim is 3, ensure that the first dim is a single dimension then squeeze it:
+        if pc1.dim() == 3:
+            assert (
+                pc1.shape[0] == 1
+            ), f"Input point clouds must have batch size of 1: {pc1.shape[0]}"
+            pc1 = pc1.squeeze(0)
+
+        assert pc1.dim() == 2, f"Input point clouds must be 3D: {pc1.dim()} != 3"
+
+        pc1_min = torch.min(pc1, 0)[0]
+        pc1_max = torch.max(pc1, 0)[0]
+
+        xmin_int, ymin_int, zmin_int = torch.floor(pc1_min * grid_factor - 1) / grid_factor
+        xmax_int, ymax_int, zmax_int = torch.ceil(pc1_max * grid_factor + 1) / grid_factor
+
+        return DistanceTransform(
+            pc1.clone().to(pc1.device),
+            (xmin_int, ymin_int, zmin_int),
+            (xmax_int, ymax_int, zmax_int),
+            pc1.device,
+            grid_factor,
+        )
+
     def torch_bilinear_distance(self, Y: torch.Tensor):
-        assert (
-            Y.dim() == 3 and Y.size(2) == 3
-        ), f"Input must be 3 dim and have 3 columns: {Y.size()}"
-        assert Y.size(0) == 1, f"Input must have batch size of 1: {Y.size()}"
-        Y = Y.squeeze(0)
+        # Y can either by 1xNx3 or Nx3.
+        if Y.dim() == 3:
+            # Ensure that the first dim is a single dimension then squeeze it:
+            assert Y.size(0) == 1, f"Input must have batch size of 1: {Y.size(0)}"
+            Y = Y.squeeze(0)
+
+        assert Y.dim() == 2, f"Input must be 2 dim: {Y.dim()}"
+        assert Y.size(1) == 3, f"Input must have 3 columns: {Y.size(1)}"
 
         H, W, D = self.D.size()
         target = self.D[None, None, ...]

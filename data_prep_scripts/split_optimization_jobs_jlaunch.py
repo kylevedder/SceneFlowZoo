@@ -2,6 +2,35 @@ import argparse
 from pathlib import Path
 import math
 import shutil
+import subprocess
+
+
+def run_bash_command(command: str) -> str:
+    """
+    Run a bash command and return the output as a string
+    """
+    print(f"Running command: >>>{command}<<<")
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+    output, _ = process.communicate()
+    return output.decode("utf-8")
+
+
+def run_jlaunch_commands(jlaunch_commands: Path) -> Path:
+    """
+    Run all the jlaunch commands in the given file and save their outputs to
+    a file called "lauch_all.sh" in the same directory as the jlaunch commands.
+    """
+
+    assert jlaunch_commands.is_file(), f"Jlaunch commands file {jlaunch_commands} does not exist"
+
+    jlaunch_results_path = jlaunch_commands.parent / "launch_all.sh"
+
+    if jlaunch_results_path.exists():
+        jlaunch_results_path.unlink()
+
+    run_bash_command(f"bash {jlaunch_commands} > {jlaunch_results_path}")
+
+    return jlaunch_results_path
 
 
 def build_config(
@@ -68,12 +97,12 @@ def build_split(
     return jlaunch_config
 
 
-def build_launch_all(jlaunches: list[Path], launch_files_dir: Path) -> Path:
+def build_jlaunch_commands(jlaunches: list[Path], launch_files_dir: Path) -> Path:
     """
     Write a bash script to launch all jobs
     """
 
-    launch_all_path = launch_files_dir / "launch_all.sh"
+    launch_all_path = launch_files_dir / "jlaunch_commands.sh"
 
     launch_all_content = f"""#!/bin/bash
 """
@@ -121,8 +150,11 @@ def build_splits(
         for idx in range(num_jobs)
     ]
 
-    launch_all = build_launch_all(jlaunch_files, launch_files_dir)
-    print(f"Launch all script written to {launch_all}")
+    jlaunch_commands = build_jlaunch_commands(jlaunch_files, launch_files_dir)
+    print(f"jlaunch commands written to {jlaunch_commands}")
+    print(f"Running jlaunch commands...")
+    run_all_commands = run_jlaunch_commands(jlaunch_commands)
+    print(f"Run all commands written to {run_all_commands} to launch jobs.")
 
 
 if __name__ == "__main__":
