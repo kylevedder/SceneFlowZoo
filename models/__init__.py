@@ -7,7 +7,7 @@ from .fast_flow_3d import (
 )
 from .base_model import BaseModel
 from .nsfp_model import NSFPModel
-from .fast_nsf_model import FastNSFModel
+from .fast_nsf_model import FastNSFModel, FastNSFPlusPlusModel
 from .liu_2024_model import Liu2024Model
 from .gigachad_nsf_model import GigaChadNSFModel
 
@@ -18,6 +18,7 @@ __all__ = [
     "FastFlow3DSelfSupervisedLoss",
     "NSFPModel",
     "FastNSFModel",
+    "FastNSFPlusPlusModel",
     "Liu2024Model",
     "GigaChadNSFModel",
     "ConstantVectorBaseline",

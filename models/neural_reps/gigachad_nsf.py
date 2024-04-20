@@ -7,6 +7,7 @@ from models.optimization.cost_functions import (
     DistanceTransformLossProblem,
     BaseCostProblem,
     AdditiveCosts,
+    SpeedRegularizer,
 )
 
 from pointclouds import to_fixed_array_torch
@@ -169,6 +170,12 @@ class GigaChadNSF(BaseNeuralRep):
                 DistanceTransformLossProblem(
                     dt=target_dt,
                     pc=warped_pc0_points,
+                )
+            )
+            cost_problems.append(
+                SpeedRegularizer(
+                    flow=input_flow.squeeze(0),
+                    speed_threshold=self.speed_threshold,
                 )
             )
 

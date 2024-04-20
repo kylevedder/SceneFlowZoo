@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from .base_cost_function import BaseCostProblem
 import numpy as np
+from typing import Optional
 
 
 class DistanceTransform:
@@ -168,10 +169,17 @@ class DistanceTransform:
         image_3d = self.D.cpu().numpy()
         return image_3d.sum(2)
 
-    def visualize_bev(self):
+    def visualize_bev(self, sample_x: Optional[torch.Tensor], sample_y: Optional[torch.Tensor]):
         import matplotlib.pyplot as plt
 
         plt.imshow(self.to_bev_image())
+
+        if sample_x is not None and sample_y is not None:
+            sample_x = sample_x.detach().squeeze(1).cpu().numpy()
+            sample_y = sample_y.detach().squeeze(1).cpu().numpy()
+
+            plt.scatter(sample_x, sample_y, c="red", s=1)
+
         plt.colorbar()
         plt.show()
 
