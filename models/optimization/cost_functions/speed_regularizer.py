@@ -23,4 +23,5 @@ class SpeedRegularizer(BaseCostProblem):
         speed = torch.norm(self.flow, dim=1)
         l1_cost = torch.nn.functional.relu(speed - self.speed_threshold)
         l2_cost = l1_cost**2
-        return (l1_cost + l2_cost).sum()
+        total_cost = (l1_cost + l2_cost).sum()
+        return total_cost

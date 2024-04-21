@@ -68,7 +68,7 @@ class FastNSFPlusPlus(FastNSF):
     def __init__(
         self,
         input_sequence: BucketedSceneFlowInputSequence,
-        speed_threshold: float = 30.0 / 10.0,  # 30 m/s
+        speed_threshold: float
     ):
         super().__init__(input_sequence)
         self.speed_threshold = speed_threshold
