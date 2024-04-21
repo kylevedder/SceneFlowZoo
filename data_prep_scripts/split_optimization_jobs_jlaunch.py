@@ -130,8 +130,9 @@ def build_splits(
     assert base_config.is_file(), f"Config file {base_config} does not exist"
     assert num_jobs > 0, f"Number of jobs must be positive"
 
+    existing_folders = [e for e in launch_files_dir.iterdir() if e.is_dir()]
     # Make the launch files directory absolute, and under the base name.
-    launch_files_dir = launch_files_dir.absolute() / base_name
+    launch_files_dir = launch_files_dir.absolute() / f"{len(existing_folders):06d}_{base_name}"
 
     # Create a directory to store the jlaunch files
     launch_files_dir.mkdir(exist_ok=True, parents=True)
