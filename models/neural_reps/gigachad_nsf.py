@@ -98,10 +98,13 @@ class GigaChadNSFPreprocessedInput:
 
 class GigaChadNSF(BaseNeuralRep):
 
-    def __init__(self, input_sequence: BucketedSceneFlowInputSequence):
+    def __init__(
+        self, input_sequence: BucketedSceneFlowInputSequence, speed_threshold: float = 60.0 / 10.0
+    ):
         super().__init__()
         self.model = GigaChadRawMLP()
         self.dts = self._build_dts(input_sequence)
+        self.speed_threshold = speed_threshold
 
         self._prep_neural_prior(self.model)
 
