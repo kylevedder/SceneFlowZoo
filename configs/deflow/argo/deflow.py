@@ -1,6 +1,7 @@
 _base_ = ["../../pseudoimage.py"]
 
 has_labels = True
+is_trainable = True
 
 epochs = 50
 learning_rate = 2e-6
