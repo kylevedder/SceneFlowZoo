@@ -14,6 +14,7 @@ def validate_complete_root_folder(
     glob_pattern: str = "*.feather",
 ):
 
+    print(f"Validating root folder: {root_folder}")
     subfolders = sorted([subfolder for subfolder in root_folder.iterdir() if subfolder.is_dir()])
     subfolder_names = set(subfolder.name for subfolder in subfolders)
 
@@ -23,7 +24,7 @@ def validate_complete_root_folder(
 
     sequence_to_len_map = {key: len(value) for key, value in sequence_to_pc_dims_lst_map.items()}
 
-    for subfolder in subfolders:
+    for subfolder in tqdm.tqdm(subfolders):
         validate_sequence(subfolder, glob_pattern, sequence_to_len_map, sequence_to_pc_dims_lst_map)
 
 
