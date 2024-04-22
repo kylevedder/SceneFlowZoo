@@ -82,7 +82,7 @@ class ModelWrapper(pl.LightningModule):
         self, input_batch: list[BucketedSceneFlowInputSequence], batch_idx: int
     ) -> dict[str, float]:
         model_res: list[BucketedSceneFlowOutputSequence] = self.model(
-            input_batch, **self.train_forward_args
+            input_batch, self.logger, **self.train_forward_args
         )
         loss_res = self.loss_fn(input_batch, model_res)
         loss = loss_res.pop("loss")
@@ -99,7 +99,7 @@ class ModelWrapper(pl.LightningModule):
         ):
             output_batch = self.model_out_saver.load_saved_batch(input_batch)
         else:
-            output_batch = self.model(input_batch, **self.val_forward_args)
+            output_batch = self.model(input_batch, self.logger, **self.val_forward_args)
             self.model_out_saver.save_batch(input_batch, output_batch)
 
         assert len(output_batch) == len(

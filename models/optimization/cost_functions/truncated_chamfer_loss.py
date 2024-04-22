@@ -8,6 +8,7 @@ from pytorch3d.ops.knn import knn_gather, knn_points
 from pytorch3d.structures.pointclouds import Pointclouds
 from typing import Union
 
+
 @dataclass
 class TruncatedChamferLossProblem(BaseCostProblem):
     warped_pc: torch.Tensor
@@ -53,3 +54,6 @@ class TruncatedChamferLossProblem(BaseCostProblem):
             cham_y[cham_y >= self.distance_threshold] = 0.0
 
         return cham_x.mean() + cham_y.mean()
+
+    def __repr__(self) -> str:
+        return f"TruncatedChamferLossProblem({self.cost()})"

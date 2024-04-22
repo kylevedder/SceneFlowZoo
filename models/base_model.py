@@ -3,20 +3,17 @@ import torch.nn as nn
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from abc import ABC, abstractmethod
 from pointclouds import transform_pc
+from pytorch_lightning.loggers import Logger
 
 
-class BaseModel(ABC, nn.Module):
-
-    def __init__(self) -> None:
-        super().__init__()
-
+class BaseModule(ABC, nn.Module):
     def forward(
-        self, batched_sequence: list[BucketedSceneFlowInputSequence]
+        self, batched_sequence: list[BucketedSceneFlowInputSequence], logger: Logger
     ) -> list[BucketedSceneFlowOutputSequence]:
-        return [self.forward_single(input_sequence) for input_sequence in batched_sequence]
+        return [self.forward_single(input_sequence, logger) for input_sequence in batched_sequence]
 
     def forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
         raise NotImplementedError()
 
@@ -44,3 +41,9 @@ class BaseModel(ABC, nn.Module):
         ego_flowed_pc = transform_pc(flowed_global_pc, torch.inverse(ego_to_global))
         ego_flow = ego_flowed_pc - ego_pc
         return ego_flow
+
+
+class BaseModel(BaseModule):
+
+    def __init__(self) -> None:
+        super().__init__()

@@ -7,6 +7,7 @@ from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputS
 from .base_model import BaseModel
 from models.optimization import OptimizationLoop
 from models.neural_reps import NSFPCycleConsistency
+from pytorch_lightning.loggers import Logger
 
 
 class NSFPModel(BaseModel):
@@ -26,11 +27,12 @@ class NSFPModel(BaseModel):
             assert len(sequence) == 2, f"Expected sequence length of 2, but got {len(sequence)}."
 
     def forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
         with torch.inference_mode(False):
             with torch.enable_grad():
                 return self.optimization_loop.optimize(
                     model=NSFPCycleConsistency().to(input_sequence.device).train(),
                     problem=input_sequence,
+                    logger=logger,
                 )

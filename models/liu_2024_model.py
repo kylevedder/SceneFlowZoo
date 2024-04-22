@@ -4,6 +4,7 @@ from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputS
 from models.neural_reps import FastNSF, Liu2024
 from .nsfp_model import NSFPModel
 from dataclasses import dataclass
+from pytorch_lightning.loggers import Logger
 
 
 class Liu2024Model(NSFPModel):
@@ -13,7 +14,7 @@ class Liu2024Model(NSFPModel):
             assert len(sequence) == 3, f"Expected sequence length of 3, but got {len(sequence)}."
 
     def forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
 
         # Taken from first party code: https://github.com/shenqildr/Multi-Frame-Neural-Scene-Flow/blob/c35a835f1cf929af4c5dbd89d847532c61b6768d/optimization.py#L645
@@ -44,6 +45,7 @@ class Liu2024Model(NSFPModel):
                     title="Optimizing Forward Flow",
                     patience=forward_early_patience,
                     min_delta=min_delta,
+                    logger=logger,
                 )
                 reverse_res = self.optimization_loop.optimize(
                     model=FastNSF(reverse_input).to(input_sequence.device).train(),
@@ -51,6 +53,7 @@ class Liu2024Model(NSFPModel):
                     title="Optimizing Reverse Flow",
                     patience=reverse_early_patience,
                     min_delta=min_delta,
+                    logger=logger,
                 )
                 return self.optimization_loop.optimize(
                     model=Liu2024(
@@ -64,4 +67,5 @@ class Liu2024Model(NSFPModel):
                     title="Optimizing Fusion Flow",
                     patience=fusion_early_patience,
                     min_delta=min_delta,
+                    logger=logger,
                 )

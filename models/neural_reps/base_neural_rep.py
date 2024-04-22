@@ -1,10 +1,10 @@
 from abc import abstractmethod
-from models import BaseModel
+from models import BaseModule
 from dataloaders import BucketedSceneFlowInputSequence
 from models.optimization.cost_functions import BaseCostProblem
 
 
-class BaseNeuralRep(BaseModel):
+class BaseNeuralRep(BaseModule):
 
     def optim_forward(
         self, batched_sequence: list[BucketedSceneFlowInputSequence]

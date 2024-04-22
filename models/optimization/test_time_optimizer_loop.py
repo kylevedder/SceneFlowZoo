@@ -5,6 +5,8 @@ from .cost_functions import BaseCostProblem
 from .utils import EarlyStopping
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from typing import Optional
+import numpy as np
+from pytorch_lightning.loggers import Logger
 
 
 class OptimizationLoop:
@@ -27,6 +29,7 @@ class OptimizationLoop:
 
     def optimize(
         self,
+        logger: Logger,
         model: BaseNeuralRep,
         problem: BucketedSceneFlowInputSequence,
         patience: Optional[int] = None,
@@ -54,10 +57,13 @@ class OptimizationLoop:
         bar = range(self.iterations)
         if title is not None:
             bar = tqdm.tqdm(range(self.iterations), leave=leave, desc=title)
-        for _ in bar:
+        for step, _ in enumerate(bar):
             optimizer.zero_grad()
             cost_problem = model.optim_forward_single(problem)
             cost = cost_problem.cost()
+            logger.log_metrics(
+                {f"log/{problem.sequence_log_id}/{problem.dataset_idx:06d}": cost.item()}, step=step
+            )
 
             if cost.item() < lowest_cost:
                 lowest_cost = cost.item()

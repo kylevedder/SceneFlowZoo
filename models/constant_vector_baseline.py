@@ -1,10 +1,9 @@
 import torch
-import torch.nn as nn
-from typing import List
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from bucketed_scene_flow_eval.interfaces import LoaderType
 from pointclouds import to_fixed_array_torch
 from .base_model import BaseModel
+from pytorch_lightning.loggers import Logger
 
 
 class ConstantVectorBaseline(BaseModel):
@@ -63,7 +62,7 @@ class ConstantVectorBaseline(BaseModel):
         )
 
     def forward_single(
-        self, input: BucketedSceneFlowInputSequence
+        self, input: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
 
         if input.loader_type == LoaderType.NON_CAUSAL:

@@ -194,6 +194,10 @@ class DistanceTransformLossProblem(BaseCostProblem):
         assert self.pc.requires_grad, "pc must have requires_grad=True"
 
     def cost(self) -> torch.Tensor:
-        res = self.dt.torch_bilinear_distance(self.pc).mean()
-        assert res.requires_grad, "res must have requires_grad=True"
-        return res
+        res = self.dt.torch_bilinear_distance(self.pc)
+        mean_res = res.mean()
+        assert mean_res.requires_grad, "mean_res must have requires_grad=True"
+        return mean_res
+
+    def __repr__(self) -> str:
+        return f"DistanceTransformLossProblem({self.cost()})"

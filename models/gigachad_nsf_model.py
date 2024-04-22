@@ -3,6 +3,7 @@ import torch
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from models.neural_reps import GigaChadNSF
 from .nsfp_model import NSFPModel
+from pytorch_lightning.loggers import Logger
 
 
 class GigaChadNSFModel(NSFPModel):
@@ -12,7 +13,7 @@ class GigaChadNSFModel(NSFPModel):
             assert len(sequence) >= 2, f"Expected sequence length of >= 2, but got {len(sequence)}."
 
     def forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
         with torch.inference_mode(False):
             with torch.enable_grad():
@@ -20,4 +21,5 @@ class GigaChadNSFModel(NSFPModel):
                     model=GigaChadNSF(input_sequence).to(input_sequence.device).train(),
                     problem=input_sequence,
                     title="Optimizing GigaChadNSFModel",
+                    logger=logger,
                 )

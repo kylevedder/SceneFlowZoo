@@ -22,6 +22,7 @@ class SpeedRegularizer(BaseCostProblem):
     def cost(self) -> torch.Tensor:
         speed = torch.norm(self.flow, dim=1)
         l1_cost = torch.nn.functional.relu(speed - self.speed_threshold)
-        l2_cost = l1_cost**2
-        total_cost = (l1_cost + l2_cost).sum()
-        return total_cost
+        return l1_cost.mean() + 0.5 * (l1_cost**2).mean()
+
+    def __repr__(self) -> str:
+        return f"SpeedRegularizer({self.cost()})"

@@ -5,7 +5,7 @@ from .fast_flow_3d import (
     FastFlow3DBucketedLoaderLoss,
     FastFlow3DSelfSupervisedLoss,
 )
-from .base_model import BaseModel
+from .base_model import BaseModel, BaseModule
 from .nsfp_model import NSFPModel
 from .fast_nsf_model import FastNSFModel, FastNSFPlusPlusModel
 from .liu_2024_model import Liu2024Model

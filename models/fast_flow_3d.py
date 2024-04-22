@@ -11,6 +11,7 @@ from models.heads import FastFlowDecoder, FastFlowDecoderStepDown, ConvGRUDecode
 from pointclouds.losses import warped_pc_loss
 from .base_model import BaseModel
 import enum
+from pytorch_lightning.loggers import Logger
 
 
 class FastFlow3DSelfSupervisedLoss:
@@ -252,7 +253,7 @@ class FastFlow3D(BaseModel):
         return batch_output
 
     def forward(
-        self, batched_sequence: List[BucketedSceneFlowInputSequence]
+        self, batched_sequence: List[BucketedSceneFlowInputSequence], logger: Logger
     ) -> List[BucketedSceneFlowOutputSequence]:
         """
         Args:
