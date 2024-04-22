@@ -77,9 +77,9 @@ def main():
 
     pl.seed_everything(42069)
 
-    tbl = TensorBoardLogger(
-        "tb_logs", name=str(Path(cfg.filename).parent.absolute()), version=args.checkpoint_dir_name
-    )
+    cfg_filename = Path(cfg.filename)
+    logger_name = cfg_filename.parent.absolute() / cfg_filename.stem
+    tbl = TensorBoardLogger("tb_logs", name=str(logger_name), version=args.checkpoint_dir_name)
     print("Tensorboard logs will be saved to:", tbl.log_dir, flush=True)
 
     test_dataloader, evaluator = make_test_dataloader(cfg)
