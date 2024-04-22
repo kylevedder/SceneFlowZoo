@@ -36,12 +36,17 @@ class GigaChadRawMLP(NSFPRawMLP):
         )
 
 
-def _make_time_feature(idx: int) -> torch.Tensor:
-    return torch.tensor([idx], dtype=torch.float32)
+def _make_time_feature(idx: int, total_entries: int) -> torch.Tensor:
+    # Make the time feature zero mean
+    if total_entries <= 1:
+        # Handle divide by zero
+        return torch.tensor([0.0], dtype=torch.float32)
+    max_idx = total_entries - 1
+    return torch.tensor([(idx / max_idx) - 0.5], dtype=torch.float32)
 
 
-def _make_input_feature(pc: torch.Tensor, idx: int) -> torch.Tensor:
-    time_feature = _make_time_feature(idx)  # 1x1
+def _make_input_feature(pc: torch.Tensor, idx: int, total_entries: int) -> torch.Tensor:
+    time_feature = _make_time_feature(idx, total_entries)  # 1x1
     pc_additional_dim = time_feature.repeat(pc.shape[0], 1)
     # Concatenate into an Nx4 tensor
     concatenated_pc = torch.cat(
@@ -93,7 +98,7 @@ class GigaChadNSFPreprocessedInput:
         Returns the input feature for the given index.
         """
         pc = self.get_global_pc(idx)  # N x 3
-        return _make_input_feature(pc, idx)
+        return _make_input_feature(pc, idx, len(self))
 
 
 class GigaChadNSF(BaseNeuralRep):
