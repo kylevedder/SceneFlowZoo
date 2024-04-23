@@ -7,6 +7,7 @@ from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputS
 from typing import Optional
 import numpy as np
 from pytorch_lightning.loggers import Logger
+from pathlib import Path
 
 
 class OptimizationLoop:
@@ -27,6 +28,9 @@ class OptimizationLoop:
         self.min_delta = min_delta
         self.compile = compile
 
+    def _save_intermediary_results(self) -> None:
+        pass
+
     def optimize(
         self,
         logger: Logger,
@@ -36,6 +40,7 @@ class OptimizationLoop:
         min_delta: Optional[float] = None,
         title: Optional[str] = "Optimizing Neur Rep",
         leave: bool = False,
+        intermediary_results_folder: Optional[Path] = None,
     ) -> BucketedSceneFlowOutputSequence:
         model = model.train()
         if self.compile:
@@ -59,7 +64,7 @@ class OptimizationLoop:
             bar = tqdm.tqdm(range(self.iterations), leave=leave, desc=title)
         for step, _ in enumerate(bar):
             optimizer.zero_grad()
-            cost_problem = model.optim_forward_single(problem)
+            cost_problem = model.optim_forward_single(problem, logger)
             cost = cost_problem.cost()
             logger.log_metrics(
                 {f"log/{problem.sequence_log_id}/{problem.dataset_idx:06d}": cost.item()}, step=step
@@ -69,7 +74,7 @@ class OptimizationLoop:
                 lowest_cost = cost.item()
                 # Run in eval mode to avoid unnecessary computation
                 with torch.inference_mode():
-                    best_output = model.forward_single(problem)
+                    best_output = model.forward_single(problem, logger)
 
             cost.backward()
             optimizer.step()

@@ -15,6 +15,7 @@ from pointclouds import to_fixed_array_torch
 from bucketed_scene_flow_eval.interfaces import LoaderType
 import torch
 from .base_neural_rep import BaseNeuralRep
+from pytorch_lightning.loggers import Logger
 
 
 class GigaChadRawMLP(NSFPRawMLP):
@@ -159,7 +160,7 @@ class GigaChadNSF(BaseNeuralRep):
         )
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 
@@ -206,7 +207,7 @@ class GigaChadNSF(BaseNeuralRep):
         return ego_flow, full_pc_mask
 
     def forward_single_causal(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
         assert (
             input_sequence.loader_type == LoaderType.CAUSAL
@@ -224,7 +225,7 @@ class GigaChadNSF(BaseNeuralRep):
         )
 
     def forward_single_noncausal(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
         assert (
             input_sequence.loader_type == LoaderType.NON_CAUSAL
@@ -251,13 +252,13 @@ class GigaChadNSF(BaseNeuralRep):
         )
 
     def forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
 
         match input_sequence.loader_type:
             case LoaderType.CAUSAL:
-                return self.forward_single_causal(input_sequence)
+                return self.forward_single_causal(input_sequence, logger)
             case LoaderType.NON_CAUSAL:
-                return self.forward_single_noncausal(input_sequence)
+                return self.forward_single_noncausal(input_sequence, logger)
             case _:
                 raise ValueError(f"Unknown loader type: {input_sequence.loader_type}")

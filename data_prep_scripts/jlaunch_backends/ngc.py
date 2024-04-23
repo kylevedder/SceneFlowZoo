@@ -25,6 +25,12 @@ from .shared_utils import run_cmd
     multiple=True,
     help="Workspace mount points. Can be used multiple times (e.g., user:host_path)",
 )
+@click.option(
+    "--label",
+    type=str,
+    multiple=True,
+    help="Labels to attach to the environment. Can be used multiple times",
+)
 def backend_ngc(
     command: str,
     instance: str,
@@ -33,12 +39,15 @@ def backend_ngc(
     image: str,
     result: str,
     workspace: list[tuple[str, str]],
+    label: list[str],
 ):
     """Launches a development environment with the specified options."""
 
     command_content = f"""ngc batch run --instance {instance} --team {team} --name {name} --image {image} --result {result}"""
     for user, host_path in workspace:
         command_content += f" --workspace {user}:{host_path}"
+    for l in label:
+        command_content += f" --label {l}"
     command_content += f' --commandline "/workspace/entrypoint.sh; cd /project; echo STARTING USER CODE; {command}"'
 
     print(command_content)

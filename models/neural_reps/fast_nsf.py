@@ -12,6 +12,7 @@ from models.optimization.cost_functions import (
     DistanceTransformLossProblem,
     SpeedRegularizer,
 )
+from pytorch_lightning.loggers import Logger
 
 
 class FastNSF(NSFPForwardOnly):
@@ -42,7 +43,7 @@ class FastNSF(NSFPForwardOnly):
             param.requires_grad = True
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 
@@ -65,16 +66,12 @@ class FastNSF(NSFPForwardOnly):
 
 class FastNSFPlusPlus(FastNSF):
 
-    def __init__(
-        self,
-        input_sequence: BucketedSceneFlowInputSequence,
-        speed_threshold: float
-    ):
+    def __init__(self, input_sequence: BucketedSceneFlowInputSequence, speed_threshold: float):
         super().__init__(input_sequence)
         self.speed_threshold = speed_threshold
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 

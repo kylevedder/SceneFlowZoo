@@ -10,6 +10,7 @@ from models.optimization.cost_functions import (
 from .nsfp_raw_mlp import NSFPRawMLP
 from .base_neural_rep import BaseNeuralRep
 from dataclasses import dataclass
+from pytorch_lightning.loggers import Logger
 
 
 @dataclass
@@ -59,7 +60,7 @@ class NSFPForwardOnly(BaseNeuralRep):
         )
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 
@@ -80,7 +81,7 @@ class NSFPForwardOnly(BaseNeuralRep):
         )
 
     def forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
 
         rep = self._preprocess(input_sequence)
@@ -107,7 +108,7 @@ class NSFPCycleConsistency(NSFPForwardOnly):
         self.reverse_model = NSFPRawMLP()
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 

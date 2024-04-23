@@ -4,56 +4,28 @@ import os
 # to enable fault tolerant training
 # os.environ['PL_FAULT_TOLERANT_TRAINING'] = '1'
 
-import datetime
 import torch
 from pathlib import Path
 import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.strategies import DDPStrategy
-from pytorch_lightning.loggers import TensorBoardLogger
+from util_scripts.logging import setup_tb_logger, get_checkpoint_path
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from tqdm import tqdm
+from typing import Optional
 import dataloaders
+from dataloaders import BucketedSceneFlowDataset, EvalWrapper
 from core_utils import ModelWrapper
 
 from pathlib import Path
-
-try:
-    from mmcv import Config
-except ImportError:
-    from mmengine import Config
+from mmengine import Config
 
 
-def get_rank() -> int:
-    # SLURM_PROCID can be set even if SLURM is not managing the multiprocessing,
-    # therefore LOCAL_RANK needs to be checked first
-    rank_keys = ("RANK", "LOCAL_RANK", "SLURM_PROCID", "JSM_NAMESPACE_RANK")
-    for key in rank_keys:
-        rank = os.environ.get(key)
-        if rank is not None:
-            return int(rank)
-    return 0
-
-
-def get_checkpoint_path(cfg, checkpoint_dir_name: str):
-    cfg_filename = Path(cfg.filename)
-    config_name = cfg_filename.stem
-    parent_name = cfg_filename.parent.name
-    parent_path = Path(f"model_checkpoints/{parent_name}/{config_name}/")
-    rank = get_rank()
-    if rank == 0:
-        # Since we're rank 0, we can create the directory
-        return parent_path / checkpoint_dir_name, checkpoint_dir_name
-    else:
-        # Since we're not rank 0, we shoulds grab the most recent directory
-        checkpoint_path = sorted(parent_path.glob("*"))[-1]
-        return checkpoint_path, checkpoint_path.name
-
-
-def make_train_dataloader(cfg):
+def make_train_dataloader(cfg: Config) -> tuple[torch.utils.data.DataLoader, EvalWrapper]:
     train_dataset_args = cfg.train_dataset.args
-    train_dataset = getattr(dataloaders, cfg.train_dataset.name)(**train_dataset_args)
+    train_dataset: BucketedSceneFlowDataset = getattr(dataloaders, cfg.train_dataset.name)(
+        **train_dataset_args
+    )
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, **cfg.train_dataloader.args, collate_fn=train_dataset.collate_fn
     )
@@ -61,9 +33,11 @@ def make_train_dataloader(cfg):
     return train_dataloader, train_dataset.evaluator()
 
 
-def make_val_dataloader(cfg):
+def make_val_dataloader(cfg: Config) -> tuple[torch.utils.data.DataLoader, EvalWrapper]:
     test_dataset_args = cfg.test_dataset.args
-    test_dataset = getattr(dataloaders, cfg.test_dataset.name)(**test_dataset_args)
+    test_dataset: BucketedSceneFlowDataset = getattr(dataloaders, cfg.test_dataset.name)(
+        **test_dataset_args
+    )
     test_dataloader = torch.utils.data.DataLoader(
         test_dataset, **cfg.test_dataloader.args, collate_fn=test_dataset.collate_fn
     )
@@ -71,16 +45,12 @@ def make_val_dataloader(cfg):
     return test_dataloader, test_dataset.evaluator()
 
 
-def setup_model(cfg, checkpoint, evaluator):
+def setup_model(cfg: Config, checkpoint: Optional[Path], evaluator: EvalWrapper):
     if (hasattr(cfg, "is_trainable") and not cfg.is_trainable) or (checkpoint is None):
         model = ModelWrapper(cfg, evaluator=evaluator)
     else:
         assert checkpoint.exists(), f"Checkpoint file {checkpoint} does not exist"
         model = ModelWrapper.load_from_checkpoint(checkpoint, cfg=cfg, evaluator=evaluator)
-
-    if hasattr(cfg, "compile_pytorch2") and cfg.compile_pytorch2:
-        print("PyTorch 2 compile()ing model!")
-        model = torch.compile(model, mode="reduce-overhead")
     return model
 
 
@@ -91,11 +61,6 @@ def main():
     parser.add_argument("--gpus", type=int, default=torch.cuda.device_count())
     parser.add_argument("--cpu", action="store_true")
     parser.add_argument("--resume_from_checkpoint", type=Path, default=None)
-    parser.add_argument(
-        "--checkpoint_dir_name",
-        type=str,
-        default=datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p"),
-    )
     parser.add_argument("--dry_run", action="store_true")
     args = parser.parse_args()
 
@@ -108,13 +73,12 @@ def main():
     if hasattr(cfg, "seed_everything"):
         pl.seed_everything(cfg.seed_everything)
 
-    checkpoint_path, checkpoint_dir_name = get_checkpoint_path(cfg, args.checkpoint_dir_name)
-
+    checkpoint_path = get_checkpoint_path(cfg)
     checkpoint_path.mkdir(parents=True, exist_ok=True)
     # Save config file to checkpoint directory
     cfg.dump(str(checkpoint_path / "config.py"))
 
-    tbl = TensorBoardLogger("tb_logs", name=cfg.filename, version=checkpoint_dir_name)
+    logger = setup_tb_logger(cfg, "train_pl")
 
     train_dataloader, _ = make_train_dataloader(cfg)
     val_dataloader, evaluator = make_val_dataloader(cfg)
@@ -122,8 +86,7 @@ def main():
     print("Train dataloader length:", len(train_dataloader))
     print("Val dataloader length:", len(val_dataloader))
 
-    resume_from_checkpoint = args.resume_from_checkpoint
-    model = setup_model(cfg, resume_from_checkpoint, evaluator)
+    model = setup_model(cfg, args.resume_from_checkpoint, evaluator)
 
     epoch_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_path,
@@ -144,18 +107,18 @@ def main():
     trainer = pl.Trainer(
         devices=args.gpus if not args.cpu else None,
         accelerator="gpu" if not args.cpu else "cpu",
-        logger=tbl,
+        logger=logger,
         strategy=DDPStrategy(find_unused_parameters=False),
         num_sanity_val_steps=2,
         log_every_n_steps=2,
         val_check_interval=cfg.validate_every,
-        check_val_every_n_epoch=cfg.check_val_every_n_epoch
-        if hasattr(cfg, "check_val_every_n_epoch")
-        else 1,
+        check_val_every_n_epoch=(
+            cfg.check_val_every_n_epoch if hasattr(cfg, "check_val_every_n_epoch") else 1
+        ),
         max_epochs=cfg.epochs,
-        accumulate_grad_batches=cfg.accumulate_grad_batches
-        if hasattr(cfg, "accumulate_grad_batches")
-        else 1,
+        accumulate_grad_batches=(
+            cfg.accumulate_grad_batches if hasattr(cfg, "accumulate_grad_batches") else 1
+        ),
         gradient_clip_val=cfg.gradient_clip_val if hasattr(cfg, "gradient_clip_val") else 0.0,
         callbacks=[epoch_checkpoint_callback, step_checkpoint_callback],
     )
