@@ -146,7 +146,9 @@ def main():
 
     dataset = construct_dataset(
         name=args.dataset_name,
-        args=dict(root_dir=args.root_dir, subsequence_length=args.subsequence_length),
+        args=dict(
+            root_dir=args.root_dir, subsequence_length=args.subsequence_length, with_ground=False
+        ),
     )
 
     visualizer = ResultsVisualizer(dataset, args.intermediary_results_folder)

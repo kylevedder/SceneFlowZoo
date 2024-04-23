@@ -4,6 +4,7 @@ from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputS
 from models.neural_reps import FastNSF, FastNSFPlusPlus
 from .nsfp_model import NSFPModel
 from pytorch_lightning.loggers import Logger
+from typing import Optional
 
 
 class FastNSFModel(NSFPModel):
@@ -29,8 +30,14 @@ class FastNSFPlusPlusModel(NSFPModel):
         patience: int = 100,
         min_delta: float = 0.00005,
         speed_threshold: float = 30.0 / 10.0,  # 30 m/s cap
+        save_flow_every: Optional[int] = None,
     ) -> None:
-        super().__init__(iterations=iterations, patience=patience, min_delta=min_delta)
+        super().__init__(
+            iterations=iterations,
+            patience=patience,
+            min_delta=min_delta,
+            save_flow_every=save_flow_every,
+        )
         self.speed_threshold = speed_threshold
 
     def forward_single(

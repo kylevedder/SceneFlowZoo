@@ -21,6 +21,7 @@ class OptimizationLoop:
         min_delta: float = 0.00005,
         weight_decay: float = 0,
         compile: bool = True,
+        save_flow_every: Optional[int] = None,
     ):
         self.iterations = iterations
         self.lr = lr
@@ -28,6 +29,7 @@ class OptimizationLoop:
         self.patience = patience
         self.min_delta = min_delta
         self.compile = compile
+        self.save_flow_every = save_flow_every
 
     def _save_intermediary_results(
         self,
@@ -62,7 +64,6 @@ class OptimizationLoop:
         min_delta: Optional[float] = None,
         title: Optional[str] = "Optimizing Neur Rep",
         leave: bool = False,
-        save_flow_every: Optional[int] = None,
     ) -> BucketedSceneFlowOutputSequence:
         model = model.train()
         if self.compile:
@@ -92,7 +93,7 @@ class OptimizationLoop:
                 {f"log/{problem.sequence_log_id}/{problem.dataset_idx:06d}": cost.item()}, step=step
             )
 
-            if save_flow_every is not None and step % save_flow_every == 0:
+            if self.save_flow_every is not None and step % self.save_flow_every == 0:
                 self._save_intermediary_results(model, problem, logger, step)
 
             if cost.item() < lowest_cost:

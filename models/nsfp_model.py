@@ -8,6 +8,7 @@ from .base_model import BaseModel
 from models.optimization import OptimizationLoop
 from models.neural_reps import NSFPCycleConsistency
 from pytorch_lightning.loggers import Logger
+from typing import Optional
 
 
 class NSFPModel(BaseModel):
@@ -16,10 +17,14 @@ class NSFPModel(BaseModel):
         iterations: int = 5000,
         patience: int = 100,
         min_delta: float = 0.00005,
+        save_flow_every: Optional[int] = None,
     ) -> None:
         super().__init__()
         self.optimization_loop = OptimizationLoop(
-            iterations=iterations, min_delta=min_delta, patience=patience
+            iterations=iterations,
+            min_delta=min_delta,
+            patience=patience,
+            save_flow_every=save_flow_every,
         )
 
     def _validate_input(self, batched_sequence: list[BucketedSceneFlowInputSequence]) -> None:
