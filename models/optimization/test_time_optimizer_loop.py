@@ -8,6 +8,7 @@ from typing import Optional
 import numpy as np
 from pytorch_lightning.loggers import Logger
 from pathlib import Path
+from bucketed_scene_flow_eval.utils import save_pickle
 
 
 class OptimizationLoop:
@@ -28,8 +29,29 @@ class OptimizationLoop:
         self.min_delta = min_delta
         self.compile = compile
 
-    def _save_intermediary_results(self) -> None:
-        pass
+    def _save_intermediary_results(
+        self,
+        model: BaseNeuralRep,
+        problem: BucketedSceneFlowInputSequence,
+        logger: Logger,
+        optimization_step: int,
+    ) -> None:
+
+        output = model.forward_single(problem, logger)
+        ego_flows = output.to_ego_lidar_flow_list()
+        raw_ego_flows = [
+            (
+                ego_flow.full_flow,
+                ego_flow.mask,
+            )
+            for ego_flow in ego_flows
+        ]
+        save_path = (
+            Path(logger.log_dir)
+            / f"dataset_idx_{problem.dataset_idx:010d}"
+            / f"opt_step_{optimization_step:08d}.pkl"
+        )
+        save_pickle(save_path, raw_ego_flows, verbose=True)
 
     def optimize(
         self,
@@ -40,7 +62,7 @@ class OptimizationLoop:
         min_delta: Optional[float] = None,
         title: Optional[str] = "Optimizing Neur Rep",
         leave: bool = False,
-        intermediary_results_folder: Optional[Path] = None,
+        save_flow_every: Optional[int] = None,
     ) -> BucketedSceneFlowOutputSequence:
         model = model.train()
         if self.compile:
@@ -69,6 +91,9 @@ class OptimizationLoop:
             logger.log_metrics(
                 {f"log/{problem.sequence_log_id}/{problem.dataset_idx:06d}": cost.item()}, step=step
             )
+
+            if save_flow_every is not None and step % save_flow_every == 0:
+                self._save_intermediary_results(model, problem, logger, step)
 
             if cost.item() < lowest_cost:
                 lowest_cost = cost.item()

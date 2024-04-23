@@ -4,15 +4,14 @@ from bucketed_scene_flow_eval.interfaces import (
     AbstractSequenceLoader,
     AbstractAVLidarSequence,
 )
-from .lazy_frame_matrix import CausalLazyFrameMatrix, NonCausalLazyFrameMatrix
+from .lazy_frame_matrix import NonCausalLazyFrameMatrix
 
 from dataclasses import dataclass
 from .lazy_frame_matrix import AbstractFrameMatrix
 from pathlib import Path
 import enum
-import numpy as np
 from typing import Optional
-from bucketed_scene_flow_eval.interfaces import LoaderType
+from visualization.vis_lib import BaseCallbackVisualizer
 
 
 class ColorEnum(enum.Enum):
@@ -54,16 +53,12 @@ class VisState:
     frame_idx: int
     flow_color: ColorEnum = ColorEnum.RED
     frame_step_size: int = 1
-    screenshot_path: Path = Path() / "screenshots"
-
-    def __post_init__(self):
-        self.screenshot_path.mkdir(exist_ok=True)
 
     def __str__(self):
         return f"sequence_idx: {self.sequence_idx}, frame__idx: {self.frame_idx}, "
 
 
-class SequenceVisualizer(O3DVisualizer):
+class SequenceVisualizer(BaseCallbackVisualizer):
 
     def __init__(
         self,
@@ -99,31 +94,15 @@ class SequenceVisualizer(O3DVisualizer):
         # down arrow decrease sequence_idx
         vis.register_key_callback(264, self.decrease_sequence_idx)
 
-    def _frame_list_to_color_list(self, num_frames: int) -> list[tuple[float, float, float]]:
-        """
-        Interpolate between red and blue based on the number of frames in the list
-        """
-
-        def interpolate_color(color1, color2, fraction):
-            return tuple(c1 * (1 - fraction) + c2 * fraction for c1, c2 in zip(color1, color2))
-
-        color1 = (0, 1, 0)
-        color2 = (0, 0, 1)
-        return [
-            interpolate_color(color1, color2, idx / (num_frames - 1)) for idx in range(num_frames)
-        ]
-
     def get_current_method_name(self) -> str:
         return self.name_lst[self.vis_state.sequence_idx]
 
-    def save_screenshot(self, vis: o3d.visualization.VisualizerWithKeyCallback):
-        save_name = (
-            self.vis_state.screenshot_path
+    def _get_screenshot_path(self) -> Path:
+        return (
+            self.screenshot_path
             / self.sequence_id
             / f"{self.vis_state.frame_idx:06d}_{self.get_current_method_name()}.png"
         )
-        save_name.parent.mkdir(exist_ok=True, parents=True)
-        vis.capture_screen_image(str(save_name))
 
     def increase_sequence_idx(self, vis):
         self.vis_state.sequence_idx += 1
@@ -185,13 +164,3 @@ class SequenceVisualizer(O3DVisualizer):
         print("Press left or right arrow to change starter_idx")
         print(f"Press S to save screenshot (saved to {self.vis_state.screenshot_path.absolute()})")
         print("#############################################################")
-
-    def run(self):
-        self._print_instructions()
-        vis = o3d.visualization.VisualizerWithKeyCallback()
-        vis.create_window()
-        vis.get_render_option().background_color = (1, 1, 1)
-        vis.get_view_control().set_up([0, 0, 1])
-        self._register_callbacks(vis)
-        self.draw_everything(vis, reset_view=True)
-        vis.run()
