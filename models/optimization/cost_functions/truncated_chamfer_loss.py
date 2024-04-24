@@ -20,7 +20,7 @@ class TruncatedChamferLossProblem(BaseCostProblem):
         assert self.warped_pc.requires_grad, "warped_pc must have requires_grad=True"
         assert self.target_pc.requires_grad, "target_pc must have requires_grad=True"
 
-    def cost(self) -> torch.Tensor:
+    def base_cost(self) -> torch.Tensor:
         warped_pc = self.warped_pc
         target_pc = self.target_pc
         if warped_pc.ndim == 2:
@@ -56,4 +56,4 @@ class TruncatedChamferLossProblem(BaseCostProblem):
         return cham_x.mean() + cham_y.mean()
 
     def __repr__(self) -> str:
-        return f"TruncatedChamferLossProblem({self.cost()})"
+        return f"TruncatedChamferLossProblem({self.base_cost()})"

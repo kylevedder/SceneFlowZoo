@@ -17,6 +17,7 @@ class OptimizationLoop:
         self,
         iterations: int = 5000,
         lr: float = 0.008,
+        burn_in_steps: int = 0,
         patience: int = 100,
         min_delta: float = 0.00005,
         weight_decay: float = 0,
@@ -26,6 +27,7 @@ class OptimizationLoop:
         self.iterations = iterations
         self.lr = lr
         self.weight_decay = weight_decay
+        self.burn_in_steps = burn_in_steps
         self.patience = patience
         self.min_delta = min_delta
         self.compile = compile
@@ -60,6 +62,7 @@ class OptimizationLoop:
         logger: Logger,
         model: BaseNeuralRep,
         problem: BucketedSceneFlowInputSequence,
+        burn_in_steps: Optional[int] = None,
         patience: Optional[int] = None,
         min_delta: Optional[float] = None,
         title: Optional[str] = "Optimizing Neur Rep",
@@ -76,7 +79,12 @@ class OptimizationLoop:
         if min_delta is None:
             min_delta = self.min_delta
 
-        early_stopping = EarlyStopping(patience=patience, min_delta=min_delta)
+        if burn_in_steps is None:
+            burn_in_steps = self.burn_in_steps
+
+        early_stopping = EarlyStopping(
+            burn_in_steps=burn_in_steps, patience=patience, min_delta=min_delta
+        )
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
         lowest_cost = torch.inf
@@ -87,7 +95,7 @@ class OptimizationLoop:
             bar = tqdm.tqdm(range(self.iterations), leave=leave, desc=title)
         for step, _ in enumerate(bar):
             optimizer.zero_grad()
-            cost_problem = model.optim_forward_single(problem, logger)
+            cost_problem = model.optim_forward_single(problem, step, early_stopping, logger)
             cost = cost_problem.cost()
             logger.log_metrics(
                 {f"log/{problem.sequence_log_id}/{problem.dataset_idx:06d}": cost.item()}, step=step
@@ -108,7 +116,7 @@ class OptimizationLoop:
             if early_stopping.step(cost):
                 break
 
-            bar.set_postfix(cost=f"{cost.item():0.4f}")
+            bar.set_postfix(cost=f"{cost.item():0.6f}")
 
         assert best_output is not None, "Best output is None; optimization failed"
         return best_output

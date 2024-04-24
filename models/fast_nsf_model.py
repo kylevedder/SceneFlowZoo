@@ -19,6 +19,7 @@ class FastNSFModel(NSFPModel):
                     problem=input_sequence,
                     title="Optimizing FastNSF",
                     logger=logger,
+                    leave=True,
                 )
 
 
@@ -52,4 +53,5 @@ class FastNSFPlusPlusModel(NSFPModel):
                     problem=input_sequence,
                     title="Optimizing FastNSF++",
                     logger=logger,
+                    leave=True,
                 )

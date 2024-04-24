@@ -7,6 +7,7 @@ from models.optimization.cost_functions import (
     AdditiveCosts,
     TruncatedChamferLossProblem,
 )
+from models.optimization.utils import EarlyStopping
 from .nsfp_raw_mlp import NSFPRawMLP
 from .base_neural_rep import BaseNeuralRep
 from dataclasses import dataclass
@@ -60,7 +61,11 @@ class NSFPForwardOnly(BaseNeuralRep):
         )
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self,
+        input_sequence: BucketedSceneFlowInputSequence,
+        optim_step: int,
+        early_stopping: EarlyStopping,
+        logger: Logger,
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 
@@ -108,7 +113,11 @@ class NSFPCycleConsistency(NSFPForwardOnly):
         self.reverse_model = NSFPRawMLP()
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self,
+        input_sequence: BucketedSceneFlowInputSequence,
+        optim_step: int,
+        early_stopping: EarlyStopping,
+        logger: Logger,
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 

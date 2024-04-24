@@ -5,6 +5,7 @@ from .nsfp_raw_mlp import NSFPRawMLP, ActivationFn
 from .fast_nsf import FastNSF
 from .nsfp import NSFPPreprocessedInput
 from models.optimization.cost_functions import DistanceTransformLossProblem, BaseCostProblem
+from models.optimization.utils import EarlyStopping
 import torch
 from pytorch_lightning.loggers import Logger
 
@@ -85,7 +86,11 @@ class Liu2024(FastNSF):
         )
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self,
+        input_sequence: BucketedSceneFlowInputSequence,
+        optim_step: int,
+        early_stopping: EarlyStopping,
+        logger: Logger,
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 

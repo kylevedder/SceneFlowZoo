@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from .base_cost_function import BaseCostProblem
 import numpy as np
 from typing import Optional
+import enum
+
+
+class BilinearSampleMode(enum.Enum):
+    CLIP = "clip"
+    IGNORE = "skip"
 
 
 class DistanceTransform:
@@ -124,14 +130,16 @@ class DistanceTransform:
         xmax_int, ymax_int, zmax_int = torch.ceil(pc1_max * grid_factor + 1) / grid_factor
 
         return DistanceTransform(
-            pc1.clone().to(pc1.device),
+            pc1.clone(),
             (xmin_int, ymin_int, zmin_int),
             (xmax_int, ymax_int, zmax_int),
             pc1.device,
             grid_factor,
         )
 
-    def torch_bilinear_distance(self, Y: torch.Tensor):
+    def torch_bilinear_distance(
+        self, Y: torch.Tensor, mode: BilinearSampleMode = BilinearSampleMode.CLIP
+    ):
         # Y can either by 1xNx3 or Nx3.
         if Y.dim() == 3:
             # Ensure that the first dim is a single dimension then squeeze it:
@@ -144,9 +152,28 @@ class DistanceTransform:
         H, W, D = self.D.size()
         target = self.D[None, None, ...]
 
-        sample_x = ((Y[:, 0:1] - self.Vx[0]) * self.grid_factor).clip(0, H - 1)
-        sample_y = ((Y[:, 1:2] - self.Vy[0]) * self.grid_factor).clip(0, W - 1)
-        sample_z = ((Y[:, 2:3] - self.Vz[0]) * self.grid_factor).clip(0, D - 1)
+        sample_x = (Y[:, 0:1] - self.Vx[0]) * self.grid_factor
+        sample_y = (Y[:, 1:2] - self.Vy[0]) * self.grid_factor
+        sample_z = (Y[:, 2:3] - self.Vz[0]) * self.grid_factor
+
+        if mode == BilinearSampleMode.CLIP:
+            # Clip all the samples to the grid
+            sample_x = sample_x.clip(0, H - 1)
+            sample_y = sample_y.clip(0, W - 1)
+            sample_z = sample_z.clip(0, D - 1)
+        elif mode == BilinearSampleMode.IGNORE:
+            # Mask out samples that are outside the grid
+            keep_mask = (
+                (sample_x >= 0)
+                & (sample_x <= H - 1)
+                & (sample_y >= 0)
+                & (sample_y <= W - 1)
+                & (sample_z >= 0)
+                & (sample_z <= D - 1)
+            ).squeeze(1)
+            sample_x = sample_x[keep_mask]
+            sample_y = sample_y[keep_mask]
+            sample_z = sample_z[keep_mask]
 
         sample = torch.cat([sample_x, sample_y, sample_z], -1)
 
@@ -157,19 +184,22 @@ class DistanceTransform:
         sample[..., 2] = sample[..., 2] / (D - 1)
         sample = sample - 1
 
-        sample_ = torch.cat([sample[..., 2:3], sample[..., 1:2], sample[..., 0:1]], -1)
+        sample_zyx = torch.cat([sample[..., 2:3], sample[..., 1:2], sample[..., 0:1]], -1)
 
         # NOTE: reshape to match 5D volumetric input
         dist = F.grid_sample(
-            target, sample_.view(1, -1, 1, 1, 3), mode="bilinear", align_corners=True
+            target, sample_zyx.view(1, -1, 1, 1, 3), mode="bilinear", align_corners=True
         ).view(-1)
+
         return dist
 
     def to_bev_image(self) -> np.ndarray:
         image_3d = self.D.cpu().numpy()
         return image_3d.sum(2)
 
-    def visualize_bev(self, sample_x: Optional[torch.Tensor], sample_y: Optional[torch.Tensor]):
+    def visualize_bev(
+        self, sample_x: Optional[torch.Tensor] = None, sample_y: Optional[torch.Tensor] = None
+    ):
         import matplotlib.pyplot as plt
 
         plt.imshow(self.to_bev_image())
@@ -183,21 +213,25 @@ class DistanceTransform:
         plt.colorbar()
         plt.show()
 
+    def __repr__(self) -> str:
+        return f"DistanceTransform(bev_image={self.to_bev_image().shape})"
+
 
 @dataclass
 class DistanceTransformLossProblem(BaseCostProblem):
 
     dt: DistanceTransform
     pc: torch.Tensor
+    sample_mode: BilinearSampleMode = BilinearSampleMode.CLIP
 
     def __post_init__(self):
         assert self.pc.requires_grad, "pc must have requires_grad=True"
 
-    def cost(self) -> torch.Tensor:
-        res = self.dt.torch_bilinear_distance(self.pc)
+    def base_cost(self) -> torch.Tensor:
+        res = self.dt.torch_bilinear_distance(self.pc, mode=self.sample_mode)
         mean_res = res.mean()
         assert mean_res.requires_grad, "mean_res must have requires_grad=True"
         return mean_res
 
     def __repr__(self) -> str:
-        return f"DistanceTransformLossProblem({self.cost()})"
+        return f"DistanceTransformLossProblem({self.base_cost()})"

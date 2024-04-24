@@ -29,9 +29,8 @@ class ResultsVisualizer(BaseCallbackVisualizer):
 
         self.vis_state = VisState()
         self.dataset = dataset
-        self.dataset_idx, self.intermediary_files = self._load_intermediary_flows(
-            intermediary_results_folder
-        )
+        self.intermediary_results_folder = intermediary_results_folder
+        self._load_intermediary_flows()
 
         super().__init__(
             screenshot_path=Path()
@@ -39,7 +38,8 @@ class ResultsVisualizer(BaseCallbackVisualizer):
             / f"dataset_idx_{self.dataset_idx:010d}"
         )
 
-    def _load_intermediary_flows(self, intermediary_results_folder: Path) -> tuple[int, list[Path]]:
+    def _load_intermediary_flows(self):
+        intermediary_results_folder = self.intermediary_results_folder
         dataset_idx = int(intermediary_results_folder.name.split("_")[-1])
         assert intermediary_results_folder.exists(), f"{intermediary_results_folder} does not exist"
         intermediary_files = sorted(intermediary_results_folder.glob("*.pkl"))
@@ -48,7 +48,7 @@ class ResultsVisualizer(BaseCallbackVisualizer):
         ), f"No intermediary files found in {intermediary_results_folder}"
 
         print(f"Found {len(intermediary_files)} intermediary files for dataset idx {dataset_idx}")
-        return dataset_idx, intermediary_files
+        self.dataset_idx, self.intermediary_files = dataset_idx, intermediary_files
 
     def _load_ego_lidar(self) -> list[EgoLidarFlow]:
         raw_intermediary_flows: list[tuple[np.ndarray, np.ndarray]] = load_pickle(
@@ -78,6 +78,7 @@ class ResultsVisualizer(BaseCallbackVisualizer):
         print("Flow moves from the gray point cloud to the white point cloud\n")
         print("Press up or down arrow to change intermediary result")
         print(f"Press S to save screenshot (saved to {self.screenshot_path.absolute()})")
+        print("Press E to jump to end of sequence")
         print("#############################################################")
 
     def _register_callbacks(self, vis: o3d.visualization.VisualizerWithKeyCallback):
@@ -86,17 +87,26 @@ class ResultsVisualizer(BaseCallbackVisualizer):
         vis.register_key_callback(265, self.increase_sequence_idx)
         # down arrow decrease sequence_idx
         vis.register_key_callback(264, self.decrease_sequence_idx)
+        # E to jump to end of sequence
+        vis.register_key_callback(ord("E"), self.jump_to_end_of_sequence)
 
     def increase_sequence_idx(self, vis):
+        self._load_intermediary_flows()
         self.vis_state.intermedary_result_idx += 1
         if self.vis_state.intermedary_result_idx >= len(self.intermediary_files):
             self.vis_state.intermedary_result_idx = 0
         self.draw_everything(vis, reset_view=False)
 
     def decrease_sequence_idx(self, vis):
+        self._load_intermediary_flows()
         self.vis_state.intermedary_result_idx -= 1
         if self.vis_state.intermedary_result_idx < 0:
             self.vis_state.intermedary_result_idx = len(self.intermediary_files) - 1
+        self.draw_everything(vis, reset_view=False)
+
+    def jump_to_end_of_sequence(self, vis):
+        self._load_intermediary_flows()
+        self.vis_state.intermedary_result_idx = len(self.intermediary_files) - 1
         self.draw_everything(vis, reset_view=False)
 
     def draw_everything(self, vis, reset_view=False):
@@ -127,31 +137,17 @@ def main():
     parser.add_argument("intermediary_results_folder", type=Path)
     args = parser.parse_args()
 
-    #  def __init__(
-    #     self,
-    #     root_dir: Union[Path, list[Path]],
-    #     subsequence_length: int = 2,
-    #     with_ground: bool = True,
-    #     with_rgb: bool = False,
-    #     cache_root: Path = Path("/tmp/"),
-    #     use_gt_flow: bool = True,
-    #     flow_data_path: Optional[Union[Path, list[Path]]] = None,
-    #     eval_type: str = "bucketed_epe",
-    #     eval_args=dict(),
-    #     expected_camera_shape: tuple[int, int, int] = (1550, 2048, 3),
-    #     point_cloud_range: Optional[PointCloudRange] = DEFAULT_POINT_CLOUD_RANGE,
-    #     use_cache=True,
-    #     load_flow: bool = True,
-    # ) -> None:
-
     dataset = construct_dataset(
         name=args.dataset_name,
         args=dict(
             root_dir=args.root_dir, subsequence_length=args.subsequence_length, with_ground=False
         ),
     )
-
-    visualizer = ResultsVisualizer(dataset, args.intermediary_results_folder)
+    intermediary_results_folder = args.intermediary_results_folder
+    # If the results folder is a pkl file, then grab the parent directory
+    if intermediary_results_folder.is_file():
+        intermediary_results_folder = intermediary_results_folder.parent
+    visualizer = ResultsVisualizer(dataset, intermediary_results_folder)
 
     visualizer.run()
 

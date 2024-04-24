@@ -5,6 +5,7 @@ from .nsfp_raw_mlp import NSFPRawMLP
 from .nsfp import NSFPPreprocessedInput, NSFPForwardOnly
 
 from dataloaders import BucketedSceneFlowInputSequence
+from models.optimization.utils import EarlyStopping
 from models.optimization.cost_functions import (
     BaseCostProblem,
     AdditiveCosts,
@@ -25,6 +26,8 @@ class FastNSF(NSFPForwardOnly):
             preprocess_result.masked_pc1.clone().detach(),
         )
 
+        print("DT:", self.dt)
+
         self._prep_neural_prior(self.forward_model)
 
     def _prep_neural_prior(self, model: nn.Module):
@@ -43,7 +46,11 @@ class FastNSF(NSFPForwardOnly):
             param.requires_grad = True
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self,
+        input_sequence: BucketedSceneFlowInputSequence,
+        optim_step: int,
+        early_stopping: EarlyStopping,
+        logger: Logger,
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 
@@ -71,7 +78,11 @@ class FastNSFPlusPlus(FastNSF):
         self.speed_threshold = speed_threshold
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self,
+        input_sequence: BucketedSceneFlowInputSequence,
+        optim_step: int,
+        early_stopping: EarlyStopping,
+        logger: Logger,
     ) -> BaseCostProblem:
         rep = self._preprocess(input_sequence)
 

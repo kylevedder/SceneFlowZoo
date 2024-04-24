@@ -8,6 +8,15 @@ from models.optimization.cost_functions import TruncatedChamferLossProblem
 class ActivationFn(enum.Enum):
     RELU = "relu"
     SIGMOID = "sigmoid"
+    SINC = "sinc"  # https://openreview.net/pdf?id=0Lqyut1y7M
+
+
+class SinC(nn.Module):
+    def __init__(self):
+        super(SinC, self).__init__()
+
+    def forward(self, x):
+        return torch.sinc(x)
 
 
 class NSFPRawMLP(nn.Module):
@@ -33,6 +42,8 @@ class NSFPRawMLP(nn.Module):
             return torch.nn.ReLU()
         elif self.act_fn == ActivationFn.SIGMOID:
             return torch.nn.Sigmoid()
+        elif self.act_fn == ActivationFn.SINC:
+            return SinC()
         else:
             raise ValueError(f"Unsupported activation function: {self.act_fn}")
 

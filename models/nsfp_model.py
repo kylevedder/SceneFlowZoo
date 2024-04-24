@@ -17,6 +17,7 @@ class NSFPModel(BaseModel):
         iterations: int = 5000,
         patience: int = 100,
         min_delta: float = 0.00005,
+        lr: float = 0.008,
         save_flow_every: Optional[int] = None,
     ) -> None:
         super().__init__()
@@ -25,6 +26,7 @@ class NSFPModel(BaseModel):
             min_delta=min_delta,
             patience=patience,
             save_flow_every=save_flow_every,
+            lr=lr,
         )
 
     def _validate_input(self, batched_sequence: list[BucketedSceneFlowInputSequence]) -> None:
