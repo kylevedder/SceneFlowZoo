@@ -34,7 +34,7 @@ class ResultsVisualizer(BaseCallbackVisualizer):
 
         super().__init__(
             screenshot_path=Path()
-            / "intermediary_screenshots"
+            / "screenshots_intermediary"
             / f"dataset_idx_{self.dataset_idx:010d}"
         )
 

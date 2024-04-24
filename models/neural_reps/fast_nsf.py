@@ -26,7 +26,7 @@ class FastNSF(NSFPForwardOnly):
             preprocess_result.masked_pc1.clone().detach(),
         )
 
-        print("DT:", self.dt)
+        # print("DT:", self.dt)
 
         self._prep_neural_prior(self.forward_model)
 
