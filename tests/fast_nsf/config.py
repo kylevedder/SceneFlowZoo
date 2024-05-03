@@ -10,12 +10,12 @@ validate_every = 10
 
 SEQUENCE_LENGTH = 2
 
+
 model = dict(
-    name="FastNSFModel",
-    args=dict(
-        iterations=10,
-    ),
+    name="FastNSFModelOptimizationLoop",
+    args=dict(epochs=10),
 )
+
 
 test_dataset = dict(
     name="BucketedSceneFlowDataset",

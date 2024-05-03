@@ -1,77 +1,13 @@
 from abc import ABC, abstractmethod
 
 from .dataclasses import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from .abstract_scene_flow_dataset import AbstractSceneFlowDataset, EvalWrapper
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Optional, Union
 
-import numpy as np
-import torch
 from bucketed_scene_flow_eval.datasets import construct_dataset
-from bucketed_scene_flow_eval.datastructures import SE3, TimeSyncedSceneFlowFrame, EgoLidarFlow
-from bucketed_scene_flow_eval.interfaces import LoaderType, AbstractDataset
+from bucketed_scene_flow_eval.interfaces import LoaderType
 from dataclasses import dataclass
-
-
-class EvalWrapper:
-
-    def __init__(self, dataset: AbstractDataset):
-        self.dataset = dataset
-        self.evaluator = dataset.evaluator()
-
-    def _eval_causal(
-        self,
-        gt_frame_list: list[TimeSyncedSceneFlowFrame],
-        pred_list: list[EgoLidarFlow],
-    ):
-        # Expect that the output is a single ego flow.
-        assert (
-            len(pred_list) == 1
-        ), f"As a causal loader, expected a single ego flow for the final frame pair, but instead got {len(pred_list)} flows."
-        assert (
-            len(gt_frame_list) >= 2
-        ), f"Expected at least two frames, but got {len(gt_frame_list)}."
-
-        gt = gt_frame_list[-2]
-        pred = pred_list[0]
-
-        self.evaluator.eval(pred, gt)
-
-    def _eval_non_causal(
-        self,
-        gt_frame_list: list[TimeSyncedSceneFlowFrame],
-        pred_list: list[EgoLidarFlow],
-    ):
-        # Expect that the output is a list of ego flows, one for each frame pair.
-        assert (
-            len(pred_list) == len(gt_frame_list) - 1
-        ), f"As a non-causal loader, expected a single ego flow for each frame pair, but instead got {len(pred_list)} flows for {len(gt_frame_list) - 1} frame pairs."
-
-        for gt, pred in zip(gt_frame_list[:-1], pred_list):
-            self.evaluator.eval(predictions=pred, gt=gt)
-
-    def eval(self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence):
-        gt_frame_list = self.dataset[input.dataset_idx]
-        pred_list = output.to_ego_lidar_flow_list()
-        if self.dataset.loader_type() == LoaderType.CAUSAL:
-            self._eval_causal(gt_frame_list, pred_list)
-        elif self.dataset.loader_type() == LoaderType.NON_CAUSAL:
-            self._eval_non_causal(gt_frame_list, pred_list)
-        else:
-            raise ValueError(f"Unknown loader type: {self.dataset.loader_type()}")
-
-    def eval_batch(
-        self,
-        inputs: List[BucketedSceneFlowInputSequence],
-        outputs: List[BucketedSceneFlowOutputSequence],
-    ):
-        assert len(inputs) == len(
-            outputs
-        ), f"Expected the same number of inputs and outputs, but got {len(inputs)} inputs and {len(outputs)} outputs."
-        for input, output in zip(inputs, outputs):
-            self.eval(input, output)
-
-    def compute_results(self, save_results: bool = True) -> dict:
-        return self.evaluator.compute_results(save_results=save_results)
 
 
 @dataclass
@@ -108,7 +44,7 @@ class BucketedSceneFlowDatasetSplit:
         return self._current_split_global_start(global_length) + split_idx
 
 
-class BucketedSceneFlowDataset(torch.utils.data.Dataset):
+class BucketedSceneFlowDataset(AbstractSceneFlowDataset):
     def __init__(
         self,
         dataset_name: str,
@@ -158,3 +94,6 @@ class BucketedSceneFlowDataset(torch.utils.data.Dataset):
             pc_max_len=self.max_pc_points,
             loader_type=self.dataset.loader_type(),
         )
+
+    def loader_type(self) -> LoaderType:
+        return self.dataset.loader_type()

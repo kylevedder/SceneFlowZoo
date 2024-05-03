@@ -1,20 +1,15 @@
 is_trainable = False
+has_labels = False
 
-test_dataset_root = "/tmp/argoverse2_small/val/"
-save_output_folder = "/tmp/argoverse2_small/val_liu_2024_out/"
+test_dataset_root = "/efs/argoverse2_small/val/"
+save_output_folder = "/efs/argoverse2_small/val_nsfp_rewritten_flow_debug/"
 
-epochs = 1
-learning_rate = 2e-6
-save_every = 500
-validate_every = 10
 
-SEQUENCE_LENGTH = 3
+SEQUENCE_LENGTH = 2
 
 model = dict(
-    name="Liu2024OptimizationLoop",
-    args=dict(
-        epochs=10,
-    ),
+    name="WholeBatchOptimizationLoop",
+    args=dict(model_class="WholeBatchNSFPCycleConsistency", save_flow_every=10),
 )
 
 test_dataset = dict(
@@ -26,8 +21,6 @@ test_dataset = dict(
         with_rgb=False,
         eval_type="bucketed_epe",
         eval_args=dict(),
-        subsequence_length=SEQUENCE_LENGTH,
-        set_length=2,
     ),
 )
 

@@ -3,18 +3,11 @@ is_trainable = False
 test_dataset_root = "/tmp/argoverse2_tiny/val/"
 save_output_folder = "/tmp/argoverse2_tiny/val_nsfp_out/"
 
-epochs = 1
-learning_rate = 2e-6
-save_every = 500
-validate_every = 10
-
 SEQUENCE_LENGTH = 2
 
 model = dict(
-    name="NSFPModel",
-    args=dict(
-        iterations=1,
-    ),
+    name="NSFPCycleConsistencyOptimizationLoop",
+    args=dict(epochs=1),
 )
 
 test_dataset = dict(

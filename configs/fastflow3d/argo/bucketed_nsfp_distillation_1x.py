@@ -18,8 +18,6 @@ model = dict(
     ),
 )
 
-loss_fn = dict(name="FastFlow3DBucketedLoaderLoss", args=dict())
-
 ######## TEST DATASET ########
 
 test_dataset_root = "/efs/argoverse2/val/"

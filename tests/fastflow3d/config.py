@@ -18,8 +18,6 @@ model = dict(
     ),
 )
 
-loss_fn = dict(name="FastFlow3DBucketedLoaderLoss", args=dict())
-
 test_dataset_root = "/tmp/argoverse2_tiny/val/"
 save_output_folder = "/tmp/argoverse2_tiny/val_nsfp_out/"
 

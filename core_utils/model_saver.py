@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from bucketed_scene_flow_eval.datastructures import EgoLidarFlow
-from core_utils import save_feather
+from bucketed_scene_flow_eval.utils import save_feather
 import pandas as pd
 from bucketed_scene_flow_eval.interfaces import LoaderType
 

@@ -50,9 +50,16 @@ class DummyModel(BaseModel):
         )
 
     def forward(
-        self, batched_sequence: list[BucketedSceneFlowInputSequence]
+        self, batched_sequence: list[BucketedSceneFlowInputSequence], logger
     ) -> list[BucketedSceneFlowOutputSequence]:
         return [self._cheat_use_gt_flow(input) for input in batched_sequence]
+
+    def loss_fn(
+        self,
+        input_batch: list[BucketedSceneFlowInputSequence],
+        model_res: list[BucketedSceneFlowOutputSequence],
+    ) -> dict[str, torch.Tensor]:
+        raise NotImplementedError()
 
 
 @pytest.fixture
@@ -101,7 +108,7 @@ def test_validate_cheating_with_gt_flow_is_perfect(dataset_with_gt_flow: Buckete
     model = DummyModel()
     for idx in range(len(dataset_with_gt_flow)):
         input = dataset_with_gt_flow[idx]
-        out_lst = model([input])
+        out_lst = model([input], None)
         output: BucketedSceneFlowOutputSequence = out_lst[0]
 
         for idx in range(len(input) - 1):

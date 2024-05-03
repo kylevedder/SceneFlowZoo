@@ -2,7 +2,7 @@ import torch
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
 from bucketed_scene_flow_eval.interfaces import LoaderType
 from pointclouds import to_fixed_array_torch
-from .base_model import BaseModel
+from .base_models import BaseModel
 from pytorch_lightning.loggers import Logger
 
 
@@ -61,7 +61,7 @@ class ConstantVectorBaseline(BaseModel):
             valid_flow_mask=valid_flow,
         )
 
-    def forward_single(
+    def inference_forward_single(
         self, input: BucketedSceneFlowInputSequence, logger: Logger
     ) -> BucketedSceneFlowOutputSequence:
 
@@ -71,3 +71,10 @@ class ConstantVectorBaseline(BaseModel):
             return self._make_causal_output(input)
         else:
             raise ValueError(f"Unknown loader type: {input.loader_type}")
+
+    def loss_fn(
+        self,
+        input_batch: list[BucketedSceneFlowInputSequence],
+        model_res: list[BucketedSceneFlowOutputSequence],
+    ) -> dict[str, torch.Tensor]:
+        return {}

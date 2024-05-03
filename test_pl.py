@@ -5,37 +5,11 @@ from pathlib import Path
 import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.strategies import DDPStrategy
-from util_scripts.logging import setup_tb_logger
-from dataloaders import EvalWrapper, BucketedSceneFlowDataset
 
-import dataloaders
-
-from core_utils import ModelWrapper
+from core_utils import setup_tb_logger, make_dataloader, setup_model
 
 from pathlib import Path
 from mmengine import Config
-
-
-def make_test_dataloader(cfg: Config) -> tuple[torch.utils.data.DataLoader, EvalWrapper]:
-    test_dataset_args = cfg.test_dataset.args
-    test_dataset: BucketedSceneFlowDataset = getattr(dataloaders, cfg.test_dataset.name)(
-        **test_dataset_args
-    )
-    test_dataloader = torch.utils.data.DataLoader(
-        test_dataset, **cfg.test_dataloader.args, collate_fn=test_dataset.collate_fn
-    )
-
-    return test_dataloader, test_dataset.evaluator()
-
-
-def setup_model(cfg: Config, evaluator: EvalWrapper, args):
-    if hasattr(cfg, "is_trainable") and not cfg.is_trainable:
-        model = ModelWrapper(cfg, evaluator=evaluator)
-    else:
-        assert args.checkpoint is not None, "Must provide checkpoint for validation"
-        assert args.checkpoint.exists(), f"Checkpoint file {args.checkpoint} does not exist"
-        model = ModelWrapper.load_from_checkpoint(args.checkpoint, cfg=cfg, evaluator=evaluator)
-    return model
 
 
 def main():
@@ -53,11 +27,13 @@ def main():
     pl.seed_everything(42069)
     logger = setup_tb_logger(cfg, "test_pl")
 
-    test_dataloader, evaluator = make_test_dataloader(cfg)
+    test_dataloader, evaluator = make_dataloader(
+        cfg.test_dataset.name, cfg.test_dataset.args, cfg.test_dataloader.args
+    )
 
     print("Val dataloader length:", len(test_dataloader))
 
-    model = setup_model(cfg, evaluator, args)
+    model = setup_model(cfg, evaluator, args.checkpoint)
     trainer = pl.Trainer(
         devices=args.gpus,
         accelerator="gpu" if not args.cpu else "cpu",

@@ -9,49 +9,11 @@ from pathlib import Path
 import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.strategies import DDPStrategy
-from util_scripts.logging import setup_tb_logger, get_checkpoint_path
+from core_utils import setup_tb_logger, get_checkpoint_path, make_dataloader, setup_model
 from pytorch_lightning.callbacks import ModelCheckpoint
-
-from typing import Optional
-import dataloaders
-from dataloaders import BucketedSceneFlowDataset, EvalWrapper
-from core_utils import ModelWrapper
 
 from pathlib import Path
 from mmengine import Config
-
-
-def make_train_dataloader(cfg: Config) -> tuple[torch.utils.data.DataLoader, EvalWrapper]:
-    train_dataset_args = cfg.train_dataset.args
-    train_dataset: BucketedSceneFlowDataset = getattr(dataloaders, cfg.train_dataset.name)(
-        **train_dataset_args
-    )
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, **cfg.train_dataloader.args, collate_fn=train_dataset.collate_fn
-    )
-
-    return train_dataloader, train_dataset.evaluator()
-
-
-def make_val_dataloader(cfg: Config) -> tuple[torch.utils.data.DataLoader, EvalWrapper]:
-    test_dataset_args = cfg.test_dataset.args
-    test_dataset: BucketedSceneFlowDataset = getattr(dataloaders, cfg.test_dataset.name)(
-        **test_dataset_args
-    )
-    test_dataloader = torch.utils.data.DataLoader(
-        test_dataset, **cfg.test_dataloader.args, collate_fn=test_dataset.collate_fn
-    )
-
-    return test_dataloader, test_dataset.evaluator()
-
-
-def setup_model(cfg: Config, checkpoint: Optional[Path], evaluator: EvalWrapper):
-    if (hasattr(cfg, "is_trainable") and not cfg.is_trainable) or (checkpoint is None):
-        model = ModelWrapper(cfg, evaluator=evaluator)
-    else:
-        assert checkpoint.exists(), f"Checkpoint file {checkpoint} does not exist"
-        model = ModelWrapper.load_from_checkpoint(checkpoint, cfg=cfg, evaluator=evaluator)
-    return model
 
 
 def main():
@@ -80,13 +42,17 @@ def main():
 
     logger = setup_tb_logger(cfg, "train_pl")
 
-    train_dataloader, _ = make_train_dataloader(cfg)
-    val_dataloader, evaluator = make_val_dataloader(cfg)
+    train_dataloader, _ = make_dataloader(
+        cfg.train_dataset.name, cfg.train_dataset.args, cfg.train_dataloader.args
+    )
+    val_dataloader, evaluator = make_dataloader(
+        cfg.test_dataset.name, cfg.test_dataset.args, cfg.test_dataloader.args
+    )
 
     print("Train dataloader length:", len(train_dataloader))
     print("Val dataloader length:", len(val_dataloader))
 
-    model = setup_model(cfg, args.resume_from_checkpoint, evaluator)
+    model = setup_model(cfg, evaluator, args.resume_from_checkpoint)
 
     epoch_checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_path,

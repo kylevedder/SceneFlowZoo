@@ -8,8 +8,8 @@ import pytorch_lightning as pl
 import torch
 import torch.optim as optim
 from bucketed_scene_flow_eval.datastructures import *
-
 import models
+from models import ForwardMode
 from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence, EvalWrapper
 
 from .model_saver import ModelOutSaver, FlowNoSave, FlowSave
@@ -23,12 +23,9 @@ class ModelWrapper(pl.LightningModule):
     def __init__(self, cfg, evaluator: EvalWrapper):
         super().__init__()
         self.cfg = cfg
-        self.model = getattr(models, cfg.model.name)(**cfg.model.args)
+        self.model = models.construct_model(cfg.model.name, cfg.model.args)
 
-        if not hasattr(cfg, "is_trainable") or cfg.is_trainable:
-            self.loss_fn = getattr(models, cfg.loss_fn.name)(**cfg.loss_fn.args)
-
-        self.lr = cfg.learning_rate
+        self.lr = _get_cfg_or_default(cfg, "learning_rate", None)
         self.evaluator = evaluator
 
         self.train_forward_args = _get_cfg_or_default(cfg, "train_forward_args", {})
@@ -81,10 +78,10 @@ class ModelWrapper(pl.LightningModule):
     def training_step(
         self, input_batch: list[BucketedSceneFlowInputSequence], batch_idx: int
     ) -> dict[str, float]:
-        model_res: list[BucketedSceneFlowOutputSequence] = self.model(
-            input_batch, self.logger, **self.train_forward_args
+        model_res = self.model(
+            ForwardMode.TRAIN, input_batch, self.logger, **self.train_forward_args
         )
-        loss_res = self.loss_fn(input_batch, model_res)
+        loss_res = self.model.loss_fn(input_batch, model_res)
         loss = loss_res.pop("loss")
         self.log("train/loss", loss, on_step=True)
         for k, v in loss_res.items():
@@ -99,7 +96,9 @@ class ModelWrapper(pl.LightningModule):
         ):
             output_batch = self.model_out_saver.load_saved_batch(input_batch)
         else:
-            output_batch = self.model(input_batch, self.logger, **self.val_forward_args)
+            output_batch = self.model(
+                ForwardMode.VAL, input_batch, self.logger, **self.val_forward_args
+            )
             self.model_out_saver.save_batch(input_batch, output_batch)
 
         assert len(output_batch) == len(

@@ -360,99 +360,56 @@ class BucketedSceneFlowInputSequence:
 
         return self
 
+    def _apply_to_vars(self, func: callable) -> "BucketedSceneFlowInputSequence":
+        copied_args = {
+            key: func(value) if isinstance(value, torch.Tensor) else value
+            for key, value in vars(self).items()
+        }
+        return type(self)(**copied_args)
+
     def clone(self) -> "BucketedSceneFlowInputSequence":
         """
         Clone this object.
         """
-        return BucketedSceneFlowInputSequence(
-            dataset_idx=self.dataset_idx,
-            sequence_log_id=self.sequence_log_id,
-            sequence_idx=self.sequence_idx,
-            full_pc=self.full_pc.clone(),
-            full_pc_mask=self.full_pc_mask.clone(),
-            full_pc_gt_flowed=self.full_pc_gt_flowed.clone(),
-            full_pc_gt_flowed_mask=self.full_pc_gt_flowed_mask.clone(),
-            full_pc_gt_class=self.full_pc_gt_class.clone(),
-            pc_poses_sensor_to_ego=self.pc_poses_sensor_to_ego.clone(),
-            pc_poses_ego_to_global=self.pc_poses_ego_to_global.clone(),
-            rgb_images=self.rgb_images.clone(),
-            rgb_poses_sensor_to_ego=self.rgb_poses_sensor_to_ego.clone(),
-            rgb_poses_ego_to_global=self.rgb_poses_ego_to_global.clone(),
-            loader_type=self.loader_type,
-        )
+        # Iterate through the vars of this object and clone the tensors; copy the rest
+
+        return self._apply_to_vars(lambda x: x.clone() if isinstance(x, torch.Tensor) else x)
 
     def detach(self) -> "BucketedSceneFlowInputSequence":
         """
         Detach all tensors in this object.
         """
-        self.full_pc = self.full_pc.detach()
-        self.full_pc_mask = self.full_pc_mask.detach()
-        self.full_pc_gt_flowed = self.full_pc_gt_flowed.detach()
-        self.full_pc_gt_flowed_mask = self.full_pc_gt_flowed_mask.detach()
-        self.full_pc_gt_class = self.full_pc_gt_class.detach()
-        self.pc_poses_sensor_to_ego = self.pc_poses_sensor_to_ego.detach()
-        self.pc_poses_ego_to_global = self.pc_poses_ego_to_global.detach()
-        self.rgb_images = self.rgb_images.detach()
-        self.rgb_poses_sensor_to_ego = self.rgb_poses_sensor_to_ego.detach()
-        self.rgb_poses_ego_to_global = self.rgb_poses_ego_to_global.detach()
-        return self
+        return self._apply_to_vars(lambda x: x.detach() if isinstance(x, torch.Tensor) else x)
 
     def requires_grad_(self, requires_grad: bool) -> "BucketedSceneFlowInputSequence":
         """
         Set the requires_grad attribute of all tensors in this object.
         """
-        self.full_pc.requires_grad_(requires_grad)
-        self.full_pc_mask.requires_grad_(requires_grad)
-        self.full_pc_gt_flowed.requires_grad_(requires_grad)
-        self.full_pc_gt_flowed_mask.requires_grad_(requires_grad)
-        self.full_pc_gt_class.requires_grad_(requires_grad)
-        self.pc_poses_sensor_to_ego.requires_grad_(requires_grad)
-        self.pc_poses_ego_to_global.requires_grad_(requires_grad)
-        self.rgb_images.requires_grad_(requires_grad)
-        self.rgb_poses_sensor_to_ego.requires_grad_(requires_grad)
-        self.rgb_poses_ego_to_global.requires_grad_(requires_grad)
-        return self
+        return self._apply_to_vars(
+            lambda x: x.requires_grad_(requires_grad) if isinstance(x, torch.Tensor) else x
+        )
 
     def slice(self, start_idx: int, end_idx: int) -> "BucketedSceneFlowInputSequence":
         # Slice the tensors in this object
         # For K length tensors, the slice is [start_idx:end_idx]
         # For K - 1 length tensors, the slice is [start_idx:end_idx - 1]
 
-        return BucketedSceneFlowInputSequence(
-            dataset_idx=self.dataset_idx,
-            sequence_log_id=self.sequence_log_id,
-            sequence_idx=self.sequence_idx,
-            full_pc=self.full_pc[start_idx:end_idx],
-            full_pc_mask=self.full_pc_mask[start_idx:end_idx],
-            full_pc_gt_flowed=self.full_pc_gt_flowed[start_idx : end_idx - 1],
-            full_pc_gt_flowed_mask=self.full_pc_gt_flowed_mask[start_idx : end_idx - 1],
-            full_pc_gt_class=self.full_pc_gt_class[start_idx : end_idx - 1],
-            pc_poses_sensor_to_ego=self.pc_poses_sensor_to_ego[start_idx:end_idx],
-            pc_poses_ego_to_global=self.pc_poses_ego_to_global[start_idx:end_idx],
-            rgb_images=self.rgb_images[start_idx:end_idx],
-            rgb_poses_sensor_to_ego=self.rgb_poses_sensor_to_ego[start_idx:end_idx],
-            rgb_poses_ego_to_global=self.rgb_poses_ego_to_global[start_idx:end_idx],
-            loader_type=self.loader_type,
-        )
+        K_length = self.full_pc.shape[0]
+        K_minus_1_length = K_length - 1
+
+        def _slice_tensor(tensor: torch.Tensor) -> torch.Tensor:
+            if len(tensor) == K_length:
+                return tensor[start_idx:end_idx]
+            elif len(tensor) == K_minus_1_length:
+                return tensor[start_idx : end_idx - 1]
+            else:
+                raise ValueError(f"Invalid tensor length {len(tensor)}")
+
+        return self._apply_to_vars(lambda x: _slice_tensor(x) if isinstance(x, torch.Tensor) else x)
 
     def reverse(self) -> "BucketedSceneFlowInputSequence":
-        # Reverse the first dimension of all tensors in this object
-        return BucketedSceneFlowInputSequence(
-            dataset_idx=self.dataset_idx,
-            sequence_log_id=self.sequence_log_id,
-            sequence_idx=self.sequence_idx,
-            full_pc=self.full_pc.flip(0),
-            full_pc_mask=self.full_pc_mask.flip(0),
-            full_pc_gt_flowed=self.full_pc_gt_flowed.flip(0),
-            full_pc_gt_flowed_mask=self.full_pc_gt_flowed_mask.flip(0),
-            full_pc_gt_class=self.full_pc_gt_class.flip(0),
-            pc_poses_sensor_to_ego=self.pc_poses_sensor_to_ego.flip(0),
-            pc_poses_ego_to_global=self.pc_poses_ego_to_global.flip(0),
-            rgb_images=self.rgb_images.flip(0),
-            rgb_poses_sensor_to_ego=self.rgb_poses_sensor_to_ego.flip(0),
-            rgb_poses_ego_to_global=self.rgb_poses_ego_to_global.flip(0),
-            loader_type=self.loader_type,
-        )
+        # Reverse the first dimension of all tensors in this object with flip(0)
+        return self._apply_to_vars(lambda x: x.flip(0) if isinstance(x, torch.Tensor) else x)
 
     @property
     def device(self) -> torch.device:
@@ -596,3 +553,13 @@ class BucketedSceneFlowOutputSequence:
         self.ego_flows.requires_grad_(requires_grad)
         self.valid_flow_mask.requires_grad_(requires_grad)
         return self
+
+    def slice(self, start_idx: int, end_idx: int) -> "BucketedSceneFlowOutputSequence":
+        # Slice the tensors in this object
+        # For K length tensors, the slice is [start_idx:end_idx]
+        # For K - 1 length tensors, the slice is [start_idx:end_idx - 1]
+
+        return BucketedSceneFlowOutputSequence(
+            ego_flows=self.ego_flows[start_idx:end_idx],
+            valid_flow_mask=self.valid_flow_mask[start_idx:end_idx],
+        )
