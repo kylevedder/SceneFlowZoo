@@ -8,13 +8,13 @@ save_output_folder = "/efs/argoverse2_small/val_gigachad_nsf_flow_feather/"
 
 model = dict(
     name="GigachadNSFOptimizationLoop",
-    args=dict(save_flow_every=1, minibatch_size=10, speed_threshold=30.0 / 10.0),
+    args=dict(
+        save_flow_every=1,
+        minibatch_size=10,
+        speed_threshold=60.0 / 10.0,
+        lr=0.008,
+    ),
 )
-
-epochs = 5000
-learning_rate = 0.008
-save_every = 500
-validate_every = 500
 
 train_dataset = dict(
     name="BucketedSceneFlowDataset",
