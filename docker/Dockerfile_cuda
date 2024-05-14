@@ -41,7 +41,7 @@ RUN pip install -e setup
 
 RUN pip install FastGeodis==1.0.5 --no-build-isolation
 
-RUN pip install bucketed-scene-flow-eval==2.0.8
+RUN pip install bucketed-scene-flow-eval==2.0.9
 
 
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
