@@ -1,0 +1,1 @@
+[{'BACKGROUND Static': 0.0, 'CAR Static': 0.008247, 'CAR Dynamic': 1.0, 'OTHER_VEHICLES Static': 0.012858, 'OTHER_VEHICLES Dynamic': 1.0, 'PEDESTRIAN Static': 0.007647, 'PEDESTRIAN Dynamic': 1.0, 'WHEELED_VRU Static': 0.005079, 'WHEELED_VRU Dynamic': 1.0, 'mean Static': 0.006766370152691367, 'mean Dynamic': 0.9999999991692607, 'Is Supervised?': 0}]

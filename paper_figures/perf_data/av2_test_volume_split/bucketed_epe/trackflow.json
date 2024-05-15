@@ -1,0 +1,14 @@
+[
+    {
+        "mean Dynamic": 0.21888200000000002,
+        "mean Static": 0.06927174999999999,
+        "Is Supervised?": 0,
+        "BACKGROUND Static": 0.003346,
+        "LARGE Static": 0.180365,
+        "LARGE Dynamic": 0.35412,
+        "MEDIUM Static": 0.042629,
+        "MEDIUM Dynamic": 0.147436,
+        "SMALL Static": 0.050747,
+        "SMALL Dynamic": 0.15509
+    }
+]
