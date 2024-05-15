@@ -17,7 +17,7 @@ def _extract_experiment_name(cfg: Config) -> str:
 
     # If configs subdir is a parent of the config file, we can just use the path below the configs subdir
     if configs_subdir in cfg_filename.parents:
-        return cfg_filename.relative_to(configs_subdir).with_suffix("")
+        return cfg_filename.relative_to(configs_subdir).with_suffix("").as_posix()
 
     parts = cfg_filename.parts
 
