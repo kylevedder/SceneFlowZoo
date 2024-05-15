@@ -19,22 +19,19 @@ def _extract_experiment_name(cfg: Config) -> str:
     if configs_subdir in cfg_filename.parents:
         return cfg_filename.relative_to(configs_subdir).with_suffix("")
 
+    parts = cfg_filename.parts
+
     # If "configs" is in the config filename, we can use the path below the "configs" subdir
-    if "configs" in cfg_filename.parts:
-        return (
-            cfg_filename.relative_to(cfg_filename.parts[cfg_filename.parts.index("configs") + 1])
-            .with_suffix("")
-            .as_posix()
-        )
+    if "configs" in parts:
+        index = parts.index("configs")
+        subpath_lst = parts[index + 1 :]
+        subpath = Path(*subpath_lst)
+        return subpath.with_suffix("").as_posix()
 
     # If "launch_files" is in the config filename, we use the name of the folders one and two levels below
-    if "launch_files" in cfg_filename.parts:
-        launch_files_idx = cfg_filename.parts.index("launch_files")
-        return (
-            cfg_filename.parts[launch_files_idx + 1]
-            + "/"
-            + cfg_filename.parts[launch_files_idx + 2]
-        )
+    if "launch_files" in parts:
+        launch_files_idx = parts.index("launch_files")
+        return parts[launch_files_idx + 1] + "/" + parts[launch_files_idx + 2]
 
     return cfg_filename.absolute().with_suffix("").as_posix()
 
