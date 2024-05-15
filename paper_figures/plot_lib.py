@@ -56,9 +56,6 @@ class BucketedEvalStats:
         assert data_file.exists(), f"Data file {data_file} does not exist"
         self.data = self._load_data(data_file)
 
-    def _load_leaderboard_data(self, raw_datastruct):
-        return raw_datastruct[0]
-
     def _convert_to_leaderboard_data(self, raw_datastruct: dict[str, str]):
         def _parse_str_tuple(str_tuple: str) -> Tuple[float, float]:
             # Remove the parentheses and split the string
@@ -88,13 +85,6 @@ class BucketedEvalStats:
         # load the string as a JSON object
         data_structure = json.loads(file_content)
         return data_structure[0]
-
-        if type(data_structure) == list:
-            # If the data is a list, it is a leaderboard file
-            return self._load_leaderboard_data(data_structure)
-        else:
-            # Otherwise, it is a regular data file
-            return self._convert_to_leaderboard_data(data_structure)
 
     def get_dynamic_metacatagory_performance(self) -> Dict[str, float]:
         # All entries that contain "Dynamic" in the key, except for "mean Dynamic"
