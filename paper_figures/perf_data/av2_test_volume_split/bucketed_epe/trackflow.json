@@ -2,7 +2,7 @@
     {
         "mean Dynamic": 0.21888200000000002,
         "mean Static": 0.06927174999999999,
-        "Is Supervised?": 0,
+        "Is Supervised?": 1,
         "BACKGROUND Static": 0.003346,
         "LARGE Static": 0.180365,
         "LARGE Dynamic": 0.35412,

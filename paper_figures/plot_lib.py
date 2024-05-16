@@ -157,7 +157,7 @@ def color(count, total_elements, intensity=1.3):
     start = 0.2
     stop = 0.7
 
-    colormap = matplotlib.cm.get_cmap(color_map())
+    colormap = plt.get_cmap(color_map())
     cm_subsection = np.linspace(start, stop, total_elements)
     # color = [matplotlib.cm.gist_earth(x) for x in cm_subsection][count]
     color = [colormap(x) for x in cm_subsection][count]
