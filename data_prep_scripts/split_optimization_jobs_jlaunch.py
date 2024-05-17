@@ -43,7 +43,7 @@ def build_config(
     
     custom_sequence_length_str = ""
     if sequence_length is not None:
-        custom_sequence_length_str = f", subsequence_length={sequence_length}\n"
+        custom_sequence_length_str = f", subsequence_length={sequence_length}"
 
     custom_config_content = f"""_base_ = "{base_config}"
 test_dataset = dict(args=dict(split=dict(split_idx={job_idx}, num_splits={num_jobs}){custom_sequence_length_str}))

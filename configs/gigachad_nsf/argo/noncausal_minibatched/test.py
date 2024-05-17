@@ -10,9 +10,10 @@ model = dict(
     name="GigachadNSFOptimizationLoop",
     args=dict(
         save_flow_every=1,
-        minibatch_size=10,
+        minibatch_size=5,
         speed_threshold=60.0 / 10.0,
-        lr=0.008,
+        lr=0.00008,
+        epochs=1000,
     ),
 )
 
@@ -21,6 +22,7 @@ train_dataset = dict(
     args=dict(
         dataset_name="Argoverse2NonCausalSceneFlow",
         root_dir=test_dataset_root,
+        load_flow=False,
         with_ground=False,
         with_rgb=False,
         eval_type="bucketed_epe",
