@@ -54,7 +54,7 @@ RUN pip uninstall PyQt5 -y
 RUN pip uninstall opencv-python -y
 RUN pip install opencv-python
 
-RUN pip install bucketed-scene-flow-eval==2.0.12
+RUN pip install bucketed-scene-flow-eval==2.0.13
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user

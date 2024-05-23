@@ -28,14 +28,7 @@ train_dataset = dict(
         eval_type="bucketed_epe",
         eval_args=dict(),
         subsequence_length=SEQUENCE_LENGTH,
-        point_cloud_range=(
-            -75,
-            -75,
-            -2.5,
-            75,
-            75,
-            2.5,
-        ),  # This is in a single global frame, to prevent truncating the point cloud too closely to the vehicle
+        range_crop_type="ego",  # Ensures that the range is cropped to the ego vehicle, so points are not chopped off if the ego vehicle is driving large distances.
     ),
 )
 
