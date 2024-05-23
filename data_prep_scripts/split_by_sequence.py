@@ -39,7 +39,7 @@ def build_config(
 ) -> None:
     assert base_config.is_file(), f"Config file {base_config} does not exist"
     custom_config_content = f"""_base_ = "{base_config}"
-test_dataset = dict(args=dict(log_subset=["{sequence_name}"]), subsequence_length={sequence_length}))
+test_dataset = dict(args=dict(log_subset=["{sequence_name}"], subsequence_length={sequence_length}))
 """
     with open(config_file_save_path, "w") as f:
         f.write(custom_config_content)
