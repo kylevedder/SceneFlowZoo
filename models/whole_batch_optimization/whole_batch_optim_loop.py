@@ -2,32 +2,32 @@ import torch
 import tqdm
 from models.components.optimization.cost_functions import BaseCostProblem
 from models.components.optimization.utils import EarlyStopping
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from typing import Optional
 import numpy as np
 from pytorch_lightning.loggers import Logger
 from pathlib import Path
 from bucketed_scene_flow_eval.utils import save_pickle
-from models import BaseModel, BaseOptimizationModel, ForwardMode
+from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models import AbstractBatcher
 
 
 class WholeBatchBatcher(AbstractBatcher):
 
-    def __init__(self, full_sequence: BucketedSceneFlowInputSequence):
+    def __init__(self, full_sequence: TorchFullFrameInputSequence):
         self.full_sequence = full_sequence
 
     def __len__(self) -> int:
         return 1
 
-    def __getitem__(self, idx: int) -> BucketedSceneFlowInputSequence:
+    def __getitem__(self, idx: int) -> TorchFullFrameInputSequence:
         return self.full_sequence
 
     def shuffle_minibatches(self, seed: int = 0):
         pass
 
 
-class WholeBatchOptimizationLoop(BaseModel):
+class WholeBatchOptimizationLoop(BaseTorchModel):
 
     def __init__(
         self,
@@ -61,14 +61,14 @@ class WholeBatchOptimizationLoop(BaseModel):
     def _save_intermediary_results(
         self,
         model: BaseOptimizationModel,
-        problem: BucketedSceneFlowInputSequence,
+        problem: TorchFullFrameInputSequence,
         logger: Logger,
         optimization_step: int,
     ) -> None:
         with torch.inference_mode():
             with torch.no_grad():
                 (output,) = model(ForwardMode.VAL, [problem], logger)
-        output: BucketedSceneFlowOutputSequence
+        output: TorchFullFrameOutputSequence
         ego_flows = output.to_ego_lidar_flow_list()
         raw_ego_flows = [
             (
@@ -85,13 +85,13 @@ class WholeBatchOptimizationLoop(BaseModel):
         save_pickle(save_path, raw_ego_flows, verbose=self.verbose)
 
     def _model_constructor_args(
-        self, full_input_sequence: BucketedSceneFlowInputSequence
+        self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return dict(full_input_sequence=full_input_sequence)
 
     def inference_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
+    ) -> TorchFullFrameOutputSequence:
         # print(
         #     f"Inference forward single for {input_sequence.sequence_log_id} {input_sequence.dataset_idx} with input_sequence of type {type(input_sequence)}"
         # )
@@ -111,20 +111,20 @@ class WholeBatchOptimizationLoop(BaseModel):
                     leave=True,
                 )
 
-    def _setup_batcher(self, full_sequence: BucketedSceneFlowInputSequence) -> AbstractBatcher:
+    def _setup_batcher(self, full_sequence: TorchFullFrameInputSequence) -> AbstractBatcher:
         return WholeBatchBatcher(full_sequence)
 
     def optimize(
         self,
         logger: Logger,
         model: BaseOptimizationModel,
-        full_batch: BucketedSceneFlowInputSequence,
+        full_batch: TorchFullFrameInputSequence,
         burn_in_steps: int | None = None,
         patience: int | None = None,
         min_delta: float | None = None,
         title: str | None = "Optimizing Neur Rep",
         leave: bool = False,
-    ) -> BucketedSceneFlowOutputSequence:
+    ) -> TorchFullFrameOutputSequence:
         model = model.train()
         if self.compile_model:
             model = torch.compile(model)
@@ -147,7 +147,7 @@ class WholeBatchOptimizationLoop(BaseModel):
         batcher = self._setup_batcher(full_batch)
 
         lowest_cost = torch.inf
-        best_output: BucketedSceneFlowOutputSequence = None
+        best_output: TorchFullFrameOutputSequence = None
         epoch_bar = tqdm.tqdm(
             range(self.epochs), leave=leave, desc=title, disable=title is None, position=1
         )
@@ -193,8 +193,8 @@ class WholeBatchOptimizationLoop(BaseModel):
 
     def loss_fn(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        model_res: list[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        model_res: list[TorchFullFrameOutputSequence],
     ) -> dict[str, torch.Tensor]:
         raise NotImplementedError(
             "Whole batch test time optimizer is not meant to be used for training. Run under test."

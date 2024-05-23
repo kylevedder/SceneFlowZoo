@@ -20,6 +20,9 @@ ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
 ENV FORCE_CUDA="1"
 RUN conda install -y numpy python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
 
+# Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
+RUN conda install -y matplotlib=3.8
+
 # Install PyTorch3d from source
 RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
 WORKDIR /pytorch3d
@@ -34,16 +37,25 @@ RUN pip install yapf==0.40.1
 RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.4 imageio black isort nntime
 RUN pip install mmcv==2.2.0
 
-# Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
+
 RUN git clone https://github.com/kylevedder/nuscenes-devkit.git /nuscenes-devkit
 WORKDIR /nuscenes-devkit
 RUN pip install -e setup
-
 RUN pip install FastGeodis==1.0.5 --no-build-isolation
 
-RUN pip install bucketed-scene-flow-eval==2.0.10
 
+RUN git clone https://github.com/facebookresearch/co-tracker /cotracker
+WORKDIR /cotracker
+RUN git checkout e29e93831181413ff2691a3d910277c09fd87559
+RUN pip install -e .
+RUN pip install imageio[ffmpeg]
 
+RUN apt install -y libxcb-xinerama0 libxcb-xinput0
+RUN pip uninstall PyQt5 -y
+RUN pip uninstall opencv-python -y
+RUN pip install opencv-python
+
+RUN pip install bucketed-scene-flow-eval==2.0.12
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user
@@ -51,9 +63,17 @@ ENV HOME=/home/user
 RUN mkdir /payload_files
 RUN chmod 777 /payload_files
 COPY bashrc /payload_files/bashrc
+
+# Downloading: "https://github.com/facebookresearch/co-tracker/zipball/main" to /payload_files/cache/torch/hub/main.zip
+# Downloading: "https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth" to /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
+RUN mkdir -p /payload_files/cache/torch/hub/checkpoints
+RUN wget https://github.com/facebookresearch/co-tracker/zipball/main -O /payload_files/cache/torch/hub/main.zip
+RUN wget https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth -O /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
+
 WORKDIR /project
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 777 /entrypoint.sh
 RUN chmod 777 /home
+
 
 ENTRYPOINT ["/entrypoint.sh"]

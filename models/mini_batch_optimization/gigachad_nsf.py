@@ -1,7 +1,7 @@
 from pytorch_lightning.loggers.logger import Logger
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop, MinibatchedSceneFlowInputSequence
 from models.components.neural_reps import GigaChadRawMLP
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from dataclasses import dataclass
 from models import BaseOptimizationModel
 from models.components.optimization.cost_functions import (
@@ -41,7 +41,7 @@ class GlobalNormalizer:
     max_z: float
 
     @staticmethod
-    def from_input_sequence(input_sequence: BucketedSceneFlowInputSequence) -> "GlobalNormalizer":
+    def from_input_sequence(input_sequence: TorchFullFrameInputSequence) -> "GlobalNormalizer":
         min_x, min_y, min_z = float("inf"), float("inf"), float("inf")
         max_x, max_y, max_z = float("-inf"), float("-inf"), float("-inf")
 
@@ -164,7 +164,7 @@ class GigaChadNSFPreprocessedInput:
 class GigachadNSFModel(BaseOptimizationModel):
 
     def __init__(
-        self, full_input_sequence: BucketedSceneFlowInputSequence, speed_threshold: float
+        self, full_input_sequence: TorchFullFrameInputSequence, speed_threshold: float
     ) -> None:
         super().__init__(full_input_sequence)
         self.model = GigaChadRawMLP()
@@ -189,7 +189,7 @@ class GigachadNSFModel(BaseOptimizationModel):
             param.requires_grad = True
 
     def _preprocess(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: TorchFullFrameInputSequence
     ) -> GigaChadNSFPreprocessedInput:
 
         full_global_pcs, full_global_pcs_mask, ego_to_globals = [], [], []
@@ -320,10 +320,10 @@ class GigachadNSFModel(BaseOptimizationModel):
         return AdditiveCosts(costs)
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> BaseCostProblem:
         assert isinstance(
-            input_sequence, BucketedSceneFlowInputSequence
+            input_sequence, TorchFullFrameInputSequence
         ), f"Expected BucketedSceneFlowInputSequence, but got {type(input_sequence)}"
 
         assert (
@@ -368,8 +368,8 @@ class GigachadNSFModel(BaseOptimizationModel):
         return ego_flow, full_pc_mask
 
     def _forward_single_noncausal(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
+    ) -> TorchFullFrameOutputSequence:
         assert (
             input_sequence.loader_type == LoaderType.NON_CAUSAL
         ), f"Expected non-causal, but got {input_sequence.loader_type}"
@@ -388,14 +388,14 @@ class GigachadNSFModel(BaseOptimizationModel):
             ego_flows.append(padded_ego_flow)
             valid_flow_masks.append(padded_full_pc_mask)
 
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=torch.stack(ego_flows),
             valid_flow_mask=torch.stack(valid_flow_masks),
         )
 
     def inference_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
+    ) -> TorchFullFrameOutputSequence:
 
         assert (
             input_sequence.loader_type == LoaderType.NON_CAUSAL
@@ -410,7 +410,7 @@ class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
         self.speed_threshold = speed_threshold
 
     def _model_constructor_args(
-        self, full_input_sequence: BucketedSceneFlowInputSequence
+        self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
             speed_threshold=self.speed_threshold

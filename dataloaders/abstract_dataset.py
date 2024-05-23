@@ -1,4 +1,8 @@
-from .dataclasses import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from .dataclasses import (
+    BaseInputSequence,
+    TorchFullFrameInputSequence,
+    TorchFullFrameOutputSequence,
+)
 import torch
 from abc import ABC, abstractmethod
 from bucketed_scene_flow_eval.datastructures import TimeSyncedSceneFlowFrame, EgoLidarFlow
@@ -42,9 +46,7 @@ class EvalWrapper:
         for gt, pred in zip(gt_frame_list[:-1], pred_list):
             self.evaluator.eval(predictions=pred, gt=gt)
 
-    def eval(self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence):
-        gt_frame_list = self.dataset[input.dataset_idx]
-        pred_list = output.to_ego_lidar_flow_list()
+    def eval(self, gt_frame_list: list[TimeSyncedSceneFlowFrame], pred_list: list[EgoLidarFlow]):
         if self.dataset.loader_type() == LoaderType.CAUSAL:
             self._eval_causal(gt_frame_list, pred_list)
         elif self.dataset.loader_type() == LoaderType.NON_CAUSAL:
@@ -52,22 +54,30 @@ class EvalWrapper:
         else:
             raise ValueError(f"Unknown loader type: {self.dataset.loader_type()}")
 
+    def compute_results(self, save_results: bool = True) -> dict:
+        return self.evaluator.compute_results(save_results=save_results)
+
+
+class TorchEvalWrapper(EvalWrapper):
+
     def eval_batch(
         self,
-        inputs: list[BucketedSceneFlowInputSequence],
-        outputs: list[BucketedSceneFlowOutputSequence],
+        inputs: list[TorchFullFrameInputSequence],
+        outputs: list[TorchFullFrameOutputSequence],
     ):
         assert len(inputs) == len(
             outputs
         ), f"Expected the same number of inputs and outputs, but got {len(inputs)} inputs and {len(outputs)} outputs."
         for input, output in zip(inputs, outputs):
-            self.eval(input, output)
+            self.eval_torch(input, output)
 
-    def compute_results(self, save_results: bool = True) -> dict:
-        return self.evaluator.compute_results(save_results=save_results)
+    def eval_torch(self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence):
+        gt_frame_list = self.dataset[input.dataset_idx]
+        pred_list = output.to_ego_lidar_flow_list()
+        super().eval(gt_frame_list, pred_list)
 
 
-class AbstractSceneFlowDataset(ABC, torch.utils.data.Dataset):
+class BaseDataset(ABC, torch.utils.data.Dataset):
     @abstractmethod
     def loader_type(self) -> LoaderType:
         raise NotImplementedError
@@ -76,13 +86,11 @@ class AbstractSceneFlowDataset(ABC, torch.utils.data.Dataset):
     def evaluator(self) -> EvalWrapper:
         raise NotImplementedError
 
-    def collate_fn(
-        self, batch: list[BucketedSceneFlowInputSequence]
-    ) -> list[BucketedSceneFlowInputSequence]:
+    def collate_fn(self, batch: list[BaseInputSequence]) -> list[BaseInputSequence]:
         return batch
 
     @abstractmethod
-    def __getitem__(self, split_idx) -> BucketedSceneFlowInputSequence:
+    def __getitem__(self, split_idx) -> BaseInputSequence:
         raise NotImplementedError
 
     @abstractmethod

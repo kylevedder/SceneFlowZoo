@@ -1,19 +1,19 @@
 from models.whole_batch_optimization import WholeBatchOptimizationLoop
 from models import AbstractBatcher
-from dataloaders import BucketedSceneFlowInputSequence
+from dataloaders import TorchFullFrameInputSequence
 import numpy as np
 from dataclasses import dataclass
 from bucketed_scene_flow_eval.interfaces import LoaderType
 
 
 @dataclass
-class MinibatchedSceneFlowInputSequence(BucketedSceneFlowInputSequence):
-    full_sequence: BucketedSceneFlowInputSequence
+class MinibatchedSceneFlowInputSequence(TorchFullFrameInputSequence):
+    full_sequence: TorchFullFrameInputSequence
     minibatch_idx: int
 
 
 class SequenceMinibatcher(AbstractBatcher):
-    def __init__(self, full_sequence: BucketedSceneFlowInputSequence, minibatch_size: int):
+    def __init__(self, full_sequence: TorchFullFrameInputSequence, minibatch_size: int):
         assert (
             full_sequence.loader_type == LoaderType.NON_CAUSAL
         ), f"SequenceMinibatcher only supports non-causal datasets; constructed dataset has loader type {full_sequence.loader_type}."
@@ -48,5 +48,5 @@ class MiniBatchOptimizationLoop(WholeBatchOptimizationLoop):
         super().__init__(*args, **kwargs)
         self.minibatch_size = minibatch_size
 
-    def _setup_batcher(self, full_sequence: BucketedSceneFlowInputSequence) -> AbstractBatcher:
+    def _setup_batcher(self, full_sequence: TorchFullFrameInputSequence) -> AbstractBatcher:
         return SequenceMinibatcher(full_sequence, self.minibatch_size)

@@ -21,7 +21,7 @@ save_every = 500
 validate_every = 10
 
 test_dataset = dict(
-    name="BucketedSceneFlowDataset",
+    name="TorchFullFrameDataset",
     args=dict(
         dataset_name="Argoverse2CausalSceneFlow",
         root_dir=test_dataset_root,

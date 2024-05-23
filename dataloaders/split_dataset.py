@@ -1,17 +1,13 @@
-from abc import ABC, abstractmethod
-
-from .dataclasses import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
-from .abstract_scene_flow_dataset import AbstractSceneFlowDataset, EvalWrapper
-from pathlib import Path
-from typing import Optional, Union
-
-from bucketed_scene_flow_eval.datasets import construct_dataset
-from bucketed_scene_flow_eval.interfaces import LoaderType
 from dataclasses import dataclass
+
+from bucketed_scene_flow_eval.interfaces import AbstractDataset
+from .abstract_dataset import BaseDataset
+from pathlib import Path
+from bucketed_scene_flow_eval.interfaces import LoaderType
 
 
 @dataclass
-class BucketedSceneFlowDatasetSplit:
+class FullFrameDatasetSplit:
     split_idx: int
     num_splits: int
 
@@ -44,26 +40,18 @@ class BucketedSceneFlowDatasetSplit:
         return self._current_split_global_start(global_length) + split_idx
 
 
-class BucketedSceneFlowDataset(AbstractSceneFlowDataset):
+class SplitFullFrameDataset(BaseDataset):
+
     def __init__(
         self,
-        dataset_name: str,
-        root_dir: Path,
-        max_pc_points: int = 120000,
-        set_length: Optional[int] = None,
-        split: Union[BucketedSceneFlowDatasetSplit, dict[str, int]] = BucketedSceneFlowDatasetSplit(
-            0, 1
-        ),
-        **kwargs,
+        set_length: int | None = None,
+        split: FullFrameDatasetSplit | dict[str, int] = FullFrameDatasetSplit(0, 1),
     ):
-        self.dataset = construct_dataset(dataset_name, dict(root_dir=root_dir, **kwargs))
-        self.max_pc_points = max_pc_points
         self.set_length = set_length
         self.split = (
-            split
-            if isinstance(split, BucketedSceneFlowDatasetSplit)
-            else BucketedSceneFlowDatasetSplit(**split)
+            split if isinstance(split, FullFrameDatasetSplit) else FullFrameDatasetSplit(**split)
         )
+        self.dataset: AbstractDataset
 
     def _global_len(self):
         global_length = len(self.dataset)
@@ -74,26 +62,10 @@ class BucketedSceneFlowDataset(AbstractSceneFlowDataset):
     def __len__(self):
         return self.split.current_split_length(self._global_len())
 
-    def evaluator(self) -> EvalWrapper:
-        return EvalWrapper(self.dataset)
-
-    def collate_fn(
-        self, batch: list[BucketedSceneFlowInputSequence]
-    ) -> list[BucketedSceneFlowInputSequence]:
-        return batch
-
-    def __getitem__(self, split_idx) -> BucketedSceneFlowInputSequence:
+    def _get_global_idx(self, split_idx):
         assert isinstance(split_idx, int), f"Index must be an integer. Got {type(split_idx)}."
         assert 0 <= split_idx < len(self), "Index out of range."
-
-        global_idx = self.split.split_index_to_global_index(split_idx, self._global_len())
-        frame_list = self.dataset[global_idx]
-        return BucketedSceneFlowInputSequence.from_frame_list(
-            global_idx,
-            frame_list,
-            pc_max_len=self.max_pc_points,
-            loader_type=self.dataset.loader_type(),
-        )
+        return self.split.split_index_to_global_index(split_idx, self._global_len())
 
     def loader_type(self) -> LoaderType:
         return self.dataset.loader_type()

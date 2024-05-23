@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from bucketed_scene_flow_eval.datastructures import EgoLidarFlow
 from bucketed_scene_flow_eval.utils import save_feather
 import pandas as pd
@@ -11,40 +11,40 @@ class ModelOutSaver(ABC):
 
     def save_batch(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        output_batch: list[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        output_batch: list[TorchFullFrameOutputSequence],
     ):
         for input_elem, output_elem in zip(input_batch, output_batch):
             self.save(input_elem, output_elem)
 
     @abstractmethod
-    def save(self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence):
+    def save(self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence):
         raise NotImplementedError()
 
     @abstractmethod
-    def is_saved(self, input: BucketedSceneFlowInputSequence) -> bool:
+    def is_saved(self, input: TorchFullFrameInputSequence) -> bool:
         """
         Check if the output for the given input is saved already (useful for caching).
         """
         raise NotImplementedError()
 
-    def load_saved(self, input: BucketedSceneFlowInputSequence) -> BucketedSceneFlowOutputSequence:
+    def load_saved(self, input: TorchFullFrameInputSequence) -> TorchFullFrameOutputSequence:
         """
         Load the saved output for the given input.
         """
         raise NotImplementedError()
 
     def load_saved_batch(
-        self, input_batch: list[BucketedSceneFlowInputSequence]
-    ) -> list[BucketedSceneFlowOutputSequence]:
+        self, input_batch: list[TorchFullFrameInputSequence]
+    ) -> list[TorchFullFrameOutputSequence]:
         return [self.load_saved(input) for input in input_batch]
 
 
 class FlowNoSave(ModelOutSaver):
-    def save(self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence):
+    def save(self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence):
         pass
 
-    def is_saved(self, input: BucketedSceneFlowInputSequence) -> bool:
+    def is_saved(self, input: TorchFullFrameInputSequence) -> bool:
         return False
 
 
@@ -90,7 +90,7 @@ class FlowSave(ModelOutSaver):
             mask=output_df["is_valid"].to_numpy(),
         )
 
-    def _single_save_file(self, input: BucketedSceneFlowInputSequence) -> Path:
+    def _single_save_file(self, input: TorchFullFrameInputSequence) -> Path:
         return (
             Path(self.save_root)
             / f"sequence_len_{len(input):03d}"
@@ -98,7 +98,7 @@ class FlowSave(ModelOutSaver):
             / f"{input.dataset_idx:010d}.feather"
         )
 
-    def _multi_save_files(self, input: BucketedSceneFlowInputSequence) -> list[Path]:
+    def _multi_save_files(self, input: TorchFullFrameInputSequence) -> list[Path]:
         return [
             Path(self.save_root)
             / f"{input.loader_type}"
@@ -110,7 +110,7 @@ class FlowSave(ModelOutSaver):
         ]
 
     def _save_single_flow(
-        self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence
+        self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence
     ):
 
         ego_flows = output.to_ego_lidar_flow_list()
@@ -118,7 +118,7 @@ class FlowSave(ModelOutSaver):
         self._save_flow(self._single_save_file(input), ego_flows[0])
 
     def _save_multi_flow(
-        self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence
+        self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence
     ):
         ego_flows = output.to_ego_lidar_flow_list()
         save_paths = self._multi_save_files(input)
@@ -131,18 +131,18 @@ class FlowSave(ModelOutSaver):
         for ego_flow, save_path in zip(ego_flows, save_paths):
             self._save_flow(save_path, ego_flow)
 
-    def _is_saved_multi(self, input: BucketedSceneFlowInputSequence) -> bool:
+    def _is_saved_multi(self, input: TorchFullFrameInputSequence) -> bool:
         return all([save_path.exists() for save_path in self._multi_save_files(input)])
 
-    def _is_saved_single(self, input: BucketedSceneFlowInputSequence) -> bool:
+    def _is_saved_single(self, input: TorchFullFrameInputSequence) -> bool:
         return self._single_save_file(input).exists()
 
-    def save(self, input: BucketedSceneFlowInputSequence, output: BucketedSceneFlowOutputSequence):
+    def save(self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence):
         assert isinstance(
-            input, BucketedSceneFlowInputSequence
+            input, TorchFullFrameInputSequence
         ), f"Expected BucketedSceneFlowInputSequence, got {type(input)}"
         assert isinstance(
-            output, BucketedSceneFlowOutputSequence
+            output, TorchFullFrameOutputSequence
         ), f"Expected BucketedSceneFlowOutputSequence, got {type(output)}"
         match input.loader_type:
             case LoaderType.CAUSAL:
@@ -152,7 +152,7 @@ class FlowSave(ModelOutSaver):
             case _:
                 raise ValueError(f"Unknown loader type: {input.loader_type}")
 
-    def is_saved(self, input: BucketedSceneFlowInputSequence) -> bool:
+    def is_saved(self, input: TorchFullFrameInputSequence) -> bool:
         match input.loader_type:
             case LoaderType.CAUSAL:
                 return self._is_saved_single(input)
@@ -161,21 +161,21 @@ class FlowSave(ModelOutSaver):
             case _:
                 raise ValueError(f"Unknown loader type: {input.loader_type}")
 
-    def _load_single_flow(self, input: BucketedSceneFlowInputSequence) -> EgoLidarFlow:
+    def _load_single_flow(self, input: TorchFullFrameInputSequence) -> EgoLidarFlow:
         return self._load_flow(self._single_save_file(input))
 
-    def _load_multi_flow(self, input: BucketedSceneFlowInputSequence) -> list[EgoLidarFlow]:
+    def _load_multi_flow(self, input: TorchFullFrameInputSequence) -> list[EgoLidarFlow]:
         return [self._load_flow(save_path) for save_path in self._multi_save_files(input)]
 
-    def load_saved(self, input: BucketedSceneFlowInputSequence) -> BucketedSceneFlowOutputSequence:
+    def load_saved(self, input: TorchFullFrameInputSequence) -> TorchFullFrameOutputSequence:
         _, PadN, _ = input.full_pc.shape
         match input.loader_type:
             case LoaderType.CAUSAL:
-                return BucketedSceneFlowOutputSequence.from_ego_lidar_flow_list(
+                return TorchFullFrameOutputSequence.from_ego_lidar_flow_list(
                     [self._load_single_flow(input)], max_len=PadN
                 )
             case LoaderType.NON_CAUSAL:
-                return BucketedSceneFlowOutputSequence.from_ego_lidar_flow_list(
+                return TorchFullFrameOutputSequence.from_ego_lidar_flow_list(
                     self._load_multi_flow(input), max_len=PadN
                 )
             case _:

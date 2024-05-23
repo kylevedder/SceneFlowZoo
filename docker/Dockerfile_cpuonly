@@ -18,29 +18,43 @@ RUN conda update -y conda
 RUN apt install -y apt-utils
 
 ENV FORCE_CUDA="0"
-RUN conda install -y numpy python=3.11 pytorch==2.1.2 torchvision==0.16.2 cpuonly fvcore iopath pytorch3d -c pytorch -c pytorch3d -c fvcore -c iopath -c conda-forge
+RUN conda install -y numpy python=3.11 python=3.11 pytorch==2.3 torchvision torchaudio cpuonly fvcore iopath -c pytorch -c pytorch3d -c fvcore -c iopath -c conda-forge
+
+# Install PyTorch3d from source
+RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
+WORKDIR /pytorch3d
+# Checkout 0.7.6
+RUN git checkout f34104cf6ebefacd7b7e07955ee7aaa823e616ac
+RUN conda install -y ninja -c conda-forge
+ENV MAX_JOBS=46
+RUN pip install -v .
+
 # YAPF versions newer than this break the MMCV config system
 RUN pip install yapf==0.40.1
 RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.4 imageio black isort nntime
 # This is required for Open3D to not blow up on startup
 RUN apt install -y freeglut3-dev
-RUN conda install -y ninja -c conda-forge
-ENV MAX_JOBS=46
-RUN pip install mmcv==2.1.0
+RUN pip install mmcv==2.2.0
 
-# Install nuscenes-devkit, but knock out the pegged Matplotlib version which lacks a wheel for Python 3.11
-RUN git clone https://github.com/nutonomy/nuscenes-devkit.git /nuscenes-devkit
+# Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
+RUN conda install -y matplotlib=3.8
+RUN git clone https://github.com/kylevedder/nuscenes-devkit.git /nuscenes-devkit
 WORKDIR /nuscenes-devkit
-RUN git checkout 9df79f48bac3cc713f4dbd2b48049be845605c51
-# On line 4 of setup/requirements/requirements_base.txt, change matplotlib<3.6.0 to matplotlib
-RUN sed -i 's/matplotlib<3.6.0/matplotlib/' setup/requirements/requirements_base.txt
 RUN pip install -e setup
-
 RUN pip install FastGeodis==1.0.5 --no-build-isolation
 
-RUN pip install bucketed-scene-flow-eval==2.0.8
+RUN git clone https://github.com/facebookresearch/co-tracker /cotracker
+WORKDIR /cotracker
+RUN git checkout e29e93831181413ff2691a3d910277c09fd87559
+RUN pip install -e .
+RUN pip install imageio[ffmpeg]
 
+RUN apt install -y libxcb-xinerama0 libxcb-xinput0
+RUN pip uninstall PyQt5 -y
+RUN pip uninstall opencv-python -y
+RUN pip install opencv-python
 
+RUN pip install bucketed-scene-flow-eval==2.0.12
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user

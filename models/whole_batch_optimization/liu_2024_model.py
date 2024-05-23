@@ -1,6 +1,6 @@
 import torch
 
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from models.base_models import BaseOptimizationModel
 from models.components.neural_reps import NSFPRawMLP, Liu2024FusionRawMLP
 from pytorch_lightning.loggers import Logger
@@ -22,9 +22,9 @@ class Liu2024PreprocessedInput(WholeBatchNSFPPreprocessedInput):
 
 
 @dataclass
-class Liu2024BucketedSceneFlowInputSequence(BucketedSceneFlowInputSequence):
-    forward_result: BucketedSceneFlowOutputSequence
-    reverse_result: BucketedSceneFlowOutputSequence
+class Liu2024BucketedSceneFlowInputSequence(TorchFullFrameInputSequence):
+    forward_result: TorchFullFrameOutputSequence
+    reverse_result: TorchFullFrameOutputSequence
 
 
 class Liu2024FusionModel(FastNSFModel):
@@ -41,14 +41,14 @@ class Liu2024FusionModel(FastNSFModel):
 
     @staticmethod
     def input_sequence_to_forward_problem(
-        full_input_sequence: BucketedSceneFlowInputSequence,
-    ) -> BucketedSceneFlowInputSequence:
+        full_input_sequence: TorchFullFrameInputSequence,
+    ) -> TorchFullFrameInputSequence:
         return full_input_sequence.slice(1, 3)
 
     @staticmethod
     def input_sequence_to_reverse_problem(
-        full_input_sequence: BucketedSceneFlowInputSequence,
-    ) -> BucketedSceneFlowInputSequence:
+        full_input_sequence: TorchFullFrameInputSequence,
+    ) -> TorchFullFrameInputSequence:
         return full_input_sequence.slice(0, 2).reverse()
 
     def _validate_liu_input(self, sequence: Liu2024BucketedSceneFlowInputSequence) -> None:
@@ -116,7 +116,7 @@ class Liu2024FusionModel(FastNSFModel):
 
     def inference_forward_single(
         self, input_sequence: Liu2024BucketedSceneFlowInputSequence, logger: Logger
-    ) -> BucketedSceneFlowOutputSequence:
+    ) -> TorchFullFrameOutputSequence:
         rep = self._preprocess_liu_input(input_sequence)
 
         global_flow_pc0: torch.Tensor = self.fusion_model(rep.fusion_input_features).squeeze(0)
@@ -128,7 +128,7 @@ class Liu2024FusionModel(FastNSFModel):
             rep.full_pc0, full_global_flow_pc0, rep.pc0_ego_to_global
         )
 
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=torch.unsqueeze(ego_flow, 0),
             valid_flow_mask=torch.unsqueeze(rep.full_pc0_mask, 0),
         )
@@ -170,8 +170,8 @@ class Liu2024OptimizationLoop(WholeBatchOptimizationLoop):
         )
 
     def inference_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
+    ) -> TorchFullFrameOutputSequence:
 
         forward_input = Liu2024FusionModel.input_sequence_to_forward_problem(input_sequence)
         reverse_input = Liu2024FusionModel.input_sequence_to_reverse_problem(input_sequence)

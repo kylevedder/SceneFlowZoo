@@ -1,12 +1,12 @@
-from models import BaseModel
+from models import BaseTorchModel
 import torch
 import numpy as np
 from bucketed_scene_flow_eval.datastructures import SE3
 import pytest
 from dataloaders import (
-    BucketedSceneFlowDataset,
-    BucketedSceneFlowInputSequence,
-    BucketedSceneFlowOutputSequence,
+    TorchFullFrameDataset,
+    TorchFullFrameInputSequence,
+    TorchFullFrameOutputSequence,
 )
 from bucketed_scene_flow_eval.datasets import Argoverse2CausalSceneFlow
 from bucketed_scene_flow_eval.datastructures import TimeSyncedSceneFlowFrame
@@ -14,13 +14,13 @@ from pathlib import Path
 from pointclouds import to_fixed_array_torch
 
 
-class DummyModel(BaseModel):
+class DummyModel(BaseTorchModel):
     def __init__(self, **kwargs):
         super().__init__()
 
     def _cheat_use_gt_flow(
-        self, input: BucketedSceneFlowInputSequence
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input: TorchFullFrameInputSequence
+    ) -> TorchFullFrameOutputSequence:
 
         full_ego_flows = []
         full_flow_masks = []
@@ -45,26 +45,26 @@ class DummyModel(BaseModel):
         full_ego_flows_tensor = torch.stack(full_ego_flows)
         full_flow_masks_tensor = torch.stack(full_flow_masks)
 
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=full_ego_flows_tensor, valid_flow_mask=full_flow_masks_tensor
         )
 
     def forward(
-        self, batched_sequence: list[BucketedSceneFlowInputSequence], logger
-    ) -> list[BucketedSceneFlowOutputSequence]:
+        self, batched_sequence: list[TorchFullFrameInputSequence], logger
+    ) -> list[TorchFullFrameOutputSequence]:
         return [self._cheat_use_gt_flow(input) for input in batched_sequence]
 
     def loss_fn(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        model_res: list[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        model_res: list[TorchFullFrameOutputSequence],
     ) -> dict[str, torch.Tensor]:
         raise NotImplementedError()
 
 
 @pytest.fixture
-def dataset_with_gt_flow() -> BucketedSceneFlowDataset:
-    dataset = BucketedSceneFlowDataset(
+def dataset_with_gt_flow() -> TorchFullFrameDataset:
+    dataset = TorchFullFrameDataset(
         dataset_name="Argoverse2CausalSceneFlow",
         root_dir=Path("/tmp/argoverse2_small/val/"),
         flow_data_path=Path("/tmp/argoverse2_small/val_sceneflow_feather/"),
@@ -104,12 +104,12 @@ def test_global_to_ego_flow_basic():
     ), f"Expected {ego_flow_np}, got {ego_flow_torch}"
 
 
-def test_validate_cheating_with_gt_flow_is_perfect(dataset_with_gt_flow: BucketedSceneFlowDataset):
+def test_validate_cheating_with_gt_flow_is_perfect(dataset_with_gt_flow: TorchFullFrameDataset):
     model = DummyModel()
     for idx in range(len(dataset_with_gt_flow)):
         input = dataset_with_gt_flow[idx]
         out_lst = model([input], None)
-        output: BucketedSceneFlowOutputSequence = out_lst[0]
+        output: TorchFullFrameOutputSequence = out_lst[0]
 
         for idx in range(len(input) - 1):
             gt_ego_flow = input.get_full_ego_pc_gt_flowed(idx) - input.get_full_ego_pc(idx)

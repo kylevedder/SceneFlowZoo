@@ -1,12 +1,12 @@
 import torch
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from bucketed_scene_flow_eval.interfaces import LoaderType
 from pointclouds import to_fixed_array_torch
-from .base_models import BaseModel
+from .base_models import BaseTorchModel
 from pytorch_lightning.loggers import Logger
 
 
-class ConstantVectorBaseline(BaseModel):
+class ConstantVectorBaseline(BaseTorchModel):
 
     def __init__(self, default_vector: torch.Tensor = torch.zeros(3)) -> None:
         super().__init__()
@@ -32,21 +32,21 @@ class ConstantVectorBaseline(BaseModel):
         return flow_vector_buffer
 
     def _make_non_causal_output(
-        self, input: BucketedSceneFlowInputSequence
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input: TorchFullFrameInputSequence
+    ) -> TorchFullFrameOutputSequence:
         K, PadN, _ = input.full_pc.shape
         # Default vector stacked to the same shape as the input point cloud, for all K-1 frames
         ego_flows = self.default_vector.expand((K - 1, PadN, 3))
         valid_flow = input.full_pc_mask[:-1]
 
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=ego_flows,
             valid_flow_mask=valid_flow,
         )
 
     def _make_causal_output(
-        self, input: BucketedSceneFlowInputSequence
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input: TorchFullFrameInputSequence
+    ) -> TorchFullFrameOutputSequence:
         K, PadN, _ = input.full_pc.shape
         jagged_full_pc_mask = input.get_full_pc_mask(-2)
         jagged_flow = self._single_frame_jagged_valid_pc_mask_to_jagged_flow(jagged_full_pc_mask)
@@ -56,14 +56,14 @@ class ConstantVectorBaseline(BaseModel):
 
         ego_flows = torch.unsqueeze(dense_flow, dim=0)
         valid_flow = torch.unsqueeze(dense_valid_flow, dim=0)
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=ego_flows,
             valid_flow_mask=valid_flow,
         )
 
     def inference_forward_single(
-        self, input: BucketedSceneFlowInputSequence, logger: Logger
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input: TorchFullFrameInputSequence, logger: Logger
+    ) -> TorchFullFrameOutputSequence:
 
         if input.loader_type == LoaderType.NON_CAUSAL:
             return self._make_non_causal_output(input)
@@ -74,7 +74,7 @@ class ConstantVectorBaseline(BaseModel):
 
     def loss_fn(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        model_res: list[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        model_res: list[TorchFullFrameOutputSequence],
     ) -> dict[str, torch.Tensor]:
         return {}

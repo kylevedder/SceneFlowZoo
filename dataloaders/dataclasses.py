@@ -7,6 +7,9 @@ from bucketed_scene_flow_eval.datastructures import (
     RGBImage,
     RGBFrameLookup,
     EgoLidarFlow,
+    PointCloudFrame,
+    RGBFrame,
+    PointCloud,
 )
 from bucketed_scene_flow_eval.interfaces import (
     NonCausalSeqLoaderDataset,
@@ -25,7 +28,17 @@ from pointclouds import (
 
 
 @dataclass
-class BucketedSceneFlowInputSequence:
+class BaseInputSequence:
+    pass
+
+
+@dataclass
+class BaseOutputSequence:
+    pass
+
+
+@dataclass
+class TorchFullFrameInputSequence(BaseInputSequence):
     """
     Class that contains all the data required for computing scene flow of a single dataset sample,
     which may contain multiple observations.
@@ -56,6 +69,10 @@ class BucketedSceneFlowInputSequence:
             of shape (K, NumIm, 4, 4).
         rgb_poses_ego_to_global (torch.Tensor): Ego to global poses for each RGB image as a float tensor
             of shape (K, NumIm, 4, 4).
+        rgb_projected_points (torch.Tensor): Projected points for each RGB image as a float tensor
+            of shape (K, NumIm, PadN, 2), where PadN is the padded number of points per point cloud.
+        rgb_projected_points_mask (torch.Tensor): A boolean mask for the projected points of shape
+            (K, NumIm, PadN, ).
         loader_type (LoaderType): The operation mode of the dataset.
     """
 
@@ -76,6 +93,8 @@ class BucketedSceneFlowInputSequence:
     rgb_images: torch.Tensor  # (K, NumIm, 4, H, W)
     rgb_poses_sensor_to_ego: torch.Tensor  # (K, NumIm, 4, 4)
     rgb_poses_ego_to_global: torch.Tensor  # (K, NumIm, 4, 4)
+    rgb_projected_points: torch.Tensor  # (K, NumIm, PadN, 2)
+    rgb_projected_points_mask: torch.Tensor  # (K, NumIm, PadN, )
 
     # Operation Mode
     loader_type: LoaderType
@@ -149,6 +168,15 @@ class BucketedSceneFlowInputSequence:
     def get_pc_transform_matrices(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self.pc_poses_sensor_to_ego[idx], self.pc_poses_ego_to_global[idx]
 
+    def get_rgb_predicted_points(self, idx: int) -> list[torch.Tensor]:
+        padded_points = self.rgb_projected_points[idx]
+        padded_valid_mask = self.rgb_projected_points_mask[idx]
+
+        return [
+            from_fixed_array_torch(points)[from_fixed_array_torch(mask).bool()]
+            for points, mask in zip(padded_points, padded_valid_mask)
+        ]
+
     def __post_init__(self):
         # Check shapes for point cloud data
         assert (
@@ -212,7 +240,7 @@ class BucketedSceneFlowInputSequence:
         frame_list: list[TimeSyncedSceneFlowFrame],
         pc_max_len: int,
         loader_type: LoaderType,
-    ) -> "BucketedSceneFlowInputSequence":
+    ) -> "TorchFullFrameInputSequence":
         """
         Create a BucketedSceneFlowItem from a list of TimeSyncedSceneFlowFrame objects.
         """
@@ -322,7 +350,81 @@ class BucketedSceneFlowInputSequence:
             ]
         )
 
-        return BucketedSceneFlowInputSequence(
+        def _get_rgb_frame_pixels(
+            pc_frame: PointCloudFrame, rgb_frame: RGBFrame
+        ) -> tuple[np.ndarray, np.ndarray]:
+            rgb_image = rgb_frame.rgb
+            pc_into_cam_frame_se3 = pc_frame.pose.sensor_to_ego.compose(
+                rgb_frame.pose.sensor_to_ego.inverse()
+            )
+            cam_frame_pc = pc_frame.full_pc.transform(pc_into_cam_frame_se3)
+            cam_frame_pc = PointCloud(cam_frame_pc.points[cam_frame_pc.points[:, 0] >= 0])
+
+            projected_points = rgb_frame.camera_projection.camera_frame_to_pixels(
+                cam_frame_pc.points
+            )
+
+            # Suppress RuntimeWarning: invalid value encountered in cast
+            with np.errstate(invalid="ignore"):
+                projected_points = projected_points.astype(np.int32)
+
+            valid_points_mask = (
+                (projected_points[:, 0] >= 0)
+                & (projected_points[:, 0] < rgb_image.shape[1])
+                & (projected_points[:, 1] >= 0)
+                & (projected_points[:, 1] < rgb_image.shape[0])
+            )
+
+            # Ensure projected points is N x 2 (2D coordinates)
+            assert (
+                projected_points.shape[1] == 2
+            ), f"Invalid projected points shape {projected_points.shape}"
+            assert (
+                projected_points.ndim == 2
+            ), f"Invalid projected points shape {projected_points.shape}"
+            return projected_points, valid_points_mask
+
+        def _make_rgb_frame_pixels(
+            frame: TimeSyncedSceneFlowFrame,
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+            """
+            For each RGB image, project the point cloud into the image space and return the pixel coordinates.
+
+            Returned shape is NumIm x PadN x 2
+            """
+            pc_frame = frame.pc
+            rgb_frame_lookup = frame.rgbs
+            if len(rgb_frame_lookup) == 0:
+                # 0 imags with with 0 2d coordinates
+                return torch.zeros(0, 0, 2), torch.zeros(0, 0, dtype=torch.bool)
+
+            jagged_pixels, jagged_valid_mask = zip(
+                *[
+                    _get_rgb_frame_pixels(pc_frame, rgb_frame)
+                    for rgb_frame in rgb_frame_lookup.values()
+                ]
+            )
+
+            padded_pixels = [
+                to_fixed_array_np(pixels, max_len=pc_max_len) for pixels in jagged_pixels
+            ]
+            padded_valid_mask = [
+                to_fixed_array_np(valid_mask, max_len=pc_max_len)
+                for valid_mask in jagged_valid_mask
+            ]
+
+            stacked_pixels = torch.from_numpy(np.stack(padded_pixels))
+            stacked_valid_mask = torch.from_numpy(np.stack(padded_valid_mask))
+
+            return stacked_pixels, stacked_valid_mask
+
+        rgb_projected_points, rgb_projected_points_mask = zip(
+            *[_make_rgb_frame_pixels(frame) for frame in frame_list]
+        )
+        rgb_projected_points = torch.stack(rgb_projected_points)
+        rgb_projected_points_mask = torch.stack(rgb_projected_points_mask)
+
+        return TorchFullFrameInputSequence(
             dataset_idx=idx,
             sequence_log_id=dataset_log_id,
             sequence_idx=dataset_idx,
@@ -336,38 +438,29 @@ class BucketedSceneFlowInputSequence:
             rgb_images=rgb_images.float(),
             rgb_poses_sensor_to_ego=rgb_poses_sensor_to_ego.float(),
             rgb_poses_ego_to_global=rgb_poses_ego_to_global.float(),
+            rgb_projected_points=rgb_projected_points.float(),
+            rgb_projected_points_mask=rgb_projected_points_mask.float(),
             loader_type=loader_type,
         )
 
-    def to(self, device: str | torch.device) -> "BucketedSceneFlowInputSequence":
-        """
-        Copy tensors in this batch to the target device.
-
-        Args:
-            device: the string (and optional ordinal) used to construct the device object, e.g., 'cuda:0'
-        """
-        # Update tensors to the new device
-        self.full_pc = self.full_pc.to(device)
-        self.full_pc_mask = self.full_pc_mask.to(device)
-        self.full_pc_gt_flowed = self.full_pc_gt_flowed.to(device)
-        self.full_pc_gt_flowed_mask = self.full_pc_gt_flowed_mask.to(device)
-        self.full_pc_gt_class = self.full_pc_gt_class.to(device)
-        self.pc_poses_sensor_to_ego = self.pc_poses_sensor_to_ego.to(device)
-        self.pc_poses_ego_to_global = self.pc_poses_ego_to_global.to(device)
-        self.rgb_images = self.rgb_images.to(device)
-        self.rgb_poses_sensor_to_ego = self.rgb_poses_sensor_to_ego.to(device)
-        self.rgb_poses_ego_to_global = self.rgb_poses_ego_to_global.to(device)
-
-        return self
-
-    def _apply_to_vars(self, func: callable) -> "BucketedSceneFlowInputSequence":
+    def _apply_to_vars(self, func: callable) -> "TorchFullFrameInputSequence":
         copied_args = {
             key: func(value) if isinstance(value, torch.Tensor) else value
             for key, value in vars(self).items()
         }
         return type(self)(**copied_args)
 
-    def clone(self) -> "BucketedSceneFlowInputSequence":
+    def to(self, device: str | torch.device) -> "TorchFullFrameInputSequence":
+        """
+        Copy tensors in this batch to the target device.
+
+        Args:
+            device: the string (and optional ordinal) used to construct the device object, e.g., 'cuda:0'
+        """
+        self = self._apply_to_vars(lambda x: x.to(device) if isinstance(x, torch.Tensor) else x)
+        return self
+
+    def clone(self) -> "TorchFullFrameInputSequence":
         """
         Clone this object.
         """
@@ -375,13 +468,13 @@ class BucketedSceneFlowInputSequence:
 
         return self._apply_to_vars(lambda x: x.clone() if isinstance(x, torch.Tensor) else x)
 
-    def detach(self) -> "BucketedSceneFlowInputSequence":
+    def detach(self) -> "TorchFullFrameInputSequence":
         """
         Detach all tensors in this object.
         """
         return self._apply_to_vars(lambda x: x.detach() if isinstance(x, torch.Tensor) else x)
 
-    def requires_grad_(self, requires_grad: bool) -> "BucketedSceneFlowInputSequence":
+    def requires_grad_(self, requires_grad: bool) -> "TorchFullFrameInputSequence":
         """
         Set the requires_grad attribute of all tensors in this object.
         """
@@ -389,7 +482,7 @@ class BucketedSceneFlowInputSequence:
             lambda x: x.requires_grad_(requires_grad) if isinstance(x, torch.Tensor) else x
         )
 
-    def slice(self, start_idx: int, end_idx: int) -> "BucketedSceneFlowInputSequence":
+    def slice(self, start_idx: int, end_idx: int) -> "TorchFullFrameInputSequence":
         # Slice the tensors in this object
         # For K length tensors, the slice is [start_idx:end_idx]
         # For K - 1 length tensors, the slice is [start_idx:end_idx - 1]
@@ -407,7 +500,7 @@ class BucketedSceneFlowInputSequence:
 
         return self._apply_to_vars(lambda x: _slice_tensor(x) if isinstance(x, torch.Tensor) else x)
 
-    def reverse(self) -> "BucketedSceneFlowInputSequence":
+    def reverse(self) -> "TorchFullFrameInputSequence":
         # Reverse the first dimension of all tensors in this object with flip(0)
         return self._apply_to_vars(lambda x: x.flip(0) if isinstance(x, torch.Tensor) else x)
 
@@ -420,7 +513,7 @@ class BucketedSceneFlowInputSequence:
 
 
 @dataclass
-class BucketedSceneFlowOutputSequence:
+class TorchFullFrameOutputSequence(BaseOutputSequence):
     """
     A standardized set of outputs for Bucketed Scene Flow evaluation.
 
@@ -435,7 +528,7 @@ class BucketedSceneFlowOutputSequence:
     @staticmethod
     def from_ego_lidar_flow_list(
         ego_lidar_flows: list[EgoLidarFlow], max_len: int
-    ) -> "BucketedSceneFlowOutputSequence":
+    ) -> "TorchFullFrameOutputSequence":
         """
         Create a BucketedSceneFlowOutputSequence from a list of EgoLidarFlow objects.
         """
@@ -453,7 +546,7 @@ class BucketedSceneFlowOutputSequence:
             ]
         )
 
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=ego_flows.float(), valid_flow_mask=valid_flow_mask.float()
         )
 
@@ -491,7 +584,7 @@ class BucketedSceneFlowOutputSequence:
     def __len__(self) -> int:
         return self.ego_flows.shape[0]
 
-    def to(self, device: str | torch.device) -> "BucketedSceneFlowOutputSequence":
+    def to(self, device: str | torch.device) -> "TorchFullFrameOutputSequence":
         """
         Copy tensors in this batch to the target device.
 
@@ -522,23 +615,23 @@ class BucketedSceneFlowOutputSequence:
             for flow, mask in zip(self.ego_flows, self.valid_flow_mask)
         ]
 
-    def reverse(self) -> "BucketedSceneFlowOutputSequence":
+    def reverse(self) -> "TorchFullFrameOutputSequence":
         # Reverse the first dimension of all tensors in this object, and reverse the actual flow direction
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=-self.ego_flows.flip(0),
             valid_flow_mask=self.valid_flow_mask.flip(0),
         )
 
-    def clone(self) -> "BucketedSceneFlowOutputSequence":
+    def clone(self) -> "TorchFullFrameOutputSequence":
         """
         Clone this object.
         """
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=self.ego_flows.clone(),
             valid_flow_mask=self.valid_flow_mask.clone(),
         )
 
-    def detach(self) -> "BucketedSceneFlowOutputSequence":
+    def detach(self) -> "TorchFullFrameOutputSequence":
         """
         Detach all tensors in this object.
         """
@@ -546,7 +639,7 @@ class BucketedSceneFlowOutputSequence:
         self.valid_flow_mask = self.valid_flow_mask.detach()
         return self
 
-    def requires_grad_(self, requires_grad: bool) -> "BucketedSceneFlowOutputSequence":
+    def requires_grad_(self, requires_grad: bool) -> "TorchFullFrameOutputSequence":
         """
         Set the requires_grad attribute of all tensors in this object.
         """
@@ -554,12 +647,12 @@ class BucketedSceneFlowOutputSequence:
         self.valid_flow_mask.requires_grad_(requires_grad)
         return self
 
-    def slice(self, start_idx: int, end_idx: int) -> "BucketedSceneFlowOutputSequence":
+    def slice(self, start_idx: int, end_idx: int) -> "TorchFullFrameOutputSequence":
         # Slice the tensors in this object
         # For K length tensors, the slice is [start_idx:end_idx]
         # For K - 1 length tensors, the slice is [start_idx:end_idx - 1]
 
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=self.ego_flows[start_idx:end_idx],
             valid_flow_mask=self.valid_flow_mask[start_idx:end_idx],
         )

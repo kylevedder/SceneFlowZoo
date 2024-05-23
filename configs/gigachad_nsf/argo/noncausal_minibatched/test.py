@@ -18,7 +18,7 @@ model = dict(
 )
 
 train_dataset = dict(
-    name="BucketedSceneFlowDataset",
+    name="TorchFullFrameDataset",
     args=dict(
         dataset_name="Argoverse2NonCausalSceneFlow",
         root_dir=test_dataset_root,

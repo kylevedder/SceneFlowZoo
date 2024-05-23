@@ -1,14 +1,15 @@
 from typing import Any
 
 from .base_models import (
-    BaseModel,
+    BaseTorchModel,
+    BaseRawModel,
     ForwardMode,
     BaseOptimizationModel,
     AbstractBatcher,
 )
 
 
-def construct_model(name: str, args: dict[str, Any]) -> BaseModel:
+def construct_model(name: str, args: dict[str, Any]) -> BaseTorchModel:
     name = name.lower()
     if name not in name_to_class_lookup:
         raise ValueError(f"Unknown model name: {name}")
@@ -31,6 +32,7 @@ from .whole_batch_optimization import (
     Liu2024OptimizationLoop,
 )
 from .mini_batch_optimization import GigachadNSFOptimizationLoop
+from .tracker import PointTracker3D
 
 
 importable_models = [
@@ -42,11 +44,14 @@ importable_models = [
     FastNSFModelOptimizationLoop,
     Liu2024OptimizationLoop,
     GigachadNSFOptimizationLoop,
+    PointTracker3D,
 ]
 
 # Ensure all importable models are based on the BaseModel class.
 for cls in importable_models:
-    assert issubclass(cls, BaseModel), f"{cls} is not a valid model class."
+    assert issubclass(cls, BaseTorchModel) or issubclass(
+        cls, BaseRawModel
+    ), f"{cls} is not a valid model class."
 
 name_to_class_lookup = {cls.__name__.lower(): cls for cls in importable_models}
 
@@ -62,6 +67,6 @@ __all__ = [
     "Liu2024Model",
     "GigaChadNSFModel",
     "ConstantVectorBaseline",
-    "BaseModel",
+    "BaseTorchModel",
     "ForwardMode",
 ]

@@ -4,12 +4,12 @@ import time
 import torch
 import torch.nn as nn
 
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from models.components.backbones import FastFlowUNet, FastFlowUNetXL
 from models.components.embedders import DynamicEmbedder
 from models.components.heads import FastFlowDecoder, FastFlowDecoderStepDown, ConvGRUDecoder
 from pointclouds.losses import warped_pc_loss
-from models.base_models import BaseModel, ForwardMode
+from models.base_models import BaseTorchModel, ForwardMode
 import enum
 from pytorch_lightning.loggers import Logger
 from abc import ABC, abstractmethod
@@ -19,8 +19,8 @@ class FastFlow3DBaseLoss(ABC):
     @abstractmethod
     def __call__(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        model_results: List[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        model_results: List[TorchFullFrameOutputSequence],
     ) -> dict[str, torch.Tensor]:
         raise NotImplementedError()
 
@@ -31,8 +31,8 @@ class FastFlow3DSelfSupervisedLoss(FastFlow3DBaseLoss):
 
     def _warped_loss(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        model_res: list[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        model_res: list[TorchFullFrameOutputSequence],
     ):
 
         # Input batch length should be the same as the estimated flows
@@ -50,8 +50,8 @@ class FastFlow3DSelfSupervisedLoss(FastFlow3DBaseLoss):
 
     def __call__(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        model_results: List[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        model_results: List[TorchFullFrameOutputSequence],
     ):
         return {"loss": self._warped_loss(input_batch, model_results)}
 
@@ -63,8 +63,8 @@ class FastFlow3DBucketedLoaderLoss(FastFlow3DBaseLoss):
 
     def __call__(
         self,
-        input_batch: List[BucketedSceneFlowInputSequence],
-        model_results: List[BucketedSceneFlowOutputSequence],
+        input_batch: List[TorchFullFrameInputSequence],
+        model_results: List[TorchFullFrameOutputSequence],
     ):
         # Input batch length should be the same as the estimated flows
         assert len(input_batch) == len(
@@ -126,7 +126,7 @@ class FastFlow3DBackboneType(enum.Enum):
     UNET_XL = "unet_xl"
 
 
-class FastFlow3D(BaseModel):
+class FastFlow3D(BaseTorchModel):
     """
     FastFlow3D based on the paper:
     https://arxiv.org/abs/2103.01306v5
@@ -201,7 +201,7 @@ class FastFlow3D(BaseModel):
         full_pc0s: list[tuple[torch.Tensor, torch.Tensor]],
         full_pc1s: list[tuple[torch.Tensor, torch.Tensor]],
         pc0_transforms: list[tuple[torch.Tensor, torch.Tensor]],
-    ) -> list[BucketedSceneFlowOutputSequence]:
+    ) -> list[TorchFullFrameOutputSequence]:
         """
         Args:
             pc0s: A list (len=batch size) of point source point clouds.
@@ -258,7 +258,7 @@ class FastFlow3D(BaseModel):
             ego_flow = self.global_to_ego_flow(full_p0, full_flow, pc0_ego_to_global)
 
             batch_output.append(
-                BucketedSceneFlowOutputSequence(
+                TorchFullFrameOutputSequence(
                     ego_flows=torch.unsqueeze(ego_flow, 0),
                     valid_flow_mask=torch.unsqueeze(full_flow_mask, 0),
                 )
@@ -268,9 +268,9 @@ class FastFlow3D(BaseModel):
     def forward(
         self,
         forward_mode: ForwardMode,
-        batched_sequence: List[BucketedSceneFlowInputSequence],
+        batched_sequence: List[TorchFullFrameInputSequence],
         logger: Logger,
-    ) -> List[BucketedSceneFlowOutputSequence]:
+    ) -> List[TorchFullFrameOutputSequence]:
         """
         Args:
             batched_sequence: A list (len=batch size) of BucketedSceneFlowItems.
@@ -286,7 +286,7 @@ class FastFlow3D(BaseModel):
 
     def loss_fn(
         self,
-        input_batch: List[BucketedSceneFlowInputSequence],
-        model_res: List[BucketedSceneFlowOutputSequence],
+        input_batch: List[TorchFullFrameInputSequence],
+        model_res: List[TorchFullFrameOutputSequence],
     ) -> dict[str, torch.Tensor]:
         return self.loss_fn_obj(input_batch, model_res)

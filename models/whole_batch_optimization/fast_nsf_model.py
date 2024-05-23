@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-from dataloaders import BucketedSceneFlowInputSequence
+from dataloaders import TorchFullFrameInputSequence
 from .whole_batch_optim_loop import WholeBatchOptimizationLoop
 from .nsfp_model import NSFPForwardOnlyModel
 from pytorch_lightning.loggers import Logger
@@ -15,7 +15,7 @@ from models.components.optimization.cost_functions import (
 
 class FastNSFModel(NSFPForwardOnlyModel):
 
-    def __init__(self, full_input_sequence: BucketedSceneFlowInputSequence) -> None:
+    def __init__(self, full_input_sequence: TorchFullFrameInputSequence) -> None:
         super().__init__(full_input_sequence)
         preprocess_result = self._preprocess(full_input_sequence.clone().detach())
         self.dt = DistanceTransform.from_pointclouds(
@@ -41,7 +41,7 @@ class FastNSFModel(NSFPForwardOnlyModel):
             param.requires_grad = True
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> BaseCostProblem:
 
         rep = self._preprocess(input_sequence)

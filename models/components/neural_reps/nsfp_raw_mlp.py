@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import enum
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence
+from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from models.components.optimization.cost_functions import TruncatedChamferLossProblem
 
 
