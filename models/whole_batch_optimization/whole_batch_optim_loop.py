@@ -155,7 +155,11 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
             batcher.shuffle_minibatches(seed=epoch_idx)
             total_cost = 0
             minibatch_bar = tqdm.tqdm(
-                batcher, leave=False, position=2, desc="Minibatches", disable=len(batcher) <= 1
+                batcher,
+                leave=False,
+                position=2,
+                desc="Minibatches",
+                disable=(len(batcher) <= 1) or (title is None),
             )
             for minibatch in minibatch_bar:
                 optimizer.zero_grad()
