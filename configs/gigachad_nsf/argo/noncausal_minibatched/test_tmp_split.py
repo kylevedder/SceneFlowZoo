@@ -1,6 +1,5 @@
 has_labels = False
 
-SEQUENCE_LENGTH = 150
 
 test_dataset_root = "/efs/argoverse2/test/"
 save_output_folder = "/tmp/argoverse2/test_gigachad_nsf_flow_feather/"
@@ -21,14 +20,14 @@ train_dataset = dict(
     name="TorchFullFrameDataset",
     args=dict(
         dataset_name="Argoverse2NonCausalSceneFlow",
-        args=dict(log_subset=["fee0f78c-cf00-35c5-975b-72724f53fd64"], subsequence_length=156),
+        log_subset=["fee0f78c-cf00-35c5-975b-72724f53fd64"],
+        subsequence_length=156,
         root_dir=test_dataset_root,
         load_flow=False,
         with_ground=False,
         with_rgb=False,
         eval_type="bucketed_epe",
         eval_args=dict(),
-        subsequence_length=SEQUENCE_LENGTH,
         range_crop_type="ego",  # Ensures that the range is cropped to the ego vehicle, so points are not chopped off if the ego vehicle is driving large distances.
     ),
 )
