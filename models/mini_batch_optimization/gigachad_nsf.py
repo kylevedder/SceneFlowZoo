@@ -90,13 +90,13 @@ class GlobalNormalizer:
         return torch.stack([x, y, z], dim=1)
 
 
-def _make_time_feature(idx: int, total_entries: int) -> torch.Tensor:
+def _make_time_feature(idx: int, total_entries: int, device: torch.device) -> torch.Tensor:
     # Make the time feature zero mean
     if total_entries <= 1:
         # Handle divide by zero
-        return torch.tensor([0.0], dtype=torch.float32)
+        return torch.tensor([0.0], dtype=torch.float32, device=device)
     max_idx = total_entries - 1
-    return torch.tensor([(idx / max_idx) - 0.5], dtype=torch.float32)
+    return torch.tensor([(idx / max_idx) - 0.5], dtype=torch.float32, device=device)
 
 
 def _make_input_feature(
@@ -112,17 +112,19 @@ def _make_input_feature(
         query_direction, QueryDirection
     ), f"Expected QueryDirection, but got {query_direction}"
 
-    time_feature = _make_time_feature(idx, total_entries)  # 1x1
+    time_feature = _make_time_feature(idx, total_entries, pc.device)  # 1x1
 
-    direction_feature = torch.tensor([query_direction.value], dtype=torch.float32)  # 1x1
-    pc_time_dim = time_feature.repeat(pc.shape[0], 1)
-    pc_direction_dim = direction_feature.repeat(pc.shape[0], 1)
+    direction_feature = torch.tensor(
+        [query_direction.value], dtype=torch.float32, device=pc.device
+    )  # 1x1
+    pc_time_dim = time_feature.repeat(pc.shape[0], 1).contiguous()
+    pc_direction_dim = direction_feature.repeat(pc.shape[0], 1).contiguous()
 
     normalized_pc = pc  # normalizer.normalize(pc)
 
     # Concatenate into a feature tensor
     return torch.cat(
-        [normalized_pc, pc_time_dim.to(pc.device), pc_direction_dim.to(pc.device)],
+        [normalized_pc, pc_time_dim, pc_direction_dim],
         dim=-1,
     )
 
