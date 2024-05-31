@@ -58,7 +58,7 @@ RUN pip install opencv-python
 RUN apt install nvtop htop -y
 RUN pip install py-spy
 
-RUN pip install bucketed-scene-flow-eval==2.0.13
+RUN pip install bucketed-scene-flow-eval==2.0.15
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user
@@ -77,6 +77,5 @@ WORKDIR /project
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 777 /entrypoint.sh
 RUN chmod 777 /home
-
 
 ENTRYPOINT ["/entrypoint.sh"]

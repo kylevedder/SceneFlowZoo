@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from pytorch3d.ops import knn_points
 from bucketed_scene_flow_eval.datastructures import (
     TimeSyncedSceneFlowFrame,
@@ -15,8 +16,16 @@ import numpy as np
 
 from cotracker.predictor import CoTrackerPredictor
 from cotracker.utils.visualizer import Visualizer
+from abc import ABC, abstractmethod
+import enum
+
 
 from dataclasses import dataclass
+
+
+class VideoDirection(enum.Enum):
+    FORWARD = "forward"
+    BACKWARD = "backward"
 
 
 @dataclass
@@ -140,15 +149,23 @@ class ImageSpaceTracks:
         return self
 
 
-class PointTracker3D(BaseRawModel):
+class BasePointTracker3D(ABC, nn.Module):
 
-    def __init__(self, camera_names: list[str]) -> None:
+    def __init__(self, camera_infos: list[tuple[str, VideoDirection | str]]) -> None:
         super().__init__()
-        self.cotracker = CoTrackerPredictor(
+        assert len(camera_infos) > 0, f"Must have at least one camera name"
+        clean_camera_infos = [
+            (
+                (camera_name, VideoDirection(camera_direction))
+                if isinstance(camera_direction, str)
+                else (camera_name, camera_direction)
+            )
+            for camera_name, camera_direction in camera_infos
+        ]
+        self.camera_infos = clean_camera_infos
+        self.tracker = CoTrackerPredictor(
             checkpoint="/payload_files/cache/torch/hub/checkpoints/cotracker2.pth"
         )
-        assert len(camera_names) > 0, f"Must have at least one camera name"
-        self.camera_names = camera_names
 
     @property
     def device(self):
@@ -166,9 +183,11 @@ class PointTracker3D(BaseRawModel):
         # Filter out all the points behind the camera.
         cam_frame_pc = PointCloud(cam_frame_pc.points[cam_frame_pc.points[:, 0] > 0])
 
-        projected_points = camera_projection.camera_frame_to_pixels(cam_frame_pc.points).astype(
-            np.int32
-        )
+        projected_points_float64 = camera_projection.camera_frame_to_pixels(cam_frame_pc.points)
+        assert np.isfinite(
+            projected_points_float64
+        ).all(), f"Expected all projected points to be finite, got {projected_points_float64}"
+        projected_points = projected_points_float64.astype(np.int32)
         projected_points_mask = (
             (projected_points[:, 0] >= 0)
             & (projected_points[:, 0] < rgb_image.shape[1])
@@ -187,11 +206,22 @@ class PointTracker3D(BaseRawModel):
         )
 
     def _extract_video_info(
-        self, camera_name: str, frame_list: list[TimeSyncedSceneFlowFrame]
+        self,
+        camera_name: str,
+        video_direction: VideoDirection,
+        frame_list: list[TimeSyncedSceneFlowFrame],
     ) -> VideoInfo:
+
+        # Validate that camera name is correct
+        for idx, frame in enumerate(frame_list):
+            assert (
+                camera_name in frame.rgbs.entries
+            ), f"Expected camera {camera_name} to be in frame {idx}; known entries: {frame.rgbs.entries}"
         rgb_frames = [frame.rgbs[camera_name] for frame in frame_list]
         np_frames = np.array([rgb.rgb.masked_image.full_image for rgb in rgb_frames])
         video_tensor = torch.tensor(np_frames).permute(0, 3, 1, 2)[None].float() * 255.0
+        if video_direction == VideoDirection.BACKWARD:
+            video_tensor = torch.flip(video_tensor, dims=[1])
         projected_points = [
             self._project_points(frame.pc, rgb_frame)
             for frame, rgb_frame in zip(frame_list, rgb_frames)
@@ -202,9 +232,10 @@ class PointTracker3D(BaseRawModel):
             projected_points=projected_points,
         )
 
+    @abstractmethod
     def _compute_video_tracks(self, video_info: VideoInfo) -> ImageSpaceTracks:
         video_info = video_info.to(self.device)
-        pred_tracks, pred_visibility = self.cotracker(
+        pred_tracks, pred_visibility = self.tracker(
             video=video_info.video_tensor, queries=video_info.get_query_points()
         )
         return ImageSpaceTracks(tracks=pred_tracks, visibility=pred_visibility)
@@ -221,16 +252,17 @@ class PointTracker3D(BaseRawModel):
 
         # Perform KNN search
         knn_result = knn_points(query_points, target_pixels, K=1)
+        knn_idx: torch.Tensor = knn_result.idx
 
         # Extract the indices of the nearest neighbors
-        nearest_indices = knn_result.idx.squeeze(0).squeeze(-1)  # Shape: (N,)
+        nearest_indices = knn_idx.squeeze(0).squeeze(-1)  # Shape: (N,)
         assert nearest_indices.shape == query_points.shape[1:2], (
             f"Expected the same number of nearest indices as query points, got "
             f"{nearest_indices.shape} and {query_points.shape}"
         )
         return nearest_indices
 
-    def _image_track_to_3d(
+    def _image_track_to_global_3d(
         self, projected_points: list[ProjectedPoints], image_track: ImageSpaceTracks
     ) -> list[PointCloud]:
         assert len(projected_points) == len(image_track), (
@@ -275,7 +307,7 @@ class PointTracker3D(BaseRawModel):
                 projected_point.rgb_frame.pose.sensor_to_global
             )
 
-            full_camera_frame_points = np.zeros((len(track), 3))
+            full_camera_frame_points = np.zeros((len(track), 3), dtype=np.float32)
             is_visible_np = is_visible.cpu().numpy()
             full_camera_frame_points[is_visible_np] = visible_global_pc.points
 
@@ -285,14 +317,10 @@ class PointTracker3D(BaseRawModel):
                 ), f"Expected all points to be visible in the first frame"
 
             # Create a full point cloud with all the points
+            # First frame should not have any non-visible points
             if idx > 0:
-                # First frame should not have any invisible points
-                if idx > 0:
-                    # Set the invisible points to NaN
-                    # These will need to be cleaned up later
-                    full_camera_frame_points[~is_visible_np] = global_pc_list[-1].points[
-                        ~is_visible_np
-                    ]
+                # Set the non-visible points to previous point in global frame
+                full_camera_frame_points[~is_visible_np] = global_pc_list[-1].points[~is_visible_np]
 
             global_pc_list.append(PointCloud(full_camera_frame_points))
 
@@ -310,42 +338,62 @@ class PointTracker3D(BaseRawModel):
             filename=f"video_{camera_name}",
         )
 
-    def inference_forward_single(
+    def _get_camera_pcs(
         self,
+        camera_name: str,
+        video_direction: VideoDirection,
         input_sequence: RawFullFrameInputSequence,
-        logger: Logger,
-    ) -> RawFullFrameOutputSequence:
+    ) -> list[PointCloudFrame]:
         frame_list = input_sequence.frame_list
 
-        o3d_vis = O3DVisualizer(point_size=3)
+        # print(f"Extracting camera point clouds for camera {camera_name}...")
+        video_info = self._extract_video_info(camera_name, video_direction, frame_list)
+        # print(f"Computing video tracks for camera {camera_name}...")
+        image_track = self._compute_video_tracks(video_info)
+        # print(f"Converting image tracks to global 3D points for camera {camera_name}...")
+        global_pcs = self._image_track_to_global_3d(video_info.projected_points, image_track)
 
-        for frame in frame_list:
-            o3d_vis.add_global_pc_frame(frame.pc, color=[0, 0, 1])
+        if video_direction == VideoDirection.BACKWARD:
+            # Reverse global_pcs list
+            global_pcs = global_pcs[::-1]
 
-        for camera_name in self.camera_names:
-            print(f"Processing camera {camera_name}")
-            video_info = self._extract_video_info(camera_name, frame_list)
-            print(f"Running cotracker")
-            image_track = self._compute_video_tracks(video_info)
+        def _global_pc_to_frame(
+            global_pc: PointCloud, frame: TimeSyncedSceneFlowFrame
+        ) -> PointCloudFrame:
+            sensor_pc = global_pc.transform(frame.pc.pose.sensor_to_global.inverse())
+            all_true_mask = np.ones(len(sensor_pc.points), dtype=bool)
+            return PointCloudFrame(
+                full_pc=sensor_pc,
+                pose=frame.pc.pose,
+                mask=all_true_mask,
+            )
 
-            self._visualize_rgb_track(camera_name, video_info, image_track)
+        # print(f"Converting global 3D points to point cloud frames for camera {camera_name}...")
+        return [
+            _global_pc_to_frame(global_pc, frame)
+            for global_pc, frame in zip(global_pcs, frame_list)
+        ]
 
-            print(f"Converting image track to 3D")
-            projected_pc_frames = self._image_track_to_3d(video_info.projected_points, image_track)
+    def _union_pc_frames(self, pc_frames: list[PointCloudFrame]) -> PointCloudFrame:
+        union_pc = PointCloud(np.concatenate([pc.pc.points for pc in pc_frames]))
+        union_mask = np.concatenate([pc.mask for pc in pc_frames])
+        # Ensure all the poses are the same
+        assert all(
+            pc.pose == pc_frames[0].pose for pc in pc_frames
+        ), f"Expected all poses to be the same, got {[pc.pose for pc in pc_frames]}"
+        return PointCloudFrame(
+            full_pc=union_pc,
+            pose=pc_frames[0].pose,
+            mask=union_mask,
+        )
 
-            for pc in projected_pc_frames:
-                # Add the raw point clouds
-                o3d_vis.add_pointcloud(pc, color=[1, 0, 0])
-
-        o3d_vis.run()
-
-        breakpoint()
-
-        return None
-
-    def loss_fn(
+    def forward(
         self,
-        input_batch: list[RawFullFrameInputSequence],
-        model_res: list[RawFullFrameOutputSequence],
-    ) -> dict[str, torch.Tensor]:
-        raise NotImplementedError()
+        input_sequence: RawFullFrameInputSequence,
+    ) -> list[PointCloudFrame]:
+        # print("Starting forward for base tracker...")
+        pc_matrix = [
+            self._get_camera_pcs(camera_name, video_direction, input_sequence)
+            for camera_name, video_direction in self.camera_infos
+        ]
+        return [self._union_pc_frames(pc_frames) for pc_frames in zip(*pc_matrix)]

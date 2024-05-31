@@ -32,7 +32,6 @@ from .whole_batch_optimization import (
     Liu2024OptimizationLoop,
 )
 from .mini_batch_optimization import GigachadNSFOptimizationLoop
-from .tracker import PointTracker3D
 
 
 importable_models = [
@@ -44,7 +43,6 @@ importable_models = [
     FastNSFModelOptimizationLoop,
     Liu2024OptimizationLoop,
     GigachadNSFOptimizationLoop,
-    PointTracker3D,
 ]
 
 # Ensure all importable models are based on the BaseModel class.
