@@ -30,6 +30,10 @@ class VideoDirection(enum.Enum):
 
 @dataclass
 class ProjectedPoints:
+    """
+    Container class for LiDAR points projected into the RGB image.
+    """
+
     image_space_points: torch.Tensor
     depths: torch.Tensor
     camera_projection: CameraProjection
@@ -263,16 +267,16 @@ class BasePointTracker3D(ABC, nn.Module):
         return nearest_indices
 
     def _image_track_to_global_3d(
-        self, projected_points: list[ProjectedPoints], image_track: ImageSpaceTracks
+        self, projected_points_list: list[ProjectedPoints], image_track: ImageSpaceTracks
     ) -> list[PointCloud]:
-        assert len(projected_points) == len(image_track), (
+        assert len(projected_points_list) == len(image_track), (
             f"Expected the same number of projected points and image tracks, got "
-            f"{len(projected_points)} and {len(image_track)}"
+            f"{len(projected_points_list)} and {len(image_track)}"
         )
 
         global_pc_list: list[PointCloud] = []
         for idx, (projected_point, (track, is_visible)) in enumerate(
-            zip(projected_points, image_track)
+            zip(projected_points_list, image_track)
         ):
 
             projected_point = projected_point.to(track.device)
@@ -283,6 +287,11 @@ class BasePointTracker3D(ABC, nn.Module):
                     is_visible
                 ), f"Expected all points to be visible in the first frame"
 
+            if np.all(~is_visible.cpu().numpy()) or target_pixels.shape[0] == 0:
+                # No visible points in this frame, or no depth targets to fit to.
+                global_pc_list.append(global_pc_list[-1])
+                continue
+
             # Handle KNN on the visible tracks
             visible_tracks = track[is_visible]
             nearest_projected_point_idxes = self._knn2d(target_pixels, visible_tracks)
@@ -290,6 +299,7 @@ class BasePointTracker3D(ABC, nn.Module):
             visible_pixel_coordinates = projected_point.image_space_points[
                 nearest_projected_point_idxes
             ]
+
             visible_pixel_coordinate_depths = projected_point.depths[
                 nearest_projected_point_idxes
             ].unsqueeze(1)
