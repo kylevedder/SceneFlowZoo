@@ -62,6 +62,11 @@ class TorchFullFrameInputSequence(BaseInputSequence):
             of shape (K, 4, 4).
         pc_poses_ego_to_global (torch.Tensor): Ego to global poses for each point cloud as a float tensor
             of shape (K, 4, 4).
+
+        auxillary_pc (torch.Tensor) | None: The auxillary point cloud as a float tensor of shape (K, PadN, 3),
+            where K is the number of point clouds, PadN is the padded number of points per point cloud,
+            and 3 represents the XYZ coordinates. This is an optional field and may be None.
+
         rgb_images (torch.Tensor): RGB images as a float tensor of shape (K, NumIm, 4, H, W),
             where K is the number of observations, NumIm is the number of images per observation,
             3 represents the RGB channels, and H, W are the image height and width, respectively.
@@ -88,6 +93,9 @@ class TorchFullFrameInputSequence(BaseInputSequence):
     full_pc_gt_class: torch.Tensor  # (K-1, PadN,)
     pc_poses_sensor_to_ego: torch.Tensor  # (K, 4, 4)
     pc_poses_ego_to_global: torch.Tensor  # (K, 4, 4)
+
+    # Camera PC from preprocessing
+    auxillary_pc: torch.Tensor | None  # (K, PadN, 3) | None
 
     # RGB Data
     rgb_images: torch.Tensor  # (K, NumIm, 4, H, W)
@@ -164,6 +172,23 @@ class TorchFullFrameInputSequence(BaseInputSequence):
         full_pc = self.get_full_global_pc_gt_flowed(idx)
         full_mask = self.get_full_pc_gt_flow_mask(idx)
         return full_pc[full_mask]
+
+    def get_auxillary_pc(self, idx: int) -> torch.Tensor | None:
+        if self.auxillary_pc is None:
+            return None
+        return from_fixed_array_torch(self.auxillary_pc[idx])
+
+    def get_global_auxillary_pc(self, idx: int) -> torch.Tensor | None:
+        camera_pc = self.get_auxillary_pc(idx)
+        if camera_pc is None:
+            return None
+        sensor_to_ego, ego_to_global = self.get_pc_transform_matrices(idx)
+        sensor_to_global = torch.matmul(ego_to_global, sensor_to_ego)
+        # Camera PC is Nx3, we need to add another entry to make it Nx4 for the transformation
+        camera_pc = torch.cat(
+            [camera_pc, torch.ones(camera_pc.shape[0], 1, device=camera_pc.device)], dim=1
+        )
+        return torch.matmul(sensor_to_global, camera_pc.T).T[:, :3]
 
     def get_pc_transform_matrices(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self.pc_poses_sensor_to_ego[idx], self.pc_poses_ego_to_global[idx]
@@ -261,6 +286,22 @@ class TorchFullFrameInputSequence(BaseInputSequence):
                 for frame in frame_list
             ]
         )
+
+        def _construct_auxillary(frame_list: list[TimeSyncedSceneFlowFrame]) -> torch.Tensor | None:
+            for frame in frame_list:
+                if frame.auxillary_pc is None:
+                    return None
+
+            return torch.stack(
+                [
+                    torch.from_numpy(
+                        to_fixed_array_np(frame.auxillary_pc.full_pc.points, max_len=pc_max_len)
+                    )
+                    for frame in frame_list
+                ]
+            )
+
+        auxillary_pc = _construct_auxillary(frame_list)
 
         flow_frame_list = frame_list[:-1]
         flowed_pc_frame_list = [frame.pc.flow(frame.flow) for frame in flow_frame_list]
@@ -433,6 +474,7 @@ class TorchFullFrameInputSequence(BaseInputSequence):
             full_pc_gt_flowed=full_pc_gt_flowed.float(),
             full_pc_gt_flowed_mask=full_pc_gt_flowed_mask.float(),
             full_pc_gt_class=full_pc_gt_class.float(),
+            auxillary_pc=auxillary_pc.float() if auxillary_pc is not None else None,
             pc_poses_sensor_to_ego=pc_poses_sensor_to_ego.float(),
             pc_poses_ego_to_global=pc_poses_ego_to_global.float(),
             rgb_images=rgb_images.float(),

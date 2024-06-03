@@ -31,6 +31,11 @@ class QueryDirection(enum.Enum):
     REVERSE = -1
 
 
+class ChamferTargetType(enum.Enum):
+    LIDAR = "lidar"
+    LIDAR_CAMERA = "lidar_camera"
+
+
 @dataclass
 class GlobalNormalizer:
     min_x: float
@@ -133,6 +138,7 @@ def _make_input_feature(
 class GigaChadNSFPreprocessedInput:
     full_global_pcs: list[torch.Tensor]
     full_global_pcs_mask: list[torch.Tensor]
+    full_global_auxillary_pcs: list[torch.Tensor | None]
     ego_to_globals: list[torch.Tensor]
     sequence_idxes: list[int]
     sequence_total_length: int
@@ -152,10 +158,24 @@ class GigaChadNSFPreprocessedInput:
     def get_full_global_pc(self, idx: int) -> torch.Tensor:
         return self.full_global_pcs[idx]
 
-    def get_global_pc(self, idx: int) -> torch.Tensor:
-        pc = self.full_global_pcs[idx]
-        mask = self.full_global_pcs_mask[idx]
-        return pc[mask].clone().detach().requires_grad_(True)
+    def get_global_lidar_auxillary_pc(self, idx: int) -> torch.Tensor:
+        lidar_pc = self.full_global_pcs[idx]
+        lidar_mask = self.full_global_pcs_mask[idx]
+        valid_pc = lidar_pc[lidar_mask]
+
+        # If the camera pc is not available, return the lidar pc
+        auxillary_pc = self.full_global_auxillary_pcs[idx]
+        assert auxillary_pc is not None, "Expected auxillary_pc to be available"
+        # concatenate the camera pc to the lidar pc
+        valid_pc = torch.cat([valid_pc, auxillary_pc], dim=0)
+
+        return valid_pc.clone().detach().requires_grad_(True)
+
+    def get_global_lidar_pc(self, idx: int) -> torch.Tensor:
+        lidar_pc = self.full_global_pcs[idx]
+        lidar_mask = self.full_global_pcs_mask[idx]
+        valid_lidar_pc = lidar_pc[lidar_mask]
+        return valid_lidar_pc.clone().detach().requires_grad_(True)
 
     def get_full_pc_mask(self, idx: int) -> torch.Tensor:
         mask = self.full_global_pcs_mask[idx]
@@ -166,12 +186,18 @@ class GigaChadNSFPreprocessedInput:
 class GigachadNSFModel(BaseOptimizationModel):
 
     def __init__(
-        self, full_input_sequence: TorchFullFrameInputSequence, speed_threshold: float
+        self,
+        full_input_sequence: TorchFullFrameInputSequence,
+        speed_threshold: float,
+        chamfer_target_type: ChamferTargetType | str,
     ) -> None:
         super().__init__(full_input_sequence)
         self.model = GigaChadRawMLP()
         self.global_normalizer = GlobalNormalizer.from_input_sequence(full_input_sequence)
         self.speed_threshold = speed_threshold
+        if isinstance(chamfer_target_type, str):
+            chamfer_target_type = ChamferTargetType(chamfer_target_type)
+        self.chamfer_target_type = chamfer_target_type
 
         self._prep_neural_prior(self.model)
 
@@ -194,17 +220,23 @@ class GigachadNSFModel(BaseOptimizationModel):
         self, input_sequence: TorchFullFrameInputSequence
     ) -> GigaChadNSFPreprocessedInput:
 
-        full_global_pcs, full_global_pcs_mask, ego_to_globals = [], [], []
+        full_global_pcs: list[torch.Tensor] = []
+        full_global_pcs_mask: list[torch.Tensor] = []
+        full_global_camera_pcs: list[torch.Tensor | None] = []
+        ego_to_globals: list[torch.Tensor] = []
 
         for idx in range(len(input_sequence)):
             full_pc, full_pc_mask = input_sequence.get_full_global_pc(
                 idx
             ), input_sequence.get_full_pc_mask(idx)
 
+            full_global_camera_pc = input_sequence.get_global_auxillary_pc(idx)
+
             ego_to_global = input_sequence.pc_poses_ego_to_global[idx]
 
             full_global_pcs.append(full_pc)
             full_global_pcs_mask.append(full_pc_mask)
+            full_global_camera_pcs.append(full_global_camera_pc)
             ego_to_globals.append(ego_to_global)
 
         if isinstance(input_sequence, MinibatchedSceneFlowInputSequence):
@@ -221,6 +253,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         return GigaChadNSFPreprocessedInput(
             full_global_pcs=full_global_pcs,
             full_global_pcs_mask=full_global_pcs_mask,
+            full_global_auxillary_pcs=full_global_camera_pcs,
             ego_to_globals=ego_to_globals,
             sequence_idxes=sequence_idxes,
             sequence_total_length=sequence_total_length,
@@ -229,7 +262,7 @@ class GigachadNSFModel(BaseOptimizationModel):
     def _cycle_consistency(self, rep: GigaChadNSFPreprocessedInput) -> BaseCostProblem:
         cost_problems: list[BaseCostProblem] = []
         for idx in range(len(rep) - 1):
-            pc = rep.get_global_pc(idx)
+            pc = rep.get_global_lidar_pc(idx)
             sequence_idx = rep.sequence_idxes[idx]
             sequence_total_length = rep.sequence_total_length
             base_input_features = _make_input_feature(
@@ -281,17 +314,21 @@ class GigachadNSFModel(BaseOptimizationModel):
             anchor_pc = anchor_pc + flow
 
             index_offset = (subk + 1) * query_direction.value
-            target_pc = rep.get_global_pc(anchor_idx + index_offset)
 
-            problem: BaseCostProblem
+            match self.chamfer_target_type:
+                case ChamferTargetType.LIDAR:
+                    target_pc = rep.get_global_lidar_pc(anchor_idx + index_offset)
+                case ChamferTargetType.LIDAR_CAMERA:
+                    target_pc = rep.get_global_lidar_auxillary_pc(anchor_idx + index_offset)
+
             match loss_type:
-                case LossTypeEnum.DISTANCE_TRANSFORM:
-                    raise NotImplementedError("Distance transform not implemented")
                 case LossTypeEnum.TRUNCATED_CHAMFER:
-                    problem = TruncatedChamferLossProblem(
+                    problem: BaseCostProblem = TruncatedChamferLossProblem(
                         warped_pc=anchor_pc,
                         target_pc=target_pc,
                     )
+                case LossTypeEnum.DISTANCE_TRANSFORM:
+                    raise NotImplementedError("Distance transform not implemented")
 
             if speed_limit is not None:
                 problem = AdditiveCosts(
@@ -314,7 +351,7 @@ class GigachadNSFModel(BaseOptimizationModel):
             anchor_idx_range = range(k, len(rep))
 
         for anchor_idx in anchor_idx_range:
-            anchor_pc = rep.get_global_pc(anchor_idx)
+            anchor_pc = rep.get_global_lidar_pc(anchor_idx)
 
             for subk in range(k):
                 problem, anchor_pc = process_subk(anchor_pc, anchor_idx, subk, query_direction)
@@ -350,7 +387,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         direction: QueryDirection = QueryDirection.FORWARD,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         input_features = _make_input_feature(
-            rep.get_global_pc(query_idx),
+            rep.get_global_lidar_pc(query_idx),
             query_idx,
             len(rep),
             direction,
@@ -407,13 +444,18 @@ class GigachadNSFModel(BaseOptimizationModel):
 
 
 class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
-    def __init__(self, speed_threshold: float, *args, **kwargs):
+    def __init__(
+        self, speed_threshold: float, chamfer_target_type: ChamferTargetType | str, *args, **kwargs
+    ):
         super().__init__(model_class=GigachadNSFModel, *args, **kwargs)
         self.speed_threshold = speed_threshold
+        if isinstance(chamfer_target_type, str):
+            chamfer_target_type = ChamferTargetType(chamfer_target_type)
+        self.chamfer_target_type = chamfer_target_type
 
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            speed_threshold=self.speed_threshold
+            speed_threshold=self.speed_threshold, chamfer_target_type=self.chamfer_target_type
         )

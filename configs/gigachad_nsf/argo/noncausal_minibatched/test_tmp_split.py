@@ -13,6 +13,7 @@ model = dict(
         speed_threshold=60.0 / 10.0,
         lr=0.00008,
         epochs=1000,
+        chamfer_target_type="lidar_camera",
     ),
 )
 

@@ -58,7 +58,7 @@ RUN pip install opencv-python
 RUN apt install nvtop htop -y
 RUN pip install py-spy
 
-RUN pip install bucketed-scene-flow-eval==2.0.15
+RUN pip install bucketed-scene-flow-eval==2.0.16
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user
