@@ -75,15 +75,14 @@ class ResultsVisualizer(BaseCallbackVisualizer):
         live updates of the visualizer from a running method.
         """
         intermediary_results_folder = self.intermediary_results_folder
-        dataset_idx = int(intermediary_results_folder.name.split("_")[-1])
         assert intermediary_results_folder.exists(), f"{intermediary_results_folder} does not exist"
         intermediary_files = sorted(intermediary_results_folder.glob("*.pkl"))
         assert (
             len(intermediary_files) > 0
         ), f"No intermediary files found in {intermediary_results_folder}"
 
-        print(f"Found {len(intermediary_files)} intermediary files for dataset idx {dataset_idx}")
-        self.dataset_idx, self.intermediary_files = dataset_idx, intermediary_files
+        self.dataset_idx = 0
+        self.intermediary_files = intermediary_files
 
     def _load_ego_lidar(self) -> list[EgoLidarFlow]:
         raw_intermediary_flows: list[tuple[np.ndarray, np.ndarray]] = load_pickle(
@@ -106,7 +105,9 @@ class ResultsVisualizer(BaseCallbackVisualizer):
             ), "Cached dataset frame list not found"
             return self._cached_dataset_frame_list
 
-        dataset_frame_list = self.dataset[self.dataset_idx]
+        assert len(self.dataset) > 0, "No sequences found in dataset"
+        print(f"Datset has {len(self.dataset)} sequences")
+        dataset_frame_list = self.dataset[0]
         intermediary_ego_flows = self._load_ego_lidar()
 
         assert (
@@ -219,6 +220,7 @@ def main():
     parser.add_argument("root_dir", type=Path)
     parser.add_argument("subsequence_length", type=int)
     parser.add_argument("--subsubsequence_length", type=int, default=-1)
+    parser.add_argument("--subsequence_id", type=str, required=True)
     parser.add_argument("intermediary_results_folder", type=Path)
     args = parser.parse_args()
 
@@ -230,8 +232,12 @@ def main():
             root_dir=args.root_dir,
             subsequence_length=subsequence_length,
             with_ground=False,
+            range_crop_type="ego",
+            log_subset=[args.subsequence_id] if args.subsequence_id is not None else None,
         ),
     )
+    assert len(dataset) > 0, "No sequences found in dataset"
+    print(f"Datset has {len(dataset)} sequences")
     subsubsequence_length = args.subsubsequence_length
     if subsubsequence_length < 0:
         subsubsequence_length = None

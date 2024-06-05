@@ -337,15 +337,22 @@ class BasePointTracker3D(ABC, nn.Module):
         return global_pc_list
 
     def _visualize_rgb_track(
-        self, camera_name: str, video_info: VideoInfo, image_track: ImageSpaceTracks
+        self,
+        camera_name: str,
+        video_info: VideoInfo,
+        image_track: ImageSpaceTracks,
+        frame_list: list[TimeSyncedSceneFlowFrame],
     ):
-        rgb_vis = Visualizer(save_dir="./saved_videos", pad_value=120, linewidth=3)
+        first_frame = frame_list[0]
+        save_path = f"./saved_videos/{first_frame.log_id}"
+        rgb_vis = Visualizer(save_dir=save_path, pad_value=120, linewidth=3)
         print(f"Visualizing image track for camera {camera_name}")
+
         rgb_vis.visualize(
             video=video_info.video_tensor,
             tracks=image_track.tracks,
             visibility=image_track.visibility,
-            filename=f"video_{camera_name}",
+            filename=f"{first_frame.log_idx:06d}_{camera_name}",
         )
 
     def _get_camera_pcs(
@@ -361,6 +368,9 @@ class BasePointTracker3D(ABC, nn.Module):
         # print(f"Computing video tracks for camera {camera_name}...")
         image_track = self._compute_video_tracks(video_info)
         # print(f"Converting image tracks to global 3D points for camera {camera_name}...")
+
+        # self._visualize_rgb_track(camera_name, video_info, image_track, frame_list)
+
         global_pcs = self._image_track_to_global_3d(video_info.projected_points, image_track)
 
         if video_direction == VideoDirection.BACKWARD:
@@ -379,21 +389,24 @@ class BasePointTracker3D(ABC, nn.Module):
             )
 
         # print(f"Converting global 3D points to point cloud frames for camera {camera_name}...")
-        return [
+        pc_frame_list = [
             _global_pc_to_frame(global_pc, frame)
             for global_pc, frame in zip(global_pcs, frame_list)
         ]
 
+        return pc_frame_list
+
     def _union_pc_frames(self, pc_frames: list[PointCloudFrame]) -> PointCloudFrame:
         union_pc = PointCloud(np.concatenate([pc.pc.points for pc in pc_frames]))
         union_mask = np.concatenate([pc.mask for pc in pc_frames])
+        cannonical_pose = pc_frames[0].pose
         # Ensure all the poses are the same
         assert all(
-            pc.pose == pc_frames[0].pose for pc in pc_frames
+            pc.pose == cannonical_pose for pc in pc_frames
         ), f"Expected all poses to be the same, got {[pc.pose for pc in pc_frames]}"
         return PointCloudFrame(
             full_pc=union_pc,
-            pose=pc_frames[0].pose,
+            pose=cannonical_pose,
             mask=union_mask,
         )
 
@@ -406,4 +419,6 @@ class BasePointTracker3D(ABC, nn.Module):
             self._get_camera_pcs(camera_name, video_direction, input_sequence)
             for camera_name, video_direction in self.camera_infos
         ]
-        return [self._union_pc_frames(pc_frames) for pc_frames in zip(*pc_matrix)]
+        merged_pc_frames = [self._union_pc_frames(pc_frames) for pc_frames in zip(*pc_matrix)]
+
+        return merged_pc_frames

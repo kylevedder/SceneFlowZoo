@@ -162,5 +162,5 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         print("Flow moves from the gray point cloud to the white point cloud\n")
         print("Press F to toggle flow lines")
         print("Press left or right arrow to change starter_idx")
-        print(f"Press S to save screenshot (saved to {self.vis_state.screenshot_path.absolute()})")
+        print(f"Press S to save screenshot (saved to {self.screenshot_path.absolute()})")
         print("#############################################################")
