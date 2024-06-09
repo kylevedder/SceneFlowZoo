@@ -3,6 +3,7 @@
 .vscode/
 **/__pycache__/
 docker_history.txt
+docker_history_blender.txt
 work_dirs/
 model_checkpoints/
 model_checkpoints_old/
