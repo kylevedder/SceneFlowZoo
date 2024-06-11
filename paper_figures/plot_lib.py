@@ -193,7 +193,12 @@ def savefig(save_folder: Path, name: str, pad: float = 0):
     for ext in ["pdf", "png"]:
         outfile = save_folder / f"{name}.{ext}"
         print("Saving", outfile)
-        plt.savefig(outfile, bbox_inches="tight", pad_inches=pad)
+        additional_args: dict[str, str | int | float] = dict()
+        if ext == "pdf":
+            additional_args["bbox_inches"] = "tight"
+        elif ext == "png":
+            additional_args["dpi"] = 300
+        plt.savefig(outfile, pad_inches=pad, **additional_args)
     plt.clf()
 
 

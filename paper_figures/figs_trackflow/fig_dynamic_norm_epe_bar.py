@@ -19,8 +19,8 @@ def plot_dynamic_norm_epe_bar(eval_stats: List[BucketedEvalStats], save_folder: 
     for name, normalized_epe in zip(names, normalized_epes):
         plt.text(normalized_epe + 0.01, name, f"{normalized_epe:.4f}", va="center", color="black")
 
-    right_max = 1.0
-    plt.xlim(left=0, right=right_max)
+    right_max = 0.5
+    # plt.xlim(left=0, right=right_max)
     plt.xlabel("mean Dynamic Normalized EPE")
 
     # Remove top and right axes

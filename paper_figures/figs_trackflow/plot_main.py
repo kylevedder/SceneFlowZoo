@@ -34,8 +34,13 @@ av2_volume_test_bucketed_data_root_dir = av2_volume_test_data_root_dir / "bucket
 # fmt: off
 
 class_bucketed_eval_stats = [
-    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "TrackFlow (ours)", "trackflow"),
+    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "Flow4D 5 Frame", "flow4d"),
+    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "TrackFlow", "trackflow"),
+    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "DeFlow++", "deflowpp"),
+    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "ICP Flow", "icp_flow"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "DeFlow", "deflow"),
+    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "SeFlow", "seflow"),
+    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "FastNSF", "fast_nsf"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "NSFP", "nsfp"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "FastFlow3D", "fastflow3d"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "ZeroFlow 1x", "zeroflow_1x"),
@@ -71,15 +76,6 @@ volume_bucketed_eval_stats = [
 
 # fmt: on
 
-assert len(class_bucketed_eval_stats) == len(
-    class_threeway_eval_stats
-), f"Lengths do not match: {len(class_bucketed_eval_stats)} != {len(class_threeway_eval_stats)}"
-
-joint_eval_stats = list(zip(class_bucketed_eval_stats, class_threeway_eval_stats))
-
-# Verify that each tuple has the same name
-for bucketed, threeway in joint_eval_stats:
-    assert bucketed.name == threeway.name, f"Names do not match: {bucketed.name} != {threeway.name}"
 
 class_bucketed_eval_stats.sort(reverse=True)
 class_threeway_eval_stats.sort(reverse=True)
@@ -92,8 +88,19 @@ av2_class_test_save_dir.mkdir(exist_ok=True, parents=True)
 
 plot_per_metacatagory_bar(class_bucketed_eval_stats, av2_class_test_save_dir)
 plot_dynamic_norm_epe_bar(class_bucketed_eval_stats, av2_class_test_save_dir)
-plot_threeway_epe_bar(joint_eval_stats, av2_class_test_save_dir)
-plot_threeway_dynamic_epe_bar(joint_eval_stats, av2_class_test_save_dir)
+
+# assert len(class_bucketed_eval_stats) == len(
+#     class_threeway_eval_stats
+# ), f"Lengths do not match: {len(class_bucketed_eval_stats)} != {len(class_threeway_eval_stats)}"
+
+# joint_eval_stats = list(zip(class_bucketed_eval_stats, class_threeway_eval_stats))
+
+# # Verify that each tuple has the same name
+# for bucketed, threeway in joint_eval_stats:
+#     assert bucketed.name == threeway.name, f"Names do not match: {bucketed.name} != {threeway.name}"
+
+# plot_threeway_epe_bar(joint_eval_stats, av2_class_test_save_dir)
+# plot_threeway_dynamic_epe_bar(joint_eval_stats, av2_class_test_save_dir)
 
 av2_volume_test_save_dir = save_folder / "av2_volume_test"
 av2_volume_test_save_dir.mkdir(exist_ok=True, parents=True)
