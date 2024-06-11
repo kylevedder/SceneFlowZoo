@@ -5,6 +5,7 @@ import os
 from dataloaders import EvalWrapper
 from core_utils import ModelWrapper
 from typing import Optional
+import torch
 
 
 def get_rank() -> int:
@@ -35,6 +36,10 @@ def get_checkpoint_path(cfg: Config) -> Path:
 
 
 def setup_model(cfg: Config, evaluator: EvalWrapper, checkpoint: Optional[Path]):
+    if hasattr(cfg, "float32_matmul_precision"):
+        print(f"Setting float32_matmul_precision to {cfg.float32_matmul_precision}")
+        torch.set_float32_matmul_precision(cfg.float32_matmul_precision)
+
     if (hasattr(cfg, "is_trainable") and not cfg.is_trainable) or checkpoint is None:
         model = ModelWrapper(cfg, evaluator=evaluator)
     else:

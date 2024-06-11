@@ -11,6 +11,7 @@ from models.components.optimization.cost_functions import (
     PointwiseLossProblem,
     DistanceTransformLossProblem,
     TruncatedChamferLossProblem,
+    ChamferDistanceType,
     SpeedRegularizer,
 )
 from bucketed_scene_flow_eval.interfaces import LoaderType
@@ -190,6 +191,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         full_input_sequence: TorchFullFrameInputSequence,
         speed_threshold: float,
         chamfer_target_type: ChamferTargetType | str,
+        chamfer_distance_type: ChamferDistanceType | str,
     ) -> None:
         super().__init__(full_input_sequence)
         self.model = GigaChadRawMLP()
@@ -198,6 +200,10 @@ class GigachadNSFModel(BaseOptimizationModel):
         if isinstance(chamfer_target_type, str):
             chamfer_target_type = ChamferTargetType(chamfer_target_type)
         self.chamfer_target_type = chamfer_target_type
+
+        if isinstance(chamfer_distance_type, str):
+            chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
+        self.chamfer_distance_type = chamfer_distance_type
 
         self._prep_neural_prior(self.model)
 
@@ -326,6 +332,7 @@ class GigachadNSFModel(BaseOptimizationModel):
                     problem: BaseCostProblem = TruncatedChamferLossProblem(
                         warped_pc=anchor_pc,
                         target_pc=target_pc,
+                        distance_type=self.chamfer_distance_type,
                     )
                 case LossTypeEnum.DISTANCE_TRANSFORM:
                     raise NotImplementedError("Distance transform not implemented")
@@ -445,7 +452,12 @@ class GigachadNSFModel(BaseOptimizationModel):
 
 class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
     def __init__(
-        self, speed_threshold: float, chamfer_target_type: ChamferTargetType | str, *args, **kwargs
+        self,
+        speed_threshold: float,
+        chamfer_target_type: ChamferTargetType | str,
+        chamfer_distance_type: ChamferDistanceType | str = ChamferDistanceType.BOTH_DIRECTION,
+        *args,
+        **kwargs,
     ):
         super().__init__(model_class=GigachadNSFModel, *args, **kwargs)
         self.speed_threshold = speed_threshold
@@ -453,9 +465,15 @@ class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
             chamfer_target_type = ChamferTargetType(chamfer_target_type)
         self.chamfer_target_type = chamfer_target_type
 
+        if isinstance(chamfer_distance_type, str):
+            chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
+        self.chamfer_distance_type = chamfer_distance_type
+
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            speed_threshold=self.speed_threshold, chamfer_target_type=self.chamfer_target_type
+            speed_threshold=self.speed_threshold,
+            chamfer_target_type=self.chamfer_target_type,
+            chamfer_distance_type=self.chamfer_distance_type,
         )
