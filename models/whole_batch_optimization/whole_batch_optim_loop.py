@@ -84,6 +84,14 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         )
         save_pickle(save_path, raw_ego_flows, verbose=self.verbose)
 
+        # Save model weights
+        model_save_path = (
+            Path(logger.log_dir)
+            / f"dataset_idx_{problem.dataset_idx:010d}"
+            / f"opt_step_{optimization_step:08d}_weights.pth"
+        )
+        torch.save(model.state_dict(), model_save_path)
+
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
