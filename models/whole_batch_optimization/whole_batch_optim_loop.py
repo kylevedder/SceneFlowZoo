@@ -41,6 +41,8 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         compile_model: bool = False,
         save_flow_every: int | None = None,
         verbose: bool = True,
+        checkpoint: Path | None = None,
+        eval_only: bool = False,
     ):
         super().__init__()
         # Ensure model_class is a type that's a subtype of BaseWholeBatchOptimizationModel
@@ -57,6 +59,8 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         self.compile_model = compile_model
         self.save_flow_every = save_flow_every
         self.verbose = verbose
+        self.checkpoint = checkpoint
+        self.eval_only = eval_only
 
     def _save_intermediary_results(
         self,
@@ -107,9 +111,27 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         with torch.inference_mode(False):
             with torch.enable_grad():
                 model = self.model_class(**self._model_constructor_args(input_sequence))
+                # Load checkpoint weights
+                if self.checkpoint is not None:
+                    print(f"Loading checkpoint from {self.checkpoint}")
+                    model.load_state_dict(torch.load(self.checkpoint))
                 model = model.to(input_sequence.device).train()
 
                 title = f"Optimizing {self.model_class.__name__}" if self.verbose else None
+
+                if self.eval_only:
+                    assert (
+                        self.checkpoint is not None
+                    ), "Must provide checkpoint for evaluation; eval_only is True"
+                    print("Running in eval mode")
+                    with torch.inference_mode():
+                        with torch.no_grad():
+                            (output,) = model(
+                                ForwardMode.VAL,
+                                [input_sequence.detach().requires_grad_(False)],
+                                logger,
+                            )
+                    return output
 
                 return self.optimize(
                     model=model,
