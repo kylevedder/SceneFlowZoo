@@ -403,7 +403,6 @@ class GigachadNSFModel(BaseOptimizationModel):
     def optim_forward_single(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> BaseCostProblem:
-        print("optim_forward_single")
         assert isinstance(
             input_sequence, TorchFullFrameInputSequence
         ), f"Expected BucketedSceneFlowInputSequence, but got {type(input_sequence)}"

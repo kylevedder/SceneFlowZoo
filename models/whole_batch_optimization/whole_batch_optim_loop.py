@@ -144,6 +144,16 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
     def _setup_batcher(self, full_sequence: TorchFullFrameInputSequence) -> AbstractBatcher:
         return WholeBatchBatcher(full_sequence)
 
+    def _setup_optimizer(self, model: BaseOptimizationModel) -> torch.optim.Optimizer:
+        return torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+    def _setup_scheduler(
+        self, optimizer: torch.optim.Optimizer
+    ) -> torch.optim.lr_scheduler._LRScheduler:
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=50
+        )
+
     def optimize(
         self,
         logger: Logger,
@@ -154,6 +164,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         min_delta: float | None = None,
         title: str | None = "Optimizing Neur Rep",
         leave: bool = False,
+        early_stopping: bool = False,
     ) -> TorchFullFrameOutputSequence:
         model = model.train()
         if self.compile_model:
@@ -169,11 +180,11 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         if burn_in_steps is None:
             burn_in_steps = self.burn_in_steps
 
-        early_stopping = EarlyStopping(
+        early_stopper = EarlyStopping(
             burn_in_steps=burn_in_steps, patience=patience, min_delta=min_delta
         )
-        optimizer = torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-
+        optimizer = self._setup_optimizer(model)
+        scheduler = self._setup_scheduler(optimizer)
         batcher = self._setup_batcher(full_batch)
 
         lowest_cost = torch.inf
@@ -219,7 +230,8 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                     with torch.no_grad():
                         (best_output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
 
-            if early_stopping.step(total_cost):
+            scheduler.step(total_cost)
+            if early_stopping and early_stopper.step(total_cost):
                 break
 
         assert best_output is not None, "Best output is None; optimization failed"
