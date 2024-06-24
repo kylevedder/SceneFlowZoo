@@ -61,6 +61,15 @@ RUN pip install py-spy
 RUN pip install bucketed-scene-flow-eval==2.0.16
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
+RUN git clone https://github.com/thomgrand/torch_kdtree.git /torch_kdtree
+# Setup pybind11 manually so that it has 3.11 support
+RUN git clone https://github.com/pybind/pybind11.git /torch_kdtree/pybind11
+WORKDIR /torch_kdtree/pybind11
+# Peg pybind11 to known good commit
+RUN git checkout a406a62e5b3ca74a76b6db9a1cd7cf3578c50772
+WORKDIR /torch_kdtree
+RUN pip install .
+
 # Setup environment to support running as non-root user
 ENV HOME=/home/user
 RUN mkdir /payload_files
@@ -77,5 +86,7 @@ WORKDIR /project
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 777 /entrypoint.sh
 RUN chmod 777 /home
+
+ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:/ioctree:${PYTHONPATH}
 
 ENTRYPOINT ["/entrypoint.sh"]

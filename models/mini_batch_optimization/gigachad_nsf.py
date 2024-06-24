@@ -7,6 +7,7 @@ from models import BaseOptimizationModel
 from models.components.optimization.cost_functions import (
     BaseCostProblem,
     DistanceTransform,
+    TruncatedKDTreeLossProblem,
     AdditiveCosts,
     PointwiseLossProblem,
     DistanceTransformLossProblem,
@@ -20,11 +21,14 @@ import enum
 import torch
 import torch.nn as nn
 import tqdm
+from torch_kdtree import build_kd_tree
+from torch_kdtree.nn_distance import TorchKDTree
 
 
 class LossTypeEnum(enum.Enum):
     TRUNCATED_CHAMFER = 0
     DISTANCE_TRANSFORM = 1
+    TRUNCATED_KD_TREE = 2
 
 
 class QueryDirection(enum.Enum):
@@ -159,7 +163,7 @@ class GigaChadNSFPreprocessedInput:
     def get_full_global_pc(self, idx: int) -> torch.Tensor:
         return self.full_global_pcs[idx]
 
-    def get_global_lidar_auxillary_pc(self, idx: int) -> torch.Tensor:
+    def get_global_lidar_auxillary_pc(self, idx: int, with_grad: bool = True) -> torch.Tensor:
         lidar_pc = self.full_global_pcs[idx]
         lidar_mask = self.full_global_pcs_mask[idx]
         valid_pc = lidar_pc[lidar_mask]
@@ -170,13 +174,18 @@ class GigaChadNSFPreprocessedInput:
         # concatenate the camera pc to the lidar pc
         valid_pc = torch.cat([valid_pc, auxillary_pc], dim=0)
 
-        return valid_pc.clone().detach().requires_grad_(True)
+        if with_grad:
+            return valid_pc.clone().detach().requires_grad_(True)
+        return valid_pc.clone().detach()
 
-    def get_global_lidar_pc(self, idx: int) -> torch.Tensor:
+    def get_global_lidar_pc(self, idx: int, with_grad: bool = True) -> torch.Tensor:
         lidar_pc = self.full_global_pcs[idx]
         lidar_mask = self.full_global_pcs_mask[idx]
         valid_lidar_pc = lidar_pc[lidar_mask]
-        return valid_lidar_pc.clone().detach().requires_grad_(True)
+
+        if with_grad:
+            return valid_lidar_pc.clone().detach().requires_grad_(True)
+        return valid_lidar_pc.clone().detach()
 
     def get_full_pc_mask(self, idx: int) -> torch.Tensor:
         mask = self.full_global_pcs_mask[idx]
@@ -206,6 +215,22 @@ class GigachadNSFModel(BaseOptimizationModel):
         self.chamfer_distance_type = chamfer_distance_type
 
         self._prep_neural_prior(self.model)
+
+        self.kd_trees: list[TorchKDTree] | None = None
+
+    def _prep_kdtrees(self) -> list:
+        full_rep = self._preprocess(self.full_input_sequence)
+        kd_trees = []
+        for idx in tqdm.tqdm(range(len(full_rep)), desc="Building KD Trees"):
+            match self.chamfer_target_type:
+                case ChamferTargetType.LIDAR:
+                    target_pc = full_rep.get_global_lidar_pc(idx, with_grad=False)
+                case ChamferTargetType.LIDAR_CAMERA:
+                    target_pc = full_rep.get_global_lidar_auxillary_pc(idx, with_grad=False)
+
+            kd_tree = build_kd_tree(target_pc)
+            kd_trees.append(kd_tree)
+        return kd_trees
 
     def _prep_neural_prior(self, model: nn.Module):
         """
@@ -300,7 +325,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         rep: GigaChadNSFPreprocessedInput,
         k: int,
         query_direction: QueryDirection,
-        loss_type: LossTypeEnum = LossTypeEnum.TRUNCATED_CHAMFER,
+        loss_type: LossTypeEnum = LossTypeEnum.TRUNCATED_KD_TREE,
         speed_limit: float | None = None,
     ) -> BaseCostProblem:
         assert k >= 1, f"Expected k >= 1, but got {k}"
@@ -321,18 +346,30 @@ class GigachadNSFModel(BaseOptimizationModel):
 
             index_offset = (subk + 1) * query_direction.value
 
-            match self.chamfer_target_type:
-                case ChamferTargetType.LIDAR:
-                    target_pc = rep.get_global_lidar_pc(anchor_idx + index_offset)
-                case ChamferTargetType.LIDAR_CAMERA:
-                    target_pc = rep.get_global_lidar_auxillary_pc(anchor_idx + index_offset)
+            def _get_target_pc() -> torch.Tensor:
+                match self.chamfer_target_type:
+                    case ChamferTargetType.LIDAR:
+                        target_pc = rep.get_global_lidar_pc(anchor_idx + index_offset)
+                    case ChamferTargetType.LIDAR_CAMERA:
+                        target_pc = rep.get_global_lidar_auxillary_pc(anchor_idx + index_offset)
+                return target_pc
 
             match loss_type:
                 case LossTypeEnum.TRUNCATED_CHAMFER:
                     problem: BaseCostProblem = TruncatedChamferLossProblem(
                         warped_pc=anchor_pc,
-                        target_pc=target_pc,
+                        target_pc=_get_target_pc(),
                         distance_type=self.chamfer_distance_type,
+                    )
+                case LossTypeEnum.TRUNCATED_KD_TREE:
+                    if self.kd_trees is None:
+                        # Only invoke this if KD trees are being used and not already built
+                        self.kd_trees = self._prep_kdtrees()
+                    global_idx = rep.sequence_idxes[anchor_idx + index_offset]
+                    kd_tree = self.kd_trees[global_idx]
+                    problem = TruncatedKDTreeLossProblem(
+                        warped_pc=anchor_pc,
+                        torch_kdtree=kd_tree,
                     )
                 case LossTypeEnum.DISTANCE_TRANSFORM:
                     raise NotImplementedError("Distance transform not implemented")
@@ -368,6 +405,7 @@ class GigachadNSFModel(BaseOptimizationModel):
     def optim_forward_single(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> BaseCostProblem:
+        print("optim_forward_single")
         assert isinstance(
             input_sequence, TorchFullFrameInputSequence
         ), f"Expected BucketedSceneFlowInputSequence, but got {type(input_sequence)}"
