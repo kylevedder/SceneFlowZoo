@@ -2,7 +2,7 @@ from .base_cost_function import BaseCostProblem, AdditiveCosts, PointwiseLossPro
 from .truncated_chamfer_loss import TruncatedChamferLossProblem, ChamferDistanceType
 from .distance_transform import DistanceTransform, DistanceTransformLossProblem
 from .speed_regularizer import SpeedRegularizer
-from .truncated_kd_tree import TruncatedKDTreeLossProblem
+from .truncated_kd_tree import TruncatedKDTreeLossProblem, KDTreeWrapper
 
 __all__ = [
     "BaseCostProblem",
@@ -14,4 +14,5 @@ __all__ = [
     "DistanceTransformLossProblem",
     "PointwiseLossProblem",
     "TruncatedKDTreeLossProblem",
+    "KDTreeWrapper",
 ]

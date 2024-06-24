@@ -8,13 +8,46 @@ from pytorch3d.ops.knn import knn_gather, knn_points
 from pytorch3d.structures.pointclouds import Pointclouds
 from typing import Union
 import enum
-from torch_kdtree.nn_distance import TorchKDTree
+
+
+class KDTreeWrapper:
+
+    def __init__(self, ref_points: torch.Tensor) -> None:
+        if self._is_gpu():
+            self.kd_tree = self._build_gpu(ref_points)
+        else:
+            self.kd_tree = self._build_cpu(ref_points)
+
+    def _is_gpu(self) -> bool:
+        return torch.cuda.is_available()
+
+    def _build_gpu(self, ref_points: torch.Tensor):
+        from torch_kdtree import build_kd_tree
+
+        return build_kd_tree(ref_points)
+
+    def _build_cpu(self, ref_points: torch.Tensor):
+        from scipy.spatial import KDTree
+
+        return KDTree(ref_points.detach().cpu().numpy())
+
+    def _query_cpu(self, query_points: torch.Tensor, nr_nns_searches):
+        return self.kd_tree.query(query_points.detach().cpu().numpy(), k=nr_nns_searches)
+
+    def _query_gpu(self, query_points: torch.Tensor, nr_nns_searches):
+        return self.kd_tree.query(query_points, nr_nns_searches=nr_nns_searches)
+
+    def query(self, query_points: torch.Tensor, nr_nns_searches: int = 1):
+        if self._is_gpu():
+            return self._query_gpu(query_points, nr_nns_searches)
+        else:
+            return self._query_cpu(query_points, nr_nns_searches)
 
 
 @dataclass
 class TruncatedKDTreeLossProblem(BaseCostProblem):
     warped_pc: torch.Tensor
-    torch_kdtree: TorchKDTree
+    kdtree: KDTreeWrapper
     distance_threshold: Optional[float] = 2.0
 
     def __post_init__(self):
@@ -27,7 +60,7 @@ class TruncatedKDTreeLossProblem(BaseCostProblem):
         return warped_pc
 
     def _kd_tree_dists(self, query_points: torch.Tensor) -> torch.Tensor:
-        cham_x, _ = self.torch_kdtree.query(query_points, nr_nns_searches=1)
+        cham_x, _ = self.kdtree.query(query_points, nr_nns_searches=1)
         if self.distance_threshold is not None:
             cham_x[cham_x >= self.distance_threshold] = 0.0
         return cham_x.mean()

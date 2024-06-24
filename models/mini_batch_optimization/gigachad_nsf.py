@@ -14,6 +14,7 @@ from models.components.optimization.cost_functions import (
     TruncatedChamferLossProblem,
     ChamferDistanceType,
     SpeedRegularizer,
+    KDTreeWrapper,
 )
 from bucketed_scene_flow_eval.interfaces import LoaderType
 from pointclouds import to_fixed_array_torch
@@ -21,8 +22,6 @@ import enum
 import torch
 import torch.nn as nn
 import tqdm
-from torch_kdtree import build_kd_tree
-from torch_kdtree.nn_distance import TorchKDTree
 
 
 class LossTypeEnum(enum.Enum):
@@ -216,9 +215,9 @@ class GigachadNSFModel(BaseOptimizationModel):
 
         self._prep_neural_prior(self.model)
 
-        self.kd_trees: list[TorchKDTree] | None = None
+        self.kd_trees: list[KDTreeWrapper] | None = None
 
-    def _prep_kdtrees(self) -> list:
+    def _prep_kdtrees(self) -> list[KDTreeWrapper]:
         full_rep = self._preprocess(self.full_input_sequence)
         kd_trees = []
         for idx in tqdm.tqdm(range(len(full_rep)), desc="Building KD Trees"):
@@ -228,8 +227,7 @@ class GigachadNSFModel(BaseOptimizationModel):
                 case ChamferTargetType.LIDAR_CAMERA:
                     target_pc = full_rep.get_global_lidar_auxillary_pc(idx, with_grad=False)
 
-            kd_tree = build_kd_tree(target_pc)
-            kd_trees.append(kd_tree)
+            kd_trees.append(KDTreeWrapper(target_pc))
         return kd_trees
 
     def _prep_neural_prior(self, model: nn.Module):
@@ -369,7 +367,7 @@ class GigachadNSFModel(BaseOptimizationModel):
                     kd_tree = self.kd_trees[global_idx]
                     problem = TruncatedKDTreeLossProblem(
                         warped_pc=anchor_pc,
-                        torch_kdtree=kd_tree,
+                        kdtree=kd_tree,
                     )
                 case LossTypeEnum.DISTANCE_TRANSFORM:
                     raise NotImplementedError("Distance transform not implemented")
