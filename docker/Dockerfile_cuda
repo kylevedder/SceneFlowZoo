@@ -18,7 +18,7 @@ RUN conda update -y conda
 
 ENV FORCE_CUDA="1"
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0"
-RUN conda install -y numpy python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
+RUN conda install -y numpy=1.26 python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
 # Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
 RUN conda install -y matplotlib=3.8
 
@@ -33,7 +33,7 @@ RUN pip install -v .
 
 # YAPF versions newer than this break the MMCV config system
 RUN pip install yapf==0.40.1
-RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.4 imageio black isort nntime
+RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.5 imageio black isort nntime
 RUN pip install mmcv==2.2.0
 
 

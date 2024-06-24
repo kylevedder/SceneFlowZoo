@@ -18,7 +18,7 @@ RUN conda update -y conda
 RUN apt install -y apt-utils
 
 ENV FORCE_CUDA="0"
-RUN conda install -y numpy python=3.11 python=3.11 pytorch==2.3 torchvision torchaudio cpuonly fvcore iopath -c pytorch -c pytorch3d -c fvcore -c iopath -c conda-forge
+RUN conda install -y numpy=1.26 python=3.11 pytorch==2.3 torchvision torchaudio cpuonly fvcore iopath -c pytorch -c pytorch3d -c fvcore -c iopath -c conda-forge
 
 # Install PyTorch3d from source
 RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
@@ -31,7 +31,7 @@ RUN pip install -v .
 
 # YAPF versions newer than this break the MMCV config system
 RUN pip install yapf==0.40.1
-RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.4 imageio black isort nntime
+RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.5 imageio black isort nntime
 # This is required for Open3D to not blow up on startup
 RUN apt install -y freeglut3-dev
 RUN pip install mmcv==2.2.0
