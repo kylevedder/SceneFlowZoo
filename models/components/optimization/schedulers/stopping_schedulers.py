@@ -73,6 +73,7 @@ class ReduceLROnPlateauWithFloorRestart(StoppingScheduler):
         self.best: float | None = None
         self.last_epoch = 0
         self.num_bad_epochs = 0
+        self.track_early_stopping = False
 
     def _set_lr(self, lr: float):
         for param_group in self.optimizer.param_groups:
@@ -89,16 +90,18 @@ class ReduceLROnPlateauWithFloorRestart(StoppingScheduler):
             group["lr"] < self.restart_min_lr for group in self.optimizer.param_groups
         )
 
-        if under_threshold and self.restart_counter < self.num_restarts:
-            # Perform restart
-            self.restart_counter += 1
-            self.num_bad_epochs = 0
-            self._set_lr(self.restart_max_lr)
-            return
-
         if under_threshold:
-            # If we're under the threshold, then there's nothing else to be done.
-            return
+            if self.restart_counter < self.num_restarts:
+                # Perform restart
+                self.restart_counter += 1
+                self.num_bad_epochs = 0
+                self._set_lr(self.restart_max_lr)
+                return
+            else:
+                # We are not cranking down the LR anymore, and we don't have any restarts left,
+                # so we can start tracking early stopping.
+                self.track_early_stopping = True
+                return
 
         # If we're not under the threshold, then we can reduce the lr
         new_lr = self.optimizer.param_groups[0]["lr"] * self.reduction_factor
@@ -121,7 +124,6 @@ class ReduceLROnPlateauWithFloorRestart(StoppingScheduler):
 
         self._last_lr = [group["lr"] for group in self.optimizer.param_groups]
 
-        if self.restart_counter >= self.num_restarts:
-            # Only invoke the early stopping if we've reached the max number of restarts
+        if self.track_early_stopping:
             return self.early_stopping.step(current)
         return False
