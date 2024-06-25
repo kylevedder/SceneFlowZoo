@@ -8,6 +8,8 @@ from models import ForwardMode
 from .whole_batch_optim_loop import WholeBatchOptimizationLoop
 from .nsfp_model import NSFPCycleConsistencyModel, WholeBatchNSFPPreprocessedInput
 from .fast_nsf_model import FastNSFModel, FastNSFModelOptimizationLoop
+from models.components.optimization.utils import EarlyStopping
+from models.components.optimization.schedulers import SchedulerBuilder
 from models.components.optimization.cost_functions import (
     BaseCostProblem,
     TruncatedChamferLossProblem,
@@ -152,19 +154,28 @@ class Liu2024OptimizationLoop(WholeBatchOptimizationLoop):
 
         super().__init__(
             model_class=Liu2024FusionModel,
-            patience=fusion_early_patience,
+            scheduler=SchedulerBuilder(
+                "StoppingScheduler",
+                {"early_stopping": EarlyStopping(patience=fusion_early_patience)},
+            ),
             *args,
             **kwargs,
         )
 
         self.forward_optmization_loop = FastNSFModelOptimizationLoop(
-            patience=forward_early_patience,
+            scheduler=SchedulerBuilder(
+                "StoppingScheduler",
+                {"early_stopping": EarlyStopping(patience=forward_early_patience)},
+            ),
             *args,
             **kwargs,
         )
 
         self.reverse_optmization_loop = FastNSFModelOptimizationLoop(
-            patience=reverse_early_patience,
+            scheduler=SchedulerBuilder(
+                "StoppingScheduler",
+                {"early_stopping": EarlyStopping(patience=reverse_early_patience)},
+            ),
             *args,
             **kwargs,
         )
