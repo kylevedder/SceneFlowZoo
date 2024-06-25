@@ -2,6 +2,11 @@ import torch
 import tqdm
 from models.components.optimization.cost_functions import BaseCostProblem
 from models.components.optimization.utils import EarlyStopping
+from models.components.optimization.schedulers import (
+    StoppingScheduler,
+    ReduceLROnPlateauWithFloorRestart,
+    SchedulerBuilder,
+)
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from typing import Optional
 import numpy as np
@@ -32,11 +37,11 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
     def __init__(
         self,
         model_class: type[BaseOptimizationModel],
+        scheduler: SchedulerBuilder | dict[str, object] = SchedulerBuilder(
+            "StoppingScheduler", {"early_stopping": EarlyStopping()}
+        ),
         epochs: int = 5000,
         lr: float = 0.008,
-        burn_in_steps: int = 0,
-        patience: int = 100,
-        min_delta: float = 0.00005,
         weight_decay: float = 0,
         compile_model: bool = False,
         save_flow_every: int | None = None,
@@ -50,17 +55,44 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
             model_class, BaseOptimizationModel
         ), f"model_class must be a subclass of BaseWholeBatchOptimizationModel, but got {model_class}"
         self.model_class = model_class
+
+        if isinstance(scheduler, dict):
+            scheduler = SchedulerBuilder(scheduler["name"], scheduler["args"])
+        self.scheduler_builder = scheduler
+
         self.epochs = epochs
         self.lr = lr
         self.weight_decay = weight_decay
-        self.burn_in_steps = burn_in_steps
-        self.patience = patience
-        self.min_delta = min_delta
+
         self.compile_model = compile_model
         self.save_flow_every = save_flow_every
         self.verbose = verbose
         self.checkpoint = checkpoint
         self.eval_only = eval_only
+
+    def _save_model_state(
+        self,
+        model: BaseOptimizationModel,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler,
+        dataset_idx: int,
+        epoch: int,
+        logger: Logger,
+    ) -> None:
+        checkpoint = {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "epoch": epoch,
+        }
+        model_save_path = (
+            Path(logger.log_dir)
+            / f"dataset_idx_{dataset_idx:010d}"
+            / f"epoch_{epoch:08d}_checkpoint.pth"
+        )
+        # Make parent directory if it doesn't exist
+        model_save_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(checkpoint, model_save_path)
 
     def _save_intermediary_results(
         self,
@@ -69,6 +101,13 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         logger: Logger,
         optimization_step: int,
     ) -> None:
+        model_save_path = (
+            Path(logger.log_dir)
+            / f"dataset_idx_{problem.dataset_idx:010d}"
+            / f"opt_step_{optimization_step:08d}_weights.pth"
+        )
+        torch.save(model.state_dict(), model_save_path)
+
         with torch.inference_mode():
             with torch.no_grad():
                 (output,) = model(ForwardMode.VAL, [problem], logger)
@@ -87,14 +126,6 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
             / f"opt_step_{optimization_step:08d}.pkl"
         )
         save_pickle(save_path, raw_ego_flows, verbose=self.verbose)
-
-        # Save model weights
-        model_save_path = (
-            Path(logger.log_dir)
-            / f"dataset_idx_{problem.dataset_idx:010d}"
-            / f"opt_step_{optimization_step:08d}_weights.pth"
-        )
-        torch.save(model.state_dict(), model_save_path)
 
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence
@@ -147,44 +178,21 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
     def _setup_optimizer(self, model: BaseOptimizationModel) -> torch.optim.Optimizer:
         return torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
-    def _setup_scheduler(
-        self, optimizer: torch.optim.Optimizer
-    ) -> torch.optim.lr_scheduler._LRScheduler:
-        return torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=50
-        )
-
     def optimize(
         self,
         logger: Logger,
         model: BaseOptimizationModel,
         full_batch: TorchFullFrameInputSequence,
-        burn_in_steps: int | None = None,
-        patience: int | None = None,
-        min_delta: float | None = None,
         title: str | None = "Optimizing Neur Rep",
         leave: bool = False,
-        early_stopping: bool = False,
     ) -> TorchFullFrameOutputSequence:
         model = model.train()
         if self.compile_model:
             model = torch.compile(model)
         full_batch = full_batch.clone().detach().requires_grad_(True)
 
-        if patience is None:
-            patience = self.patience
-
-        if min_delta is None:
-            min_delta = self.min_delta
-
-        if burn_in_steps is None:
-            burn_in_steps = self.burn_in_steps
-
-        early_stopper = EarlyStopping(
-            burn_in_steps=burn_in_steps, patience=patience, min_delta=min_delta
-        )
         optimizer = self._setup_optimizer(model)
-        scheduler = self._setup_scheduler(optimizer)
+        scheduler = self.scheduler_builder.to_scheduler(optimizer)
         batcher = self._setup_batcher(full_batch)
 
         lowest_cost = torch.inf
@@ -214,14 +222,11 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                 total_cost += cost.item()
                 minibatch_bar.set_postfix(cost=f"{cost.item():0.6f}")
 
-            if self.save_flow_every is not None and epoch_idx % self.save_flow_every == 0:
-                self._save_intermediary_results(model, full_batch, logger, epoch_idx)
-
-            logger.log_metrics(
-                {f"log/{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}": total_cost},
-                step=epoch_idx,
-            )
-            epoch_bar.set_postfix(cost=f"{total_cost / len(batcher):0.6f}")
+            if self.save_flow_every is not None:
+                if epoch_idx % self.save_flow_every == 0 or epoch_idx == self.epochs - 1:
+                    self._save_model_state(
+                        model, optimizer, scheduler, full_batch.dataset_idx, epoch_idx, logger
+                    )
 
             if total_cost < lowest_cost:
                 lowest_cost = total_cost
@@ -230,8 +235,21 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                     with torch.no_grad():
                         (best_output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
 
-            scheduler.step(total_cost)
-            if early_stopping and early_stopper.step(total_cost):
+            should_exit = scheduler.step(total_cost)
+
+            logger.log_metrics(
+                {
+                    f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}/total_cost": total_cost,
+                    f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}/lr": np.mean(
+                        scheduler.get_last_lr()
+                    ),
+                },
+                step=epoch_idx,
+            )
+
+            epoch_bar.set_postfix(cost=f"{total_cost / len(batcher):0.6f}")
+
+            if should_exit:
                 break
 
         assert best_output is not None, "Best output is None; optimization failed"

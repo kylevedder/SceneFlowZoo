@@ -1,6 +1,3 @@
-import torch
-import time
-from collections import defaultdict
 import enum
 import numpy as np
 
@@ -15,8 +12,8 @@ class EarlyStopping:
         self,
         burn_in_steps: int = 0,
         mode: EarlyStoppingMode = EarlyStoppingMode.MIN,
-        min_delta: float = 0,
-        patience: int = 10,
+        min_delta: float = 0.001,
+        patience: int = 150,
         percentage: bool = False,
     ):
         self.burn_in_steps = burn_in_steps
