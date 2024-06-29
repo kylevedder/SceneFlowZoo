@@ -1,4 +1,5 @@
 is_trainable = False
+has_labels = False
 
 test_dataset_root = "/tmp/argoverse2_small/val/"
 save_output_folder = "/tmp/argoverse2_small/val_ntp_out/"
@@ -33,7 +34,7 @@ test_dataset = dict(
         eval_type="bucketed_epe",
         eval_args=dict(),
         subsequence_length=SEQUENCE_LENGTH,
-        set_length=4,
+        set_length=1,
     ),
 )
 
