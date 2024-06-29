@@ -15,7 +15,7 @@ model = dict(
     args=dict(
         minibatch_size=4,
         lr=0.003,
-        epochs=2,
+        epochs=1,
         scheduler=dict(
             name="PassThroughScheduler",
             args=dict(schedule_name="StepLR", schedule_args=dict(step_size=500, gamma=0.5)),
@@ -26,14 +26,14 @@ model = dict(
 test_dataset = dict(
     name="TorchFullFrameDataset",
     args=dict(
-        dataset_name="Argoverse2CausalSceneFlow",
+        dataset_name="Argoverse2NonCausalSceneFlow",
         root_dir=test_dataset_root,
         with_ground=False,
         with_rgb=False,
         eval_type="bucketed_epe",
         eval_args=dict(),
         subsequence_length=SEQUENCE_LENGTH,
-        set_length=2,
+        set_length=4,
     ),
 )
 
