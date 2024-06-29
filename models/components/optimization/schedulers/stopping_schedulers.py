@@ -1,7 +1,9 @@
 import torch
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler, LambdaLR
+from torch.optim import lr_scheduler
+from torch.optim.lr_scheduler import *
 from models.components.optimization.utils import EarlyStopping
+from dataclasses import dataclass
 
 
 class StoppingScheduler(LRScheduler):
@@ -40,6 +42,28 @@ class StoppingScheduler(LRScheduler):
 
     def get_lr(self):
         return [param_group["lr"] for param_group in self.optimizer.param_groups]
+
+
+class PassThroughScheduler(StoppingScheduler):
+
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        schedule_name: str,
+        schedule_args: dict[str, object],
+        early_stopping: EarlyStopping | dict[str, object] = EarlyStopping.no_stopping(),
+    ):
+        super().__init__(optimizer, early_stopping)
+        self.scheduler: LRScheduler = getattr(lr_scheduler, schedule_name)(
+            optimizer, **schedule_args
+        )
+
+    def get_lr(self):
+        return self.scheduler.get_lr()
+
+    def step(self, metric: float) -> bool:  # type: ignore
+        self.scheduler.step()
+        return super().step(metric)
 
 
 class ReduceLROnPlateauWithFloorRestart(StoppingScheduler):

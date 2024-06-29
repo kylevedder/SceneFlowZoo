@@ -25,6 +25,10 @@ class EarlyStopping:
         self.percentage = percentage
         self.total_steps = 0
 
+    @staticmethod
+    def no_stopping():
+        return EarlyStopping(patience=0)
+
     def _is_better(self, current_perf_metric: float) -> bool:
         if self.patience == 0:
             return True

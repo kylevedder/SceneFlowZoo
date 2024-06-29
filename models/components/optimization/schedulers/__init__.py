@@ -1,7 +1,11 @@
 import torch
 from dataclasses import dataclass
 
-from .stopping_schedulers import StoppingScheduler, ReduceLROnPlateauWithFloorRestart
+from .stopping_schedulers import (
+    StoppingScheduler,
+    ReduceLROnPlateauWithFloorRestart,
+    PassThroughScheduler,
+)
 
 
 @dataclass
@@ -30,6 +34,7 @@ def construct_scheduler(
 
 importable_schedulers = [
     StoppingScheduler,
+    PassThroughScheduler,
     ReduceLROnPlateauWithFloorRestart,
 ]
 

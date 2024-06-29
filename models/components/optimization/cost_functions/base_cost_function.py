@@ -20,6 +20,17 @@ class BaseCostProblem(ABC):
 
 
 @dataclass
+class PassthroughCostProblem(BaseCostProblem):
+    cost: torch.Tensor
+
+    def base_cost(self) -> torch.Tensor:
+        return self.cost
+
+    def __repr__(self) -> str:
+        return f"PassthroughCost({self.cost} * {self.cost_scalar})"
+
+
+@dataclass
 class AdditiveCosts(BaseCostProblem):
     costs: list[BaseCostProblem]
 
