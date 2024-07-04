@@ -5,12 +5,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 import logging
+from dataclasses import dataclass
 
 from .nsfp_raw_mlp import NSFPRawMLP, ActivationFn
 
 
 def load_pretrained_traj_field(pth_file, traj_len, options):
-    net = NeuralTrajField(
+    net = NeuralTrajectoryField(
         traj_len=traj_len,
         filter_size=options.hidden_units,
         act_fn=options.act_fn,
@@ -29,50 +30,49 @@ def get_traj_field(pc, ref_id, traj_field):
     return traj_rt["traj"]
 
 
-class VelocityTrajDecoder(nn.Module):
+@dataclass
+class DecodedTrajectory:
+    global_positions: torch.Tensor
+    t: int
+
+    def get_next_position(self):
+        return self.global_positions[:, self.t + 1, :]
+
+    def get_previous_position(self):
+        return self.global_positions[:, self.t - 1, :]
+
+
+class VelocityTrajectoryDecoder(nn.Module):
     def __init__(self, traj_len):
         super().__init__()
         self.traj_rep_dim = (traj_len - 1) * 3
         self.traj_len = traj_len
 
-    def forward(self, traj_rep, t, do_fwd_flow=False, do_bwd_flow=False, do_full_traj=False):
-        traj_rep = traj_rep.view(-1, self.traj_len - 1, 3)
-        result = {}
-        if do_bwd_flow:
-            if t == 0:
-                result["flow_bwd"] = torch.zeros(
-                    traj_rep.shape[0], 3, dtype=traj_rep.dtype, device=traj_rep.device
-                )
-            else:
-                result["flow_bwd"] = -traj_rep[:, t - 1, :]
+    def forward(
+        self, global_pc: torch.Tensor, global_forward_deltas: torch.Tensor, t: int
+    ) -> DecodedTrajectory:
+        """
+        Decode the global forward deltas, which are relative to the global_pc, into global positions.
 
-        if do_fwd_flow:
-            if t == self.traj_len - 1:
-                result["flow_fwd"] = torch.zeros(
-                    traj_rep.shape[0], 3, dtype=traj_rep.dtype, device=traj_rep.device
-                )
-            else:
-                result["flow_fwd"] = traj_rep[:, t, :]
+        The forward deltas from before t need to be inverted to be relative to the global_pc at t.
+        """
 
-        if do_full_traj:
-            cumulative_traj = torch.cumsum(traj_rep, 1)
-            result["traj"] = torch.cat(
-                [
-                    torch.zeros(
-                        traj_rep.shape[0], 1, 3, dtype=traj_rep.dtype, device=traj_rep.device
-                    ),
-                    cumulative_traj,
-                ],
-                1,
-            )
+        # Shape is N x traj_deltas x 3
+        # These are the forward deltas from 0 to N - 1
+        assert 0 <= t < self.traj_len, f"t must be in [0, {self.traj_len}), but got {t}"
 
-        return result
+        global_before_deltas = global_forward_deltas[:, :t, :]
+        global_before_positions = (
+            torch.cumsum(-global_before_deltas.flip(1), 1) + global_pc.unsqueeze(1)
+        ).flip(1)
 
-    def transform_pts(self, flow, pts):
-        return pts + flow
+        global_after_deltas = global_forward_deltas[:, t:, :]
+        global_after_positions = torch.cumsum(global_after_deltas, 1) + global_pc.unsqueeze(1)
 
-    def extract_flow(self, t0, t1, traj):
-        return traj[:, t1, :] - traj[:, t0, :]
+        global_positions = torch.cat(
+            [global_before_positions, global_pc.unsqueeze(1), global_after_positions], 1
+        )
+        return DecodedTrajectory(global_positions, t)
 
 
 class BaseSpatialTemporalEmbedding(nn.Module):
@@ -86,6 +86,25 @@ class BaseSpatialTemporalEmbedding(nn.Module):
         t : scalar
         """
         return torch.cat([x, torch.full((x.shape[0], 1), t, device=x.device, dtype=x.dtype)], -1)
+
+
+class TrajectoryNeuralRep(NSFPRawMLP):
+
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        latent_dim: int,
+        traj_len: int,
+        act_fn: ActivationFn = ActivationFn.RELU,
+        num_layers: int = 8,
+    ):
+        super().__init__(input_dim, output_dim, latent_dim, act_fn, num_layers)
+        self.trajectory_len = traj_len
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Reshape the base output to be a trajectory representation
+        return super().forward(x).view(-1, self.trajectory_len - 1, 3)
 
 
 def cosine_embed(x, num_freq, freq_sample_method="log", scale=1):
@@ -110,23 +129,22 @@ class FourierSpatialTemporalEmbedding(BaseSpatialTemporalEmbedding):
         assert isinstance(x, torch.Tensor), f"x must be a tensor, but got {x} of type {type(x)}."
         assert x.shape[1] == 3, f"x must have 3 channels, but got {x.shape[1]}."
         assert isinstance(t, int), f"t must be an integer, but got {t} of type {type(t)}."
-        t = torch.full(
+        t_torch = torch.full(
             size=(1,),
             fill_value=(t + 0.5) / self.traj_len,
             device=x.device,
             dtype=x.dtype,
         )
-        t_embed = cosine_embed(t, self.n_freq, freq_sample_method="log")
+        t_embed = cosine_embed(t_torch, self.n_freq, freq_sample_method="log")
         t_embed_t = t_embed.view(1, self.n_freq).repeat(x.shape[0], 1)
         return torch.cat([x, t_embed_t], -1)
 
 
-class NeuralTrajField(nn.Module):
+class NeuralTrajectoryField(nn.Module):
     def __init__(
         self,
-        traj_len,
-        filter_size=128,
-        act_fn="relu",
+        traj_len: int,
+        filter_size: int = 128,
     ):
         super().__init__()
         self.traj_len = traj_len
@@ -136,52 +154,35 @@ class NeuralTrajField(nn.Module):
         )
 
         self.input_dim = self.embed_func.embedding_dim
-        self.traj_decoder = VelocityTrajDecoder(traj_len=self.traj_len)
+        self.traj_decoder = VelocityTrajectoryDecoder(traj_len=self.traj_len)
 
         self.output_dim = self.traj_decoder.traj_rep_dim
-        self.neural_field = NSFPRawMLP(
+        self.neural_field = TrajectoryNeuralRep(
             input_dim=self.input_dim,
             output_dim=self.output_dim,
             latent_dim=filter_size,
-            act_fn=ActivationFn(act_fn),
+            traj_len=self.traj_len,
         )
 
-    def forward(self, x, t, do_fwd_flow=False, do_bwd_flow=False, do_full_traj=False):
-        xt_embed = self.embed_func(x, t)
+    def forward(self, global_pc: torch.Tensor, t: int) -> DecodedTrajectory:
+        xt_embed = self.embed_func(global_pc, t)
         traj_rep = self.neural_field(xt_embed)
-        result = self.traj_decoder(traj_rep, t, do_fwd_flow, do_bwd_flow, do_full_traj)
-        result["traj_rep"] = traj_rep
+        result = self.traj_decoder(global_pc, traj_rep, t)
         return result
 
-    def transform_pts(self, flow, pts):
-        return self.traj_decoder.transform_pts(flow, pts)
+    # def compute_traj_consist_loss(self, traj1, traj2, ref_pts1, ref_pts2, t1, t2, loss_type):
+    #     # debug_ref_pts1 = ref_pts1.unsqueeze(-2)
+    #     # debug_traj_sample1 = traj1[:, t1:t1+1, :]
+    #     # debug_idmap1 = (ref_pts1.unsqueeze(-2) -  traj1[:, t1:t1+1, :])
+    #     # debug_idmap2 = (ref_pts2.unsqueeze(-2) -  traj1[:, t2:t2+1, :])
+    #     # debug_is_same = torch.allclose(debug_idmap1, debug_idmap2, equal_nan=True)
+    #     traj1 = traj1 + (ref_pts1.unsqueeze(-2) - traj1[:, t1 : t1 + 1, :])
+    #     traj2 = traj2 + (ref_pts2.unsqueeze(-2) - traj1[:, t2 : t2 + 1, :])
+    #     if loss_type == "velocity":
+    #         traj1_rep = traj1[:, 1:, :] - traj1[:, :-1, :]
+    #         traj2_rep = traj2[:, 1:, :] - traj2[:, :-1, :]
+    #     else:
+    #         traj1_rep = traj1 - traj1.mean(-2, keepdims=True)
+    #         traj2_rep = traj2 - traj2.mean(-2, keepdims=True)
 
-    def traj_to_pts(self, traj, pts):
-        pts_traj = self.traj_decoder.transform_pts(
-            traj.contiguous().view(-1, *traj.shape[2:]),
-            pts.unsqueeze(1).repeat(1, self.traj_len, 1).view(-1, 3),
-        )
-        return pts_traj.view(-1, self.traj_len, 3)
-
-    def extract_flow(self, t0, t1, traj):
-        return self.traj_decoder.extract_flow(t0, t1, traj)
-
-    def compute_direct_traj_consist_loss(self, traj1, traj2):
-        return ((traj1 - traj2) ** 2).mean()
-
-    def compute_traj_consist_loss(self, traj1, traj2, ref_pts1, ref_pts2, t1, t2, loss_type):
-        # debug_ref_pts1 = ref_pts1.unsqueeze(-2)
-        # debug_traj_sample1 = traj1[:, t1:t1+1, :]
-        # debug_idmap1 = (ref_pts1.unsqueeze(-2) -  traj1[:, t1:t1+1, :])
-        # debug_idmap2 = (ref_pts2.unsqueeze(-2) -  traj1[:, t2:t2+1, :])
-        # debug_is_same = torch.allclose(debug_idmap1, debug_idmap2, equal_nan=True)
-        traj1 = traj1 + (ref_pts1.unsqueeze(-2) - traj1[:, t1 : t1 + 1, :])
-        traj2 = traj2 + (ref_pts2.unsqueeze(-2) - traj1[:, t2 : t2 + 1, :])
-        if loss_type == "velocity":
-            traj1_rep = traj1[:, 1:, :] - traj1[:, :-1, :]
-            traj2_rep = traj2[:, 1:, :] - traj2[:, :-1, :]
-        else:
-            traj1_rep = traj1 - traj1.mean(-2, keepdims=True)
-            traj2_rep = traj2 - traj2.mean(-2, keepdims=True)
-
-        return ((traj1_rep - traj2_rep) ** 2).mean()
+    #     return ((traj1_rep - traj2_rep) ** 2).mean()

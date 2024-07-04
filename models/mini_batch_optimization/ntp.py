@@ -1,6 +1,6 @@
 from pytorch_lightning.loggers.logger import Logger
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop, MinibatchedSceneFlowInputSequence
-from models.components.neural_reps import NeuralTrajField
+from models.components.neural_reps import NeuralTrajectoryField, DecodedTrajectory
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from dataclasses import dataclass
 from models import BaseOptimizationModel
@@ -23,6 +23,43 @@ import enum
 import torch
 import torch.nn as nn
 import tqdm
+from bucketed_scene_flow_eval.datastructures import O3DVisualizer, PointCloud
+
+
+# @dataclass
+# class NTPTrajectoryConsistencyProblem(BaseCostProblem):
+#     before_trajectory: DecodedTrajectory
+#     query_trajectory: DecodedTrajectory
+#     after_trajectory: DecodedTrajectory
+
+#     def base_cost(self) -> torch.Tensor:
+#         """
+#         All trajectories are in global coordinates, and we are just computing the mean of the L2 squared distance between the positions.
+#         """
+
+#         before_query_diff = (
+#             self.before_trajectory.global_positions - self.query_trajectory.global_positions
+#         ) ** 2
+#         after_query_diff = (
+#             self.after_trajectory.global_positions - self.query_trajectory.global_positions
+#         ) ** 2
+
+#         return before_query_diff.mean() + after_query_diff.mean()
+
+
+@dataclass
+class NTPTrajectoryConsistencyProblem(BaseCostProblem):
+    t1: DecodedTrajectory
+    t2: DecodedTrajectory
+
+    def base_cost(self) -> torch.Tensor:
+        """
+        All trajectories are in global coordinates, and we are just computing the mean of the L2 squared distance between the positions.
+        """
+
+        position_diff = (self.t1.global_positions - self.t2.global_positions) ** 2
+
+        return position_diff.mean()
 
 
 @dataclass
@@ -87,7 +124,7 @@ class NTPModel(BaseOptimizationModel):
     ) -> None:
         super().__init__(full_input_sequence)
         print(f"full_input_sequence: {len(full_input_sequence)}")
-        self.model = NeuralTrajField(
+        self.model = NeuralTrajectoryField(
             traj_len=len(full_input_sequence),
         )
         self.consistency_loss_weight = consistency_loss_weight
@@ -133,29 +170,35 @@ class NTPModel(BaseOptimizationModel):
             sequence_total_length=sequence_total_length,
         )
 
-    def _make_chamfer_losses(
+    def _make_trajectory_consistency_losses(
         self,
-        rep: NTPPreprocessedInput,
-        query_index: int,
-        before_idx: int,
-        after_idx: int,
-        estimated_trajectory: dict[str, torch.Tensor],
+        before_trajectory: DecodedTrajectory,
+        query_trajectory: DecodedTrajectory,
+        after_trajectory: DecodedTrajectory,
     ) -> BaseCostProblem:
-        query_pc = rep.get_global_lidar_pc(query_index)
-        est_before_pc = self.model.transform_pts(estimated_trajectory["flow_fwd"], query_pc)
-        est_after_pc = self.model.transform_pts(estimated_trajectory["flow_bwd"], query_pc)
+        return AdditiveCosts(
+            [
+                NTPTrajectoryConsistencyProblem(before_trajectory, query_trajectory),
+                NTPTrajectoryConsistencyProblem(query_trajectory, after_trajectory),
+            ]
+        )
 
-        before_pc = rep.get_global_lidar_pc(before_idx)
-        after_pc = rep.get_global_lidar_pc(after_idx)
+    def _make_neighbor_chamfer_losses(
+        self,
+        query_trajectory: DecodedTrajectory,
+        gt_before_pc: torch.Tensor,
+        gt_after_pc: torch.Tensor,
+    ) -> BaseCostProblem:
+        est_before_pc = query_trajectory.get_previous_position()
+        est_after_pc = query_trajectory.get_next_position()
 
-        # Traditional forward and backward chamfer losses
         return AdditiveCosts(
             [
                 TruncatedChamferLossProblem(
-                    est_before_pc, before_pc, distance_type=ChamferDistanceType.BOTH_DIRECTION
+                    est_before_pc, gt_before_pc, distance_type=ChamferDistanceType.BOTH_DIRECTION
                 ),
                 TruncatedChamferLossProblem(
-                    est_after_pc, after_pc, distance_type=ChamferDistanceType.BOTH_DIRECTION
+                    est_after_pc, gt_after_pc, distance_type=ChamferDistanceType.BOTH_DIRECTION
                 ),
             ]
         )
@@ -167,65 +210,67 @@ class NTPModel(BaseOptimizationModel):
         # Query index is 1 to n-2 because we need to preserve there being and additional before and after point.
 
         cost_problems: list[BaseCostProblem] = []
-        for query_index in range(1, len(rep) - 1):
-            before_idx = query_index - 1
-            after_idx = query_index + 1
+        for local_query_index in range(1, len(rep) - 1):
+            local_before_idx = local_query_index - 1
+            local_after_idx = local_query_index + 1
 
-            query_trajectory: dict[str, torch.Tensor] = self.model(
-                rep.get_global_lidar_pc(query_index),
-                rep.sequence_idxes[query_index],
-                do_fwd_flow=True,
-                do_bwd_flow=True,
-                do_full_traj=True,
+            gt_query_pc = rep.get_global_lidar_pc(local_query_index)
+
+            # Base trajectory
+            query_trajectory: DecodedTrajectory = self.model(
+                gt_query_pc,
+                rep.sequence_idxes[local_query_index],
             )
 
-            query_pc = rep.get_global_lidar_pc(query_index)
-
-            est_before_pc = self.model.transform_pts(query_trajectory["flow_fwd"], query_pc)
-            est_after_pc = self.model.transform_pts(query_trajectory["flow_bwd"], query_pc)
-
-            before_trajectory: dict[str, torch.Tensor] = self.model(
-                est_before_pc,
-                rep.sequence_idxes[before_idx],
-                do_fwd_flow=True,
-                do_bwd_flow=False,
-                do_full_traj=True,
-            )
-            after_trajectory: dict[str, torch.Tensor] = self.model(
-                est_after_pc,
-                rep.sequence_idxes[after_idx],
-                do_fwd_flow=False,
-                do_bwd_flow=True,
-                do_full_traj=True,
-            )
-
-            forward_consistency_loss: torch.Tensor = self.model.compute_traj_consist_loss(
-                query_trajectory["traj"],
-                after_trajectory["traj"],
-                query_pc,
-                est_after_pc,
-                rep.sequence_idxes[query_index],
-                rep.sequence_idxes[after_idx],
-                loss_type="velocity",
-            )
-
-            backward_consistency_loss: torch.Tensor = self.model.compute_traj_consist_loss(
-                query_trajectory["traj"],
-                before_trajectory["traj"],
-                query_pc,
-                est_before_pc,
-                rep.sequence_idxes[query_index],
-                rep.sequence_idxes[before_idx],
-                loss_type="velocity",
-            )
-
+            # Standard Chamfer based scene flow loss for clouds just before and just after.
             cost_problems.append(
-                self._make_chamfer_losses(rep, query_index, before_idx, after_idx, query_trajectory)
+                self._make_neighbor_chamfer_losses(
+                    query_trajectory,
+                    rep.get_global_lidar_pc(local_before_idx),
+                    rep.get_global_lidar_pc(local_after_idx),
+                )
             )
+
+            est_before_pc = query_trajectory.get_previous_position()
+            est_after_pc = query_trajectory.get_next_position()
+
+            # Trajectories of the one step look ahead and look behind
+            # The global trajectories should all match
+            before_trajectory: DecodedTrajectory = self.model(
+                est_before_pc,
+                rep.sequence_idxes[local_before_idx],
+            )
+            after_trajectory: DecodedTrajectory = self.model(
+                est_after_pc,
+                rep.sequence_idxes[local_after_idx],
+            )
+
+            # Trajectories of the points doing a round trip
+            # query -(-1)-> step before -(+1)-> query
+            # query -(+1)-> step after -(-1)-> query
+            query_after_round_trip_trajectory: DecodedTrajectory = self.model(
+                after_trajectory.get_previous_position(),
+                rep.sequence_idxes[local_query_index],
+            )
+
+            query_before_round_trip_trajectory: DecodedTrajectory = self.model(
+                before_trajectory.get_next_position(),
+                rep.sequence_idxes[local_query_index],
+            )
+
+            # Neighbors should have the same trajectories
             cost_problems.append(
-                PassthroughCostProblem(
-                    (forward_consistency_loss + backward_consistency_loss)
-                    * self.consistency_loss_weight,
+                self._make_trajectory_consistency_losses(
+                    before_trajectory, query_trajectory, after_trajectory
+                )
+            )
+
+            # Round trip should have the same trajectory
+            cost_problems.append(
+                self._make_trajectory_consistency_losses(
+                    query_before_round_trip_trajectory,
+                    query_trajectory,
+                    query_after_round_trip_trajectory,
                 )
             )
 
@@ -238,17 +283,16 @@ class NTPModel(BaseOptimizationModel):
     ) -> tuple[torch.Tensor, torch.Tensor]:
 
         query_pc = rep.get_global_lidar_pc(query_idx)
-        query_trajectory = self.model(
+        query_trajectory: DecodedTrajectory = self.model(
             query_pc,
             rep.sequence_idxes[query_idx],
-            do_fwd_flow=True,
         )
-        global_flow_pc = self.model.transform_pts(query_trajectory["flow_fwd"], query_pc)
 
+        # We need to construct the full global pc, by using the query trajectory to get the next position
         full_global_pc = rep.get_full_global_pc(query_idx)
-        full_global_flow_pc = torch.zeros_like(full_global_pc)
+        full_global_flow_pc = full_global_pc.clone()
         full_pc_mask = rep.get_full_pc_mask(query_idx)
-        full_global_flow_pc[full_pc_mask] = global_flow_pc
+        full_global_flow_pc[full_pc_mask] = query_trajectory.get_next_position()
 
         ego_flow = self.global_to_ego_flow(
             full_global_pc, full_global_flow_pc, rep.ego_to_globals[query_idx]
