@@ -4,7 +4,7 @@ has_labels = False
 SEQUENCE_LENGTH = 150
 
 test_dataset_root = "/efs/argoverse2/train/"
-save_output_folder = "/efs/argoverse2/train_ntp_flow_feather/"
+save_output_folder = "/efs/argoverse2/train_ntp_cleaned_up_flow_feather/"
 
 model = dict(
     name="NTPOptimizationLoop",
