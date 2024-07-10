@@ -38,6 +38,30 @@ class BaseOutputSequence:
 
 
 @dataclass
+class FreeSpaceRays:
+    rays: torch.Tensor
+    mask: torch.Tensor
+    origin: torch.Tensor
+
+    def __post_init__(self):
+        assert (
+            self.rays.dim() == 2 and self.rays.shape[1] == 3
+        ), f"Invalid rays shape {self.rays.shape}"
+        assert (
+            self.mask.dim() == 1 and self.mask.shape[0] == self.rays.shape[0]
+        ), f"Invalid mask shape {self.mask.shape} for rays shape {self.rays.shape}"
+        assert (
+            self.origin.dim() == 1 and self.origin.shape[0] == 3
+        ), f"Invalid origin shape {self.origin.shape}"
+
+    def get_freespace_pc(self, range_scalar: float) -> torch.Tensor:
+        """
+        Get the free space point cloud by extending the rays by the range scalar.
+        """
+        return self.origin + self.rays * range_scalar
+
+
+@dataclass
 class TorchFullFrameInputSequence(BaseInputSequence):
     """
     Class that contains all the data required for computing scene flow of a single dataset sample,
@@ -201,6 +225,27 @@ class TorchFullFrameInputSequence(BaseInputSequence):
             from_fixed_array_torch(points)[from_fixed_array_torch(mask).bool()]
             for points, mask in zip(padded_points, padded_valid_mask)
         ]
+
+    def get_global_free_space_rays(self, idx: int) -> FreeSpaceRays:
+        global_pc = self.get_full_global_pc(idx)
+        global_mask = self.get_full_pc_mask(idx)
+
+        # Get the sensor to ego and ego to global transformations
+        ego_to_global = self.pc_poses_ego_to_global[idx]
+        sensor_to_ego = self.pc_poses_sensor_to_ego[idx]
+        sensor_to_global = torch.matmul(ego_to_global, sensor_to_ego)
+
+        # Extract the translation component of the transformation to get the sensor origin in the global frame
+        sensor_origin = sensor_to_global[:3, 3]
+
+        # Compute the direction of the rays from the sensor origin to the global point cloud
+        ray_directions = global_pc - sensor_origin
+
+        return FreeSpaceRays(
+            rays=ray_directions,
+            mask=global_mask,
+            origin=sensor_origin,
+        )
 
     def __post_init__(self):
         # Check shapes for point cloud data

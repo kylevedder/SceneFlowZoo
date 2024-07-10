@@ -1,6 +1,6 @@
 from pytorch_lightning.loggers.logger import Logger
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop, MinibatchedSceneFlowInputSequence
-from models.components.neural_reps import GigaChadRawMLP
+from models.components.neural_reps import GigaChadFlowMLP, QueryDirection, ModelFlowResult
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from dataclasses import dataclass
 from models import BaseOptimizationModel
@@ -30,112 +30,9 @@ class LossTypeEnum(enum.Enum):
     TRUNCATED_KD_TREE = 2
 
 
-class QueryDirection(enum.Enum):
-    FORWARD = 1
-    REVERSE = -1
-
-
 class ChamferTargetType(enum.Enum):
     LIDAR = "lidar"
     LIDAR_CAMERA = "lidar_camera"
-
-
-@dataclass
-class GlobalNormalizer:
-    min_x: float
-    min_y: float
-    min_z: float
-    max_x: float
-    max_y: float
-    max_z: float
-
-    @staticmethod
-    def from_input_sequence(input_sequence: TorchFullFrameInputSequence) -> "GlobalNormalizer":
-        min_x, min_y, min_z = float("inf"), float("inf"), float("inf")
-        max_x, max_y, max_z = float("-inf"), float("-inf"), float("-inf")
-
-        for idx in range(len(input_sequence)):
-            pc = input_sequence.get_global_pc(idx)
-            min_x = min(min_x, torch.min(pc[:, 0]).item())
-            min_y = min(min_y, torch.min(pc[:, 1]).item())
-            min_z = min(min_z, torch.min(pc[:, 2]).item())
-
-            max_x = max(max_x, torch.max(pc[:, 0]).item())
-            max_y = max(max_y, torch.max(pc[:, 1]).item())
-            max_z = max(max_z, torch.max(pc[:, 2]).item())
-
-        return GlobalNormalizer(min_x, min_y, min_z, max_x, max_y, max_z)
-
-    def normalize(self, pc: torch.Tensor) -> torch.Tensor:
-        """
-        Normalize the pc so that it will be centered at 0, 0, 0
-
-        Importantly, the relative distances of the different axses are preserved
-        """
-        x, y, z = pc[:, 0], pc[:, 1], pc[:, 2]
-
-        # Calculate center coordinates
-        center_x = (self.max_x + self.min_x) / 2
-        center_y = (self.max_y + self.min_y) / 2
-        center_z = (self.max_z + self.min_z) / 2
-
-        # Shift to the origin (without in-place operations)
-        x = x - center_x
-        y = y - center_y
-        z = z - center_z
-
-        # Find maximum extent
-        max_extent = torch.max(
-            torch.tensor(
-                [self.max_x - self.min_x, self.max_y - self.min_y, self.max_z - self.min_z]
-            )
-        )
-
-        # Scale to normalize (without in-place operations)
-        x = x / max_extent
-        y = y / max_extent
-        z = z / max_extent
-
-        return torch.stack([x, y, z], dim=1)
-
-
-def _make_time_feature(idx: int, total_entries: int, device: torch.device) -> torch.Tensor:
-    # Make the time feature zero mean
-    if total_entries <= 1:
-        # Handle divide by zero
-        return torch.tensor([0.0], dtype=torch.float32, device=device)
-    max_idx = total_entries - 1
-    return torch.tensor([(idx / max_idx) - 0.5], dtype=torch.float32, device=device)
-
-
-def _make_input_feature(
-    pc: torch.Tensor,
-    idx: int,
-    total_entries: int,
-    query_direction: QueryDirection,
-    normalizer: GlobalNormalizer,
-) -> torch.Tensor:
-    assert pc.shape[1] == 3, f"Expected 3, but got {pc.shape[1]}"
-    assert pc.dim() == 2, f"Expected 2, but got {pc.dim()}"
-    assert isinstance(
-        query_direction, QueryDirection
-    ), f"Expected QueryDirection, but got {query_direction}"
-
-    time_feature = _make_time_feature(idx, total_entries, pc.device)  # 1x1
-
-    direction_feature = torch.tensor(
-        [query_direction.value], dtype=torch.float32, device=pc.device
-    )  # 1x1
-    pc_time_dim = time_feature.repeat(pc.shape[0], 1).contiguous()
-    pc_direction_dim = direction_feature.repeat(pc.shape[0], 1).contiguous()
-
-    normalized_pc = pc  # normalizer.normalize(pc)
-
-    # Concatenate into a feature tensor
-    return torch.cat(
-        [normalized_pc, pc_time_dim, pc_direction_dim],
-        dim=-1,
-    )
 
 
 @dataclass
@@ -202,16 +99,10 @@ class GigachadNSFModel(BaseOptimizationModel):
         chamfer_distance_type: ChamferDistanceType | str,
     ) -> None:
         super().__init__(full_input_sequence)
-        self.model = GigaChadRawMLP()
-        self.global_normalizer = GlobalNormalizer.from_input_sequence(full_input_sequence)
+        self.model = GigaChadFlowMLP()
         self.speed_threshold = speed_threshold
-        if isinstance(chamfer_target_type, str):
-            chamfer_target_type = ChamferTargetType(chamfer_target_type)
-        self.chamfer_target_type = chamfer_target_type
-
-        if isinstance(chamfer_distance_type, str):
-            chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
-        self.chamfer_distance_type = chamfer_distance_type
+        self.chamfer_target_type = ChamferTargetType(chamfer_target_type)
+        self.chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
 
         self._prep_neural_prior(self.model)
 
@@ -288,34 +179,34 @@ class GigachadNSFModel(BaseOptimizationModel):
             sequence_total_length=sequence_total_length,
         )
 
+    def _is_occupied_cost(self, model_res: ModelFlowResult) -> list[BaseCostProblem]:
+        return []
+
     def _cycle_consistency(self, rep: GigaChadNSFPreprocessedInput) -> BaseCostProblem:
         cost_problems: list[BaseCostProblem] = []
         for idx in range(len(rep) - 1):
             pc = rep.get_global_lidar_pc(idx)
             sequence_idx = rep.sequence_idxes[idx]
             sequence_total_length = rep.sequence_total_length
-            base_input_features = _make_input_feature(
+            model_res_forward: ModelFlowResult = self.model(
                 pc,
                 sequence_idx,
                 sequence_total_length,
                 QueryDirection.FORWARD,
-                self.global_normalizer,
             )
-            forward_flow: torch.Tensor = self.model(base_input_features)
-            forward_flowed_pc = pc + forward_flow
+            forward_flowed_pc = pc + model_res_forward.flow
 
-            forward_flowed_input_features = _make_input_feature(
+            model_res_reverse: ModelFlowResult = self.model(
                 forward_flowed_pc,
                 sequence_idx + 1,
                 sequence_total_length,
                 QueryDirection.REVERSE,
-                self.global_normalizer,
             )
-
-            backward_flow: torch.Tensor = self.model(forward_flowed_input_features)
-            round_trip_flowed_pc = forward_flowed_pc + backward_flow
+            round_trip_flowed_pc = forward_flowed_pc + model_res_reverse.flow
 
             cost_problems.append(PointwiseLossProblem(pred=round_trip_flowed_pc, target=pc))
+            cost_problems.extend(self._is_occupied_cost(model_res_forward))
+            cost_problems.extend(self._is_occupied_cost(model_res_reverse))
         return AdditiveCosts(cost_problems)
 
     def _k_step_cost(
@@ -332,15 +223,13 @@ class GigachadNSFModel(BaseOptimizationModel):
             anchor_pc: torch.Tensor, anchor_idx: int, subk: int, query_direction: QueryDirection
         ) -> tuple[BaseCostProblem, torch.Tensor]:
             sequence_idx = rep.sequence_idxes[anchor_idx]
-            features = _make_input_feature(
+            model_res: ModelFlowResult = self.model(
                 anchor_pc,
                 sequence_idx,
                 rep.sequence_total_length,
                 query_direction,
-                self.global_normalizer,
             )
-            flow: torch.Tensor = self.model(features)
-            anchor_pc = anchor_pc + flow
+            anchor_pc = anchor_pc + model_res.flow
 
             index_offset = (subk + 1) * query_direction.value
 
@@ -372,18 +261,19 @@ class GigachadNSFModel(BaseOptimizationModel):
                 case LossTypeEnum.DISTANCE_TRANSFORM:
                     raise NotImplementedError("Distance transform not implemented")
 
+            problem_list = [problem]
+
             if speed_limit is not None:
-                problem = AdditiveCosts(
-                    [
-                        problem,
-                        SpeedRegularizer(
-                            flow=flow.squeeze(0),
-                            speed_threshold=speed_limit,
-                        ),
-                    ]
+                problem_list.append(
+                    SpeedRegularizer(
+                        flow=model_res.flow.squeeze(0),
+                        speed_threshold=speed_limit,
+                    )
                 )
 
-            return problem, anchor_pc
+            problem_list.extend(self._is_occupied_cost(model_res))
+
+            return AdditiveCosts(problem_list), anchor_pc
 
         costs = []
 
@@ -428,14 +318,13 @@ class GigachadNSFModel(BaseOptimizationModel):
         query_idx: int,
         direction: QueryDirection = QueryDirection.FORWARD,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        input_features = _make_input_feature(
+        model_res: ModelFlowResult = self.model(
             rep.get_global_lidar_pc(query_idx),
             query_idx,
             len(rep),
             direction,
-            self.global_normalizer,
         )
-        global_flow_pc = self.model(input_features).squeeze(0)
+        global_flow_pc = model_res.flow.squeeze(0)
 
         full_global_pc = rep.get_full_global_pc(query_idx)
         full_global_flow_pc = torch.zeros_like(full_global_pc)
@@ -491,18 +380,14 @@ class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
         speed_threshold: float,
         chamfer_target_type: ChamferTargetType | str,
         chamfer_distance_type: ChamferDistanceType | str = ChamferDistanceType.BOTH_DIRECTION,
+        model_class: type[BaseOptimizationModel] = GigachadNSFModel,
         *args,
         **kwargs,
     ):
-        super().__init__(model_class=GigachadNSFModel, *args, **kwargs)
+        super().__init__(model_class=model_class, *args, **kwargs)
         self.speed_threshold = speed_threshold
-        if isinstance(chamfer_target_type, str):
-            chamfer_target_type = ChamferTargetType(chamfer_target_type)
-        self.chamfer_target_type = chamfer_target_type
-
-        if isinstance(chamfer_distance_type, str):
-            chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
-        self.chamfer_distance_type = chamfer_distance_type
+        self.chamfer_target_type = ChamferTargetType(chamfer_target_type)
+        self.chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
 
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence

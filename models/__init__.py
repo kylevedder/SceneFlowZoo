@@ -31,7 +31,11 @@ from .whole_batch_optimization import (
     FastNSFModelOptimizationLoop,
     Liu2024OptimizationLoop,
 )
-from .mini_batch_optimization import GigachadNSFOptimizationLoop, NTPOptimizationLoop
+from .mini_batch_optimization import (
+    GigachadNSFOptimizationLoop,
+    NTPOptimizationLoop,
+    GigachadOccFlowOptimizationLoop,
+)
 
 
 importable_models = [
@@ -44,6 +48,7 @@ importable_models = [
     Liu2024OptimizationLoop,
     GigachadNSFOptimizationLoop,
     NTPOptimizationLoop,
+    GigachadOccFlowOptimizationLoop,
 ]
 
 # Ensure all importable models are based on the BaseModel class.

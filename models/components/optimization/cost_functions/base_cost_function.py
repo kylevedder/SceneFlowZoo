@@ -18,6 +18,10 @@ class BaseCostProblem(ABC):
         self.cost_scalar = other
         return self
 
+    def __truediv__(self, other: float) -> "BaseCostProblem":
+        self.cost_scalar = 1.0 / other
+        return self
+
 
 @dataclass
 class PassthroughCostProblem(BaseCostProblem):
