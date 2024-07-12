@@ -3,7 +3,6 @@ import torch.nn as nn
 import enum
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from models.components.optimization.cost_functions import TruncatedChamferLossProblem
-import torch.jit as jit
 
 
 class ActivationFn(enum.Enum):
@@ -20,7 +19,7 @@ class SinC(nn.Module):
         return torch.sinc(x)
 
 
-class NSFPRawMLP(jit.ScriptModule):
+class NSFPRawMLP(nn.Module):
 
     def __init__(
         self,
