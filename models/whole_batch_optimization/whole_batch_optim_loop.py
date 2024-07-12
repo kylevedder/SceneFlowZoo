@@ -1,4 +1,5 @@
 import torch
+import torch.profiler
 import tqdm
 from models.components.optimization.cost_functions import BaseCostProblem
 from models.components.optimization.utils import EarlyStopping
@@ -197,6 +198,18 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         lowest_cost = torch.inf
         best_output: TorchFullFrameOutputSequence = None
+
+        # Profile the training step
+        # with torch.profiler.profile(
+        #     activities=[
+        #         torch.profiler.ProfilerActivity.CUDA,
+        #     ],
+        #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=self.epochs * len(batcher)),
+        #     record_shapes=True,
+        #     profile_memory=True,
+        #     with_stack=True,
+        # ) as prof:
+
         epoch_bar = tqdm.tqdm(
             range(self.epochs), leave=leave, desc=title, disable=title is None, position=1
         )
@@ -221,6 +234,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
                 total_cost += cost.item()
                 minibatch_bar.set_postfix(cost=f"{cost.item():0.6f}")
+                # prof.step()
 
             if self.save_flow_every is not None:
                 if epoch_idx % self.save_flow_every == 0 or epoch_idx == self.epochs - 1:
@@ -235,22 +249,28 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                     with torch.no_grad():
                         (best_output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
 
-            should_exit = scheduler.step(total_cost)
+            batch_cost = total_cost / len(batcher)
+            should_exit = scheduler.step(batch_cost)
 
+            logger_prefix = f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}"
             logger.log_metrics(
                 {
-                    f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}/total_cost": total_cost,
-                    f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}/lr": np.mean(
-                        scheduler.get_last_lr()
-                    ),
+                    f"{logger_prefix}/batch_cost": (batch_cost),
+                    f"{logger_prefix}/lr": np.mean(scheduler.get_last_lr()),
                 },
                 step=epoch_idx,
             )
 
-            epoch_bar.set_postfix(cost=f"{total_cost / len(batcher):0.6f}")
+            model.log(logger, logger_prefix, epoch_idx)
+
+            epoch_bar.set_postfix(cost=f"{batch_cost:0.6f}")
 
             if should_exit:
                 break
+
+        # # Save the profiling results to a text file
+        # with open("profile_results.txt", "w") as f:
+        #     f.write(prof.key_averages().table(sort_by="cuda_time_total", row_limit=30))
 
         assert best_output is not None, "Best output is None; optimization failed"
         return best_output

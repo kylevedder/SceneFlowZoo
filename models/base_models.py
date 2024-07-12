@@ -170,6 +170,9 @@ class BaseOptimizationModel(BaseTorchModel):
             "loss": loss,
         }
 
+    def log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+        pass
+
 
 class AbstractBatcher(ABC):
 

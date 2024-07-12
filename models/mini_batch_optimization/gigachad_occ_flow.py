@@ -23,6 +23,7 @@ from models.components.optimization.cost_functions import BaseCostProblem
 from bucketed_scene_flow_eval.interfaces import LoaderType
 from pointclouds import to_fixed_array_torch
 import torch
+import numpy as np
 from dataclasses import dataclass
 
 
@@ -101,11 +102,9 @@ class GigachadOccFlowModel(GigachadNSFModel):
                 costs.append(self._make_occupancy_cost(model_res, 0.0))
                 costs.append(self._make_expected_zero_flow(model_res))
 
-            return AdditiveCosts(costs) / len(rep)
+            return AdditiveCosts(costs)
 
-        return AdditiveCosts([_sample_at_distance(d) for d in distance_schedule]) / len(
-            distance_schedule
-        )
+        return AdditiveCosts([_sample_at_distance(d) for d in distance_schedule])
 
     def optim_forward_single(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
@@ -165,6 +164,58 @@ class GigachadOccFlowModel(GigachadNSFModel):
         ), f"Expected non-causal, but got {input_sequence.loader_type}"
 
         return self._forward_single_noncausal(input_sequence, logger)
+
+    def log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+        min_x = torch.inf
+        max_x = -torch.inf
+        min_y = torch.inf
+        max_y = -torch.inf
+        for idx in range(len(self.full_input_sequence)):
+            points = self.full_input_sequence.get_global_pc(idx)
+            min_x = min(min_x, points[:, 0].min().item())
+            max_x = max(max_x, points[:, 0].max().item())
+            min_y = min(min_y, points[:, 1].min().item())
+            max_y = max(max_y, points[:, 1].max().item())
+
+        # List of points at 0.2m resolution
+        x = np.arange(min_x, max_x, 0.2)
+        y = np.arange(min_y, max_y, 0.2)
+        x_idxes = np.arange(len(x))
+        y_idxes = np.arange(len(y))
+
+        xy_grid = np.array(np.meshgrid(x, y))
+        xy_idx_grid = np.array(np.meshgrid(x_idxes, y_idxes))
+
+        xys = xy_grid.T.reshape(-1, 2)
+        xy_idxes = xy_idx_grid.T.reshape(-1, 2)
+
+        def make_img(idx: int, z: float = 0.5):
+            xyzs = np.concatenate([xys, np.full((xys.shape[0], 1), z)], axis=1)
+            with torch.inference_mode():
+                with torch.no_grad():
+                    xyzs_torch = torch.tensor(xyzs, dtype=torch.float32, device="cuda")
+                    occ_flow_res: ModelOccFlowResult = self.model(
+                        xyzs_torch,
+                        idx,
+                        len(self.full_input_sequence),
+                        QueryDirection.FORWARD,
+                    )
+            occupancy_bev_image = np.zeros((len(x), len(y)))
+            occupancy_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = occ_flow_res.occ.cpu().numpy()
+            # Expand the image to 3 channels
+            return torch.from_numpy(occupancy_bev_image.T.reshape(1, len(y), len(x)))
+
+        idxes = [
+            int(0.25 * len(self.full_input_sequence)),
+            int(0.5 * len(self.full_input_sequence)),
+            int(0.75 * len(self.full_input_sequence)),
+        ]
+
+        imgs = [make_img(idx) for idx in idxes]
+
+        logger.experiment.add_image(f"{prefix}/occ/0.25", imgs[0], epoch_idx)
+        logger.experiment.add_image(f"{prefix}/occ/0.50", imgs[1], epoch_idx)
+        logger.experiment.add_image(f"{prefix}/occ/0.75", imgs[2], epoch_idx)
 
 
 class GigachadOccFlowOptimizationLoop(GigachadNSFOptimizationLoop):

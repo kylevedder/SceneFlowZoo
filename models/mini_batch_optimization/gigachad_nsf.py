@@ -106,7 +106,7 @@ class GigachadNSFModel(BaseOptimizationModel):
 
         self._prep_neural_prior(self.model)
 
-        self.kd_trees: list[KDTreeWrapper] | None = None
+        self.kd_trees: list[KDTreeWrapper] | None = self._prep_kdtrees()
 
     def _prep_kdtrees(self) -> list[KDTreeWrapper]:
         full_rep = self._preprocess(self.full_input_sequence)
@@ -209,6 +209,69 @@ class GigachadNSFModel(BaseOptimizationModel):
             cost_problems.extend(self._is_occupied_cost(model_res_reverse))
         return AdditiveCosts(cost_problems)
 
+    def _process_k_step_subk(
+        self,
+        rep: GigaChadNSFPreprocessedInput,
+        anchor_pc: torch.Tensor,
+        anchor_idx: int,
+        subk: int,
+        query_direction: QueryDirection,
+        loss_type: LossTypeEnum,
+        speed_limit: float | None,
+    ) -> tuple[BaseCostProblem, torch.Tensor]:
+        sequence_idx = rep.sequence_idxes[anchor_idx]
+        model_res: ModelFlowResult = self.model(
+            anchor_pc,
+            sequence_idx,
+            rep.sequence_total_length,
+            query_direction,
+        )
+        anchor_pc = anchor_pc + model_res.flow
+
+        index_offset = (subk + 1) * query_direction.value
+
+        def _get_target_pc() -> torch.Tensor:
+            match self.chamfer_target_type:
+                case ChamferTargetType.LIDAR:
+                    target_pc = rep.get_global_lidar_pc(anchor_idx + index_offset)
+                case ChamferTargetType.LIDAR_CAMERA:
+                    target_pc = rep.get_global_lidar_auxillary_pc(anchor_idx + index_offset)
+            return target_pc
+
+        match loss_type:
+            case LossTypeEnum.TRUNCATED_CHAMFER:
+                problem: BaseCostProblem = TruncatedChamferLossProblem(
+                    warped_pc=anchor_pc,
+                    target_pc=_get_target_pc(),
+                    distance_type=self.chamfer_distance_type,
+                )
+            case LossTypeEnum.TRUNCATED_KD_TREE:
+                if self.kd_trees is None:
+                    # Only invoke this if KD trees are being used and not already built
+                    self.kd_trees = self._prep_kdtrees()
+                global_idx = rep.sequence_idxes[anchor_idx + index_offset]
+                kd_tree = self.kd_trees[global_idx]
+                problem = TruncatedKDTreeLossProblem(
+                    warped_pc=anchor_pc,
+                    kdtree=kd_tree,
+                )
+            case LossTypeEnum.DISTANCE_TRANSFORM:
+                raise NotImplementedError("Distance transform not implemented")
+
+        problem_list = [problem]
+
+        if speed_limit is not None:
+            problem_list.append(
+                SpeedRegularizer(
+                    flow=model_res.flow.squeeze(0),
+                    speed_threshold=speed_limit,
+                )
+            )
+
+        problem_list.extend(self._is_occupied_cost(model_res))
+
+        return AdditiveCosts(problem_list), anchor_pc
+
     def _k_step_cost(
         self,
         rep: GigaChadNSFPreprocessedInput,
@@ -218,62 +281,6 @@ class GigachadNSFModel(BaseOptimizationModel):
         speed_limit: float | None = None,
     ) -> BaseCostProblem:
         assert k >= 1, f"Expected k >= 1, but got {k}"
-
-        def process_subk(
-            anchor_pc: torch.Tensor, anchor_idx: int, subk: int, query_direction: QueryDirection
-        ) -> tuple[BaseCostProblem, torch.Tensor]:
-            sequence_idx = rep.sequence_idxes[anchor_idx]
-            model_res: ModelFlowResult = self.model(
-                anchor_pc,
-                sequence_idx,
-                rep.sequence_total_length,
-                query_direction,
-            )
-            anchor_pc = anchor_pc + model_res.flow
-
-            index_offset = (subk + 1) * query_direction.value
-
-            def _get_target_pc() -> torch.Tensor:
-                match self.chamfer_target_type:
-                    case ChamferTargetType.LIDAR:
-                        target_pc = rep.get_global_lidar_pc(anchor_idx + index_offset)
-                    case ChamferTargetType.LIDAR_CAMERA:
-                        target_pc = rep.get_global_lidar_auxillary_pc(anchor_idx + index_offset)
-                return target_pc
-
-            match loss_type:
-                case LossTypeEnum.TRUNCATED_CHAMFER:
-                    problem: BaseCostProblem = TruncatedChamferLossProblem(
-                        warped_pc=anchor_pc,
-                        target_pc=_get_target_pc(),
-                        distance_type=self.chamfer_distance_type,
-                    )
-                case LossTypeEnum.TRUNCATED_KD_TREE:
-                    if self.kd_trees is None:
-                        # Only invoke this if KD trees are being used and not already built
-                        self.kd_trees = self._prep_kdtrees()
-                    global_idx = rep.sequence_idxes[anchor_idx + index_offset]
-                    kd_tree = self.kd_trees[global_idx]
-                    problem = TruncatedKDTreeLossProblem(
-                        warped_pc=anchor_pc,
-                        kdtree=kd_tree,
-                    )
-                case LossTypeEnum.DISTANCE_TRANSFORM:
-                    raise NotImplementedError("Distance transform not implemented")
-
-            problem_list = [problem]
-
-            if speed_limit is not None:
-                problem_list.append(
-                    SpeedRegularizer(
-                        flow=model_res.flow.squeeze(0),
-                        speed_threshold=speed_limit,
-                    )
-                )
-
-            problem_list.extend(self._is_occupied_cost(model_res))
-
-            return AdditiveCosts(problem_list), anchor_pc
 
         costs = []
 
@@ -286,7 +293,9 @@ class GigachadNSFModel(BaseOptimizationModel):
             anchor_pc = rep.get_global_lidar_pc(anchor_idx)
 
             for subk in range(k):
-                problem, anchor_pc = process_subk(anchor_pc, anchor_idx, subk, query_direction)
+                problem, anchor_pc = self._process_k_step_subk(
+                    rep, anchor_pc, anchor_idx, subk, query_direction, loss_type, speed_limit
+                )
                 costs.append(problem)
         return AdditiveCosts(costs)
 
