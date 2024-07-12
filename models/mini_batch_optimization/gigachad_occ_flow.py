@@ -25,6 +25,7 @@ from pointclouds import to_fixed_array_torch
 import torch
 import numpy as np
 from dataclasses import dataclass
+from visualization.flow_to_rgb import flow_to_rgb
 
 
 @dataclass
@@ -165,7 +166,7 @@ class GigachadOccFlowModel(GigachadNSFModel):
 
         return self._forward_single_noncausal(input_sequence, logger)
 
-    def log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+    def _build_sample_range(self) -> tuple[float, float, float, float]:
         min_x = torch.inf
         max_x = -torch.inf
         min_y = torch.inf
@@ -176,6 +177,31 @@ class GigachadOccFlowModel(GigachadNSFModel):
             max_x = max(max_x, points[:, 0].max().item())
             min_y = min(min_y, points[:, 1].min().item())
             max_y = max(max_y, points[:, 1].max().item())
+
+        return min_x, max_x, min_y, max_y
+
+    def _build_occ_bev(
+        self, occ_flow_res: ModelOccFlowResult, x: np.ndarray, y: np.ndarray, xy_idxes: np.ndarray
+    ) -> torch.Tensor:
+        occupancy_bev_image = np.zeros((len(x), len(y)))
+        occupancy_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = occ_flow_res.occ.cpu().numpy()
+
+        return torch.from_numpy(occupancy_bev_image.T.reshape(1, len(y), len(x)))
+
+    def _build_flow_bev(
+        self, occ_flow_res: ModelOccFlowResult, x: np.ndarray, y: np.ndarray, xy_idxes: np.ndarray
+    ) -> torch.Tensor:
+
+        flow = occ_flow_res.flow.cpu().numpy()
+        flow_bev_image = np.zeros((len(x), len(y), 3), dtype=np.uint8)
+        flow_rgbs = flow_to_rgb(flow, flow_max_radius=1.0, background="bright")
+
+        flow_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = flow_rgbs
+
+        return torch.from_numpy(flow_bev_image.transpose((2, 0, 1)))
+
+    def epoch_end_log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+        min_x, max_x, min_y, max_y = self._build_sample_range()
 
         # List of points at 0.2m resolution
         x = np.arange(min_x, max_x, 0.2)
@@ -189,7 +215,7 @@ class GigachadOccFlowModel(GigachadNSFModel):
         xys = xy_grid.T.reshape(-1, 2)
         xy_idxes = xy_idx_grid.T.reshape(-1, 2)
 
-        def make_img(idx: int, z: float = 0.5):
+        def make_occ_flow_imgs(idx: int, z: float = 0.5):
             xyzs = np.concatenate([xys, np.full((xys.shape[0], 1), z)], axis=1)
             with torch.inference_mode():
                 with torch.no_grad():
@@ -200,10 +226,9 @@ class GigachadOccFlowModel(GigachadNSFModel):
                         len(self.full_input_sequence),
                         QueryDirection.FORWARD,
                     )
-            occupancy_bev_image = np.zeros((len(x), len(y)))
-            occupancy_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = occ_flow_res.occ.cpu().numpy()
-            # Expand the image to 3 channels
-            return torch.from_numpy(occupancy_bev_image.T.reshape(1, len(y), len(x)))
+            return self._build_occ_bev(occ_flow_res, x, y, xy_idxes), self._build_flow_bev(
+                occ_flow_res, x, y, xy_idxes
+            )
 
         idxes = [
             int(0.25 * len(self.full_input_sequence)),
@@ -211,11 +236,15 @@ class GigachadOccFlowModel(GigachadNSFModel):
             int(0.75 * len(self.full_input_sequence)),
         ]
 
-        imgs = [make_img(idx) for idx in idxes]
+        imgs = [make_occ_flow_imgs(idx) for idx in idxes]
 
-        logger.experiment.add_image(f"{prefix}/occ/0.25", imgs[0], epoch_idx)
-        logger.experiment.add_image(f"{prefix}/occ/0.50", imgs[1], epoch_idx)
-        logger.experiment.add_image(f"{prefix}/occ/0.75", imgs[2], epoch_idx)
+        logger.experiment.add_image(f"{prefix}/occ/0.25", imgs[0][0], epoch_idx)
+        logger.experiment.add_image(f"{prefix}/occ/0.50", imgs[1][0], epoch_idx)
+        logger.experiment.add_image(f"{prefix}/occ/0.75", imgs[2][0], epoch_idx)
+
+        logger.experiment.add_image(f"{prefix}/flow/0.25", imgs[0][1], epoch_idx)
+        logger.experiment.add_image(f"{prefix}/flow/0.50", imgs[1][1], epoch_idx)
+        logger.experiment.add_image(f"{prefix}/flow/0.75", imgs[2][1], epoch_idx)
 
 
 class GigachadOccFlowOptimizationLoop(GigachadNSFOptimizationLoop):

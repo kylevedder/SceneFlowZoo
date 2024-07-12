@@ -261,7 +261,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                 step=epoch_idx,
             )
 
-            model.log(logger, logger_prefix, epoch_idx)
+            model.epoch_end_log(logger, logger_prefix, epoch_idx)
 
             epoch_bar.set_postfix(cost=f"{batch_cost:0.6f}")
 

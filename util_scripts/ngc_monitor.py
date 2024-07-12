@@ -118,7 +118,7 @@ def get_job_prefix(client: paramiko.SSHClient, launch_script: Path) -> str:
 
 
 def get_job_status(client: paramiko.SSHClient, job_prefix: str) -> list[Job]:
-    command = "ngc batch list --duration=7D --column=name --column=status --column=duration --status STARTING --status RUNNING --status FINISHED_SUCCESS --status FAILED --format_type csv"
+    command = "ngc batch list --duration=7D --column=name --column=status --column=duration --status STARTING --status RUNNING --status FINISHED_SUCCESS --status QUEUED --status FAILED --format_type csv"
     stdout, stderr, exit_status = run_remote_command(client, command)
     if exit_status != 0:
         raise RuntimeError(f"Failed to get job status. Error: {stderr}")
@@ -168,6 +168,8 @@ def retry_job(
         if dry_run:
             logging.info(f"Would have relaunched job {job.name} with command: {launch_command}")
             break
+        # replace 16g with 32g for retry
+        launch_command = launch_command.replace(".16g.", ".32g.")
         stdout, stderr, exit_status = run_remote_command(client, launch_command)
 
         if exit_status == 0:

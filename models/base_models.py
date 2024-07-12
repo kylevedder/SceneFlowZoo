@@ -170,7 +170,7 @@ class BaseOptimizationModel(BaseTorchModel):
             "loss": loss,
         }
 
-    def log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+    def epoch_end_log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
         pass
 
 
