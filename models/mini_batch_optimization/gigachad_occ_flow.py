@@ -198,7 +198,7 @@ class GigachadOccFlowModel(GigachadNSFModel):
 
         flow_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = flow_rgbs
 
-        return torch.from_numpy(flow_bev_image.transpose((2, 0, 1)))
+        return torch.from_numpy(flow_bev_image.transpose((2, 1, 0)))
 
     def epoch_end_log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
         min_x, max_x, min_y, max_y = self._build_sample_range()
