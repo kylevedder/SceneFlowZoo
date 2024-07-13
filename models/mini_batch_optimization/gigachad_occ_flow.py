@@ -194,7 +194,7 @@ class GigachadOccFlowModel(GigachadNSFModel):
 
         flow = occ_flow_res.flow.cpu().numpy()
         flow_bev_image = np.zeros((len(x), len(y), 3), dtype=np.uint8)
-        flow_rgbs = flow_to_rgb(flow, flow_max_radius=1.0, background="bright")
+        flow_rgbs = flow_to_rgb(flow, flow_max_radius=0.15, background="bright")
 
         flow_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = flow_rgbs
 
