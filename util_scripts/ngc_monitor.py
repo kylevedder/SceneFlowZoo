@@ -117,7 +117,26 @@ def get_job_prefix(client: paramiko.SSHClient, launch_script: Path) -> str:
     return stdout
 
 
-def get_job_status(client: paramiko.SSHClient, job_prefix: str) -> list[Job]:
+def get_launch_commands(client: paramiko.SSHClient, launch_script: Path) -> List[str]:
+    """Extract all launch commands from the launch script."""
+    command = f"grep 'ngc batch run' {launch_script}"
+    stdout, stderr, exit_status = run_remote_command(client, command)
+    if exit_status != 0:
+        raise ValueError("Could not find launch commands in launch script.")
+    return stdout.splitlines()
+
+
+def get_unlaunched_job_commands(launched_jobs: List[Job], launch_commands: List[str]) -> List[str]:
+    """Determine which jobs in the launch script haven't been launched yet."""
+    launched_job_names = set(job.name for job in launched_jobs)
+    return [
+        cmd
+        for cmd in launch_commands
+        if not any(job_name in cmd for job_name in launched_job_names)
+    ]
+
+
+def get_launched_job_status(client: paramiko.SSHClient, job_prefix: str) -> list[Job]:
     command = "ngc batch list --duration=7D --column=name --column=status --column=duration --status STARTING --status RUNNING --status FINISHED_SUCCESS --status QUEUED --status FAILED --format_type csv"
     stdout, stderr, exit_status = run_remote_command(client, command)
     if exit_status != 0:
@@ -140,68 +159,80 @@ def get_job_status(client: paramiko.SSHClient, job_prefix: str) -> list[Job]:
     return [job for job in pruned_jobs if job.name.startswith(job_prefix)]
 
 
-def get_launch_command(
-    client: paramiko.SSHClient, launch_script: Path, job_name: str
-) -> Optional[str]:
-    command = f"grep '{job_name}' {launch_script}"
-    stdout, stderr, exit_status = run_remote_command(client, command)
-    if exit_status != 0:
-        return None
-    return stdout.strip()
+def launch_job(
+    client: paramiko.SSHClient,
+    launch_command: str,
+    max_retries: int,
+    retry_delay: int,
+    dry_run: bool = False,
+) -> None:
+    if dry_run:
+        logging.info(f"Would have launched job with command: {launch_command}")
+        return
+
+    for attempt in range(max_retries):
+        logging.info(f"Launch attempt {attempt + 1} for job: {launch_command}")
+        stdout, stderr, exit_status = run_remote_command(client, launch_command)
+
+        if exit_status == 0:
+            logging.info("Job launched successfully.")
+            break
+        else:
+            logging.error(f"Failed to launch job. Error: {stderr}")
+
+        if attempt < max_retries - 1:
+            logging.info(f"Waiting {retry_delay} seconds before next retry...")
+            time.sleep(retry_delay)
 
 
 def retry_job(
     client: paramiko.SSHClient,
     job: Job,
-    launch_script: Path,
+    launch_commands: list[str],
     max_retries: int,
     retry_delay: int,
     dry_run: bool = False,
 ) -> None:
-    launch_command = get_launch_command(client, launch_script, job.name)
+
+    launch_command = [cmd for cmd in launch_commands if job.name in cmd][0]
     if not launch_command:
         logging.error(f"Couldn't find launch command for job {job.name} in the launch script.")
         return
 
-    for attempt in range(max_retries):
-        logging.info(f"Retry attempt {attempt + 1} for job {job.name}")
-        if dry_run:
-            logging.info(f"Would have relaunched job {job.name} with command: {launch_command}")
-            break
-        # replace 16g with 32g for retry
-        launch_command = launch_command.replace(".16g.", ".32g.")
-        stdout, stderr, exit_status = run_remote_command(client, launch_command)
-
-        if exit_status == 0:
-            logging.info(f"Successfully relaunched job {job.name}")
-            break
-        else:
-            logging.error(f"Failed to relaunch job {job.name}. Error: {stderr}")
-
-        if attempt < max_retries - 1:
-            logging.info(f"Waiting {retry_delay} seconds before next retry...")
-            time.sleep(retry_delay)
-    else:
-        logging.warning(f"Max retries reached for job {job.name}. Moving on to next job.")
+    # replace 16g with 32g for retry
+    launch_command = launch_command.replace(".16g.", ".32g.")
+    launch_job(client, launch_command, max_retries, retry_delay, dry_run=dry_run)
 
 
 def monitor_jobs(
     client: paramiko.SSHClient, args: argparse.Namespace, job_prefix: str, dry_run: bool
 ) -> None:
     check_interval = 30  # Set check interval to 30 seconds
+    launch_commands = get_launch_commands(client, args.launch_script)
+
     while True:
-        job_statuses = get_job_status(client, job_prefix)
+        job_statuses = get_launched_job_status(client, job_prefix)
+
+        unlaunced_jobs = get_unlaunched_job_commands(job_statuses, launch_commands)
+
+        logging.info(f"Found {len(unlaunced_jobs)} unlaunched jobs.")
+
+        # Launch any unlaunched jobs
+        for job_command in unlaunced_jobs:
+            logging.info(f"Found unlaunched job: {job_command}")
+            launch_job(client, job_command, args.max_retries, args.retry_delay, dry_run=dry_run)
 
         failed_jobs = [job for job in job_statuses if job.status == "FAILED"]
 
         logging.info(f"Found {len(failed_jobs)} failed jobs.")
 
+        # Retry failed jobs
         for job in failed_jobs:
             logging.info(f"Job {job.name} failed. Attempting to retry...")
             retry_job(
                 client,
                 job,
-                args.launch_script,
+                launch_commands,
                 args.max_retries,
                 args.retry_delay,
                 dry_run=dry_run,
