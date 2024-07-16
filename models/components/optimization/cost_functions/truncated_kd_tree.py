@@ -8,6 +8,7 @@ from pytorch3d.ops.knn import knn_gather, knn_points
 from pytorch3d.structures.pointclouds import Pointclouds
 from typing import Union
 import enum
+from .truncated_chamfer_loss import TruncatedChamferLossProblem, ChamferDistanceType
 
 
 class KDTreeWrapper:
@@ -45,7 +46,7 @@ class KDTreeWrapper:
 
 
 @dataclass
-class TruncatedKDTreeLossProblem(BaseCostProblem):
+class TruncatedForwardKDTreeLossProblem(BaseCostProblem):
     warped_pc: torch.Tensor
     kdtree: KDTreeWrapper
     distance_threshold: Optional[float] = 2.0
@@ -72,4 +73,32 @@ class TruncatedKDTreeLossProblem(BaseCostProblem):
         return kd_mean * 2
 
     def __repr__(self) -> str:
-        return f"TruncatedKDTreeLossProblem({self.base_cost()})"
+        return f"TruncatedForwardKDTreeLossProblem({self.base_cost()})"
+
+
+@dataclass
+class TruncatedForwardBackwardKDTreeLossProblem(BaseCostProblem):
+
+    def __init__(
+        self,
+        warped_pc: torch.Tensor,
+        target_pc: torch.Tensor,
+        kdtree: KDTreeWrapper,
+        distance_threshold: float | None = 2.0,
+    ):
+        self.forward_kd_tree = TruncatedForwardKDTreeLossProblem(
+            warped_pc=warped_pc, kdtree=kdtree, distance_threshold=distance_threshold
+        )
+        self.reverse_chamfer = TruncatedChamferLossProblem(
+            warped_pc=target_pc,
+            target_pc=warped_pc,
+            distance_threshold=distance_threshold,
+            distance_type=ChamferDistanceType.FORWARD_ONLY,
+        )
+
+    def base_cost(self) -> torch.Tensor:
+        total_cost = self.forward_kd_tree.base_cost() + self.reverse_chamfer.base_cost()
+        return total_cost / 2
+
+    def __repr__(self) -> str:
+        return f"TruncatedForwardBackwardKDTreeLossProblem({self.base_cost()})"

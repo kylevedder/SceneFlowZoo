@@ -7,7 +7,8 @@ from models import BaseOptimizationModel
 from models.components.optimization.cost_functions import (
     BaseCostProblem,
     DistanceTransform,
-    TruncatedKDTreeLossProblem,
+    TruncatedForwardKDTreeLossProblem,
+    TruncatedForwardBackwardKDTreeLossProblem,
     AdditiveCosts,
     PointwiseLossProblem,
     DistanceTransformLossProblem,
@@ -27,7 +28,8 @@ import tqdm
 class LossTypeEnum(enum.Enum):
     TRUNCATED_CHAMFER = 0
     DISTANCE_TRANSFORM = 1
-    TRUNCATED_KD_TREE = 2
+    TRUNCATED_KD_TREE_FORWARD = 2
+    TRUNCATED_KD_TREE_FORWARD_BACKWARD = 3
 
 
 class ChamferTargetType(enum.Enum):
@@ -106,7 +108,7 @@ class GigachadNSFModel(BaseOptimizationModel):
 
         self._prep_neural_prior(self.model)
 
-        self.kd_trees: list[KDTreeWrapper] | None = self._prep_kdtrees()
+        self.kd_trees: list[KDTreeWrapper] = self._prep_kdtrees()
 
     def _prep_kdtrees(self) -> list[KDTreeWrapper]:
         full_rep = self._preprocess(self.full_input_sequence)
@@ -245,15 +247,18 @@ class GigachadNSFModel(BaseOptimizationModel):
                     target_pc=_get_target_pc(),
                     distance_type=self.chamfer_distance_type,
                 )
-            case LossTypeEnum.TRUNCATED_KD_TREE:
-                if self.kd_trees is None:
-                    # Only invoke this if KD trees are being used and not already built
-                    self.kd_trees = self._prep_kdtrees()
+            case LossTypeEnum.TRUNCATED_KD_TREE_FORWARD:
                 global_idx = rep.sequence_idxes[anchor_idx + index_offset]
                 kd_tree = self.kd_trees[global_idx]
-                problem = TruncatedKDTreeLossProblem(
+                problem = TruncatedForwardKDTreeLossProblem(
                     warped_pc=anchor_pc,
                     kdtree=kd_tree,
+                )
+            case LossTypeEnum.TRUNCATED_KD_TREE_FORWARD_BACKWARD:
+                problem = TruncatedForwardBackwardKDTreeLossProblem(
+                    warped_pc=anchor_pc,
+                    target_pc=_get_target_pc(),
+                    kdtree=self.kd_trees[sequence_idx],
                 )
             case LossTypeEnum.DISTANCE_TRANSFORM:
                 raise NotImplementedError("Distance transform not implemented")
@@ -277,7 +282,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         rep: GigaChadNSFPreprocessedInput,
         k: int,
         query_direction: QueryDirection,
-        loss_type: LossTypeEnum = LossTypeEnum.TRUNCATED_KD_TREE,
+        loss_type: LossTypeEnum = LossTypeEnum.TRUNCATED_KD_TREE_FORWARD,
         speed_limit: float | None = None,
     ) -> BaseCostProblem:
         assert k >= 1, f"Expected k >= 1, but got {k}"

@@ -8,7 +8,7 @@ from models.components.optimization.cost_functions import (
     BaseCostProblem,
     PassthroughCostProblem,
     DistanceTransform,
-    TruncatedKDTreeLossProblem,
+    TruncatedForwardKDTreeLossProblem,
     AdditiveCosts,
     PointwiseLossProblem,
     DistanceTransformLossProblem,
