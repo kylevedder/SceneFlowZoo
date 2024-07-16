@@ -23,6 +23,8 @@ import enum
 import torch
 import torch.nn as nn
 import tqdm
+from visualization.flow_to_rgb import flow_to_rgb
+import numpy as np
 
 
 class LossTypeEnum(enum.Enum):
@@ -386,6 +388,98 @@ class GigachadNSFModel(BaseOptimizationModel):
         ), f"Expected non-causal, but got {input_sequence.loader_type}"
 
         return self._forward_single_noncausal(input_sequence, logger)
+
+    def _build_grid_sample(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        min_x = torch.inf
+        max_x = -torch.inf
+        min_y = torch.inf
+        max_y = -torch.inf
+        for idx in range(len(self.full_input_sequence)):
+            points = self.full_input_sequence.get_global_pc(idx)
+            min_x = min(min_x, points[:, 0].min().item())
+            max_x = max(max_x, points[:, 0].max().item())
+            min_y = min(min_y, points[:, 1].min().item())
+            max_y = max(max_y, points[:, 1].max().item())
+
+        x = np.arange(min_x, max_x, 0.2)
+        y = np.arange(min_y, max_y, 0.2)
+        x_idxes = np.arange(len(x))
+        y_idxes = np.arange(len(y))
+
+        xy_grid = np.array(np.meshgrid(x, y))
+        xy_idx_grid = np.array(np.meshgrid(x_idxes, y_idxes))
+
+        xys = xy_grid.T.reshape(-1, 2)
+        xy_idxes = xy_idx_grid.T.reshape(-1, 2)
+
+        return x, y, xys, xy_idxes
+
+    def _log_flow_bev(
+        self,
+        logger: Logger,
+        prefix: str,
+        percent_query: float,
+        epoch_idx: int,
+        model_res: ModelFlowResult,
+        x: np.ndarray,
+        y: np.ndarray,
+        xy_idxes: np.ndarray,
+    ):
+
+        flow = model_res.flow.cpu().numpy()
+        flow_bev_image = np.zeros((len(x), len(y), 3), dtype=np.uint8)
+        flow_rgbs = flow_to_rgb(flow, flow_max_radius=0.15, background="bright")
+
+        flow_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = flow_rgbs
+        flow_bev_torch = torch.from_numpy(flow_bev_image.transpose((2, 1, 0)))
+
+        logger.experiment.add_image(
+            f"{prefix}/flow/{percent_query:0.2f}", flow_bev_torch, epoch_idx
+        )
+
+    def _query_grid_sample(
+        self,
+        xys: np.ndarray,
+        idx: int,
+        z: float = 0.5,  # Meters
+    ) -> ModelFlowResult:
+        xyzs = np.concatenate([xys, np.full((xys.shape[0], 1), z)], axis=1)
+        with torch.inference_mode():
+            with torch.no_grad():
+                xyzs_torch = torch.tensor(xyzs, dtype=torch.float32, device="cuda")
+                model_res: ModelFlowResult = self.model(
+                    xyzs_torch,
+                    idx,
+                    len(self.full_input_sequence),
+                    QueryDirection.FORWARD,
+                )
+
+        return model_res
+
+    def _process_grid_results(
+        self,
+        logger: Logger,
+        prefix: str,
+        percent_query: float,
+        epoch_idx: int,
+        result: ModelFlowResult,
+        x: np.ndarray,
+        y: np.ndarray,
+        xy_idxes: np.ndarray,
+    ):
+        self._log_flow_bev(logger, prefix, percent_query, epoch_idx, result, x, y, xy_idxes)
+
+    def epoch_end_log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+        x, y, xys, xy_idxes = self._build_grid_sample()
+
+        percent_queries = [0.25, 0.5, 0.75]
+        idxes = [int(p * len(self.full_input_sequence)) for p in percent_queries]
+
+        for percent_query, idx in zip(percent_queries, idxes):
+            query_grid_result = self._query_grid_sample(xys, idx)
+            self._process_grid_results(
+                logger, prefix, percent_query, epoch_idx, query_grid_result, x, y, xy_idxes
+            )
 
 
 class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):

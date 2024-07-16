@@ -1,4 +1,4 @@
-from pytorch_lightning.loggers.logger import Logger
+from pytorch_lightning.loggers import Logger, TensorBoardLogger
 from models.base_models import BaseOptimizationModel
 from models.components.neural_reps import GigaChadOccFlowMLP, ModelOccFlowResult
 from models.mini_batch_optimization.gigachad_nsf import ModelFlowResult
@@ -166,85 +166,40 @@ class GigachadOccFlowModel(GigachadNSFModel):
 
         return self._forward_single_noncausal(input_sequence, logger)
 
-    def _build_sample_range(self) -> tuple[float, float, float, float]:
-        min_x = torch.inf
-        max_x = -torch.inf
-        min_y = torch.inf
-        max_y = -torch.inf
-        for idx in range(len(self.full_input_sequence)):
-            points = self.full_input_sequence.get_global_pc(idx)
-            min_x = min(min_x, points[:, 0].min().item())
-            max_x = max(max_x, points[:, 0].max().item())
-            min_y = min(min_y, points[:, 1].min().item())
-            max_y = max(max_y, points[:, 1].max().item())
-
-        return min_x, max_x, min_y, max_y
-
-    def _build_occ_bev(
-        self, occ_flow_res: ModelOccFlowResult, x: np.ndarray, y: np.ndarray, xy_idxes: np.ndarray
-    ) -> torch.Tensor:
+    def _log_occ_bev(
+        self,
+        logger: Logger,
+        prefix: str,
+        percent_query: float,
+        epoch_idx: int,
+        model_res: ModelOccFlowResult,
+        x: np.ndarray,
+        y: np.ndarray,
+        xy_idxes: np.ndarray,
+    ):
         occupancy_bev_image = np.zeros((len(x), len(y)))
-        occupancy_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = occ_flow_res.occ.cpu().numpy()
+        occupancy_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = model_res.occ.cpu().numpy()
+        occupancy_bev_torch = torch.from_numpy(occupancy_bev_image.T.reshape(1, len(y), len(x)))
 
-        return torch.from_numpy(occupancy_bev_image.T.reshape(1, len(y), len(x)))
+        logger.experiment.add_image(
+            f"{prefix}/occ/{percent_query:0.2f}", occupancy_bev_torch, epoch_idx
+        )
 
-    def _build_flow_bev(
-        self, occ_flow_res: ModelOccFlowResult, x: np.ndarray, y: np.ndarray, xy_idxes: np.ndarray
-    ) -> torch.Tensor:
-
-        flow = occ_flow_res.flow.cpu().numpy()
-        flow_bev_image = np.zeros((len(x), len(y), 3), dtype=np.uint8)
-        flow_rgbs = flow_to_rgb(flow, flow_max_radius=0.15, background="bright")
-
-        flow_bev_image[xy_idxes[:, 0], xy_idxes[:, 1]] = flow_rgbs
-
-        return torch.from_numpy(flow_bev_image.transpose((2, 1, 0)))
-
-    def epoch_end_log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
-        min_x, max_x, min_y, max_y = self._build_sample_range()
-
-        # List of points at 0.2m resolution
-        x = np.arange(min_x, max_x, 0.2)
-        y = np.arange(min_y, max_y, 0.2)
-        x_idxes = np.arange(len(x))
-        y_idxes = np.arange(len(y))
-
-        xy_grid = np.array(np.meshgrid(x, y))
-        xy_idx_grid = np.array(np.meshgrid(x_idxes, y_idxes))
-
-        xys = xy_grid.T.reshape(-1, 2)
-        xy_idxes = xy_idx_grid.T.reshape(-1, 2)
-
-        def make_occ_flow_imgs(idx: int, z: float = 0.5):
-            xyzs = np.concatenate([xys, np.full((xys.shape[0], 1), z)], axis=1)
-            with torch.inference_mode():
-                with torch.no_grad():
-                    xyzs_torch = torch.tensor(xyzs, dtype=torch.float32, device="cuda")
-                    occ_flow_res: ModelOccFlowResult = self.model(
-                        xyzs_torch,
-                        idx,
-                        len(self.full_input_sequence),
-                        QueryDirection.FORWARD,
-                    )
-            return self._build_occ_bev(occ_flow_res, x, y, xy_idxes), self._build_flow_bev(
-                occ_flow_res, x, y, xy_idxes
-            )
-
-        idxes = [
-            int(0.25 * len(self.full_input_sequence)),
-            int(0.5 * len(self.full_input_sequence)),
-            int(0.75 * len(self.full_input_sequence)),
-        ]
-
-        imgs = [make_occ_flow_imgs(idx) for idx in idxes]
-
-        logger.experiment.add_image(f"{prefix}/occ/0.25", imgs[0][0], epoch_idx)
-        logger.experiment.add_image(f"{prefix}/occ/0.50", imgs[1][0], epoch_idx)
-        logger.experiment.add_image(f"{prefix}/occ/0.75", imgs[2][0], epoch_idx)
-
-        logger.experiment.add_image(f"{prefix}/flow/0.25", imgs[0][1], epoch_idx)
-        logger.experiment.add_image(f"{prefix}/flow/0.50", imgs[1][1], epoch_idx)
-        logger.experiment.add_image(f"{prefix}/flow/0.75", imgs[2][1], epoch_idx)
+    def _process_grid_results(
+        self,
+        logger: Logger,
+        prefix: str,
+        percent_query: float,
+        epoch_idx: int,
+        result: ModelFlowResult,
+        x: np.ndarray,
+        y: np.ndarray,
+        xy_idxes: np.ndarray,
+    ):
+        super()._process_grid_results(
+            logger, prefix, percent_query, epoch_idx, result, x, y, xy_idxes
+        )
+        self._log_occ_bev(logger, prefix, percent_query, epoch_idx, result, x, y, xy_idxes)
 
 
 class GigachadOccFlowOptimizationLoop(GigachadNSFOptimizationLoop):
