@@ -282,7 +282,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         rep: GigaChadNSFPreprocessedInput,
         k: int,
         query_direction: QueryDirection,
-        loss_type: LossTypeEnum = LossTypeEnum.TRUNCATED_KD_TREE_FORWARD,
+        loss_type: LossTypeEnum = LossTypeEnum.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
         speed_limit: float | None = None,
     ) -> BaseCostProblem:
         assert k >= 1, f"Expected k >= 1, but got {k}"
