@@ -16,6 +16,7 @@ from pathlib import Path
 from bucketed_scene_flow_eval.utils import save_pickle
 from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models import AbstractBatcher
+from pytorch_memlab import MemReporter
 
 
 class WholeBatchBatcher(AbstractBatcher):
@@ -30,6 +31,20 @@ class WholeBatchBatcher(AbstractBatcher):
         return self.full_sequence
 
     def shuffle_minibatches(self, seed: int = 0):
+        pass
+
+
+class DummyProfiler:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self
+
+    def step(self):
+        pass
+
+    def save_results(self, key: str):
         pass
 
 
@@ -179,6 +194,30 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
     def _setup_optimizer(self, model: BaseOptimizationModel) -> torch.optim.Optimizer:
         return torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
+    def _setup_profiler(self, profile: bool) -> torch.profiler.profile | DummyProfiler:
+        if not profile:
+            return DummyProfiler()
+
+        profiler = torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        )
+
+        def save_results(key: str):
+            results = profiler.key_averages().table(sort_by=key, row_limit=30)
+            results_file = Path() / f"profile_results_{key}.txt"
+            with open(results_file, "w") as f:
+                f.write(results)
+            print(f"Saved profiling results to {results_file}")
+
+        profiler.save_results = save_results
+
+        return profiler
+
     def optimize(
         self,
         logger: Logger,
@@ -186,10 +225,12 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         full_batch: TorchFullFrameInputSequence,
         title: str | None = "Optimizing Neur Rep",
         leave: bool = False,
+        profile: bool = False,
     ) -> TorchFullFrameOutputSequence:
         model = model.train()
         if self.compile_model:
             model = torch.compile(model)
+
         full_batch = full_batch.clone().detach().requires_grad_(True)
 
         optimizer = self._setup_optimizer(model)
@@ -200,77 +241,68 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         best_output: TorchFullFrameOutputSequence = None
 
         # Profile the training step
-        # with torch.profiler.profile(
-        #     activities=[
-        #         torch.profiler.ProfilerActivity.CUDA,
-        #     ],
-        #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=self.epochs * len(batcher)),
-        #     record_shapes=True,
-        #     profile_memory=True,
-        #     with_stack=True,
-        # ) as prof:
+        with self._setup_profiler(profile=profile) as prof:
 
-        epoch_bar = tqdm.tqdm(
-            range(self.epochs), leave=leave, desc=title, disable=title is None, position=1
-        )
-        for epoch_idx in epoch_bar:
-            batcher.shuffle_minibatches(seed=epoch_idx)
-            total_cost = 0
-            minibatch_bar = tqdm.tqdm(
-                batcher,
-                leave=False,
-                position=2,
-                desc="Minibatches",
-                disable=(len(batcher) <= 1) or (title is None),
+            epoch_bar = tqdm.tqdm(
+                range(self.epochs), leave=leave, desc=title, disable=title is None, position=1
             )
-            for minibatch in minibatch_bar:
-                optimizer.zero_grad()
-                (cost_problem,) = model(ForwardMode.TRAIN, [minibatch], logger)
-                cost_problem: BaseCostProblem
-                cost = cost_problem.cost()
+            for epoch_idx in epoch_bar:
+                batcher.shuffle_minibatches(seed=epoch_idx)
+                total_cost = 0
+                minibatch_bar = tqdm.tqdm(
+                    batcher,
+                    leave=False,
+                    position=2,
+                    desc="Minibatches",
+                    disable=(len(batcher) <= 1) or (title is None),
+                )
+                for minibatch_idx, minibatch in enumerate(minibatch_bar):
+                    optimizer.zero_grad()
+                    (cost_problem,) = model(ForwardMode.TRAIN, [minibatch], logger)
+                    cost_problem: BaseCostProblem
+                    cost = cost_problem.cost()
 
-                cost.backward()
-                optimizer.step()
+                    cost.backward()
+                    optimizer.step()
 
-                total_cost += cost.item()
-                minibatch_bar.set_postfix(cost=f"{cost.item():0.6f}")
-                # prof.step()
+                    total_cost += cost.item()
+                    minibatch_bar.set_postfix(cost=f"{cost.item():0.6f}")
+                    prof.step()
 
-            if self.save_flow_every is not None:
-                if epoch_idx % self.save_flow_every == 0 or epoch_idx == self.epochs - 1:
-                    self._save_model_state(
-                        model, optimizer, scheduler, full_batch.dataset_idx, epoch_idx, logger
-                    )
+                if self.save_flow_every is not None:
+                    if epoch_idx % self.save_flow_every == 0 or epoch_idx == self.epochs - 1:
+                        self._save_model_state(
+                            model, optimizer, scheduler, full_batch.dataset_idx, epoch_idx, logger
+                        )
 
-            if total_cost < lowest_cost:
-                lowest_cost = total_cost
-                # Run in eval mode to avoid unnecessary computation
-                with torch.inference_mode():
-                    with torch.no_grad():
-                        (best_output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
+                if total_cost < lowest_cost:
+                    lowest_cost = total_cost
+                    # Run in eval mode to avoid unnecessary computation
+                    with torch.inference_mode():
+                        with torch.no_grad():
+                            (best_output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
 
-            batch_cost = total_cost / len(batcher)
-            should_exit = scheduler.step(batch_cost)
+                batch_cost = total_cost / len(batcher)
+                should_exit = scheduler.step(batch_cost)
 
-            logger_prefix = f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}"
-            logger.log_metrics(
-                {
-                    f"{logger_prefix}/batch_cost": (batch_cost),
-                    f"{logger_prefix}/lr": np.mean(scheduler.get_last_lr()),
-                },
-                step=epoch_idx,
-            )
+                logger_prefix = f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}"
+                logger.log_metrics(
+                    {
+                        f"{logger_prefix}/batch_cost": (batch_cost),
+                        f"{logger_prefix}/lr": np.mean(scheduler.get_last_lr()),
+                    },
+                    step=epoch_idx,
+                )
 
-            model.epoch_end_log(logger, logger_prefix, epoch_idx)
+                model.epoch_end_log(logger, logger_prefix, epoch_idx)
 
-            epoch_bar.set_postfix(cost=f"{batch_cost:0.6f}")
+                epoch_bar.set_postfix(cost=f"{batch_cost:0.6f}")
 
-            if should_exit:
-                break
+                if should_exit:
+                    break
 
-        # # Save the profiling results to a text file
-        # with open("profile_results.txt", "w") as f:
-        #     f.write(prof.key_averages().table(sort_by="cuda_time_total", row_limit=30))
+        # Save the profiling results to a text file
+        prof.save_results("self_cuda_memory_usage")
 
         assert best_output is not None, "Best output is None; optimization failed"
         return best_output

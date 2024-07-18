@@ -58,9 +58,6 @@ RUN pip install opencv-python
 RUN apt install nvtop htop -y
 RUN pip install py-spy
 
-RUN pip install bucketed-scene-flow-eval==2.0.16
-ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
-
 RUN git clone https://github.com/thomgrand/torch_kdtree.git /torch_kdtree
 # Setup pybind11 manually so that it has 3.11 support
 RUN git clone https://github.com/pybind/pybind11.git /torch_kdtree/pybind11
@@ -72,6 +69,11 @@ RUN pip install .
 
 RUN apt install -y ffmpeg
 RUN conda install -c conda-forge openh264
+RUN pip install pytorch_memlab
+RUN apt install -y nano
+
+RUN pip install bucketed-scene-flow-eval==2.0.19
+ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user
 ENV HOME=/home/user

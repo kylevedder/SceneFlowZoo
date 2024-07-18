@@ -38,8 +38,10 @@ class PassthroughCostProblem(BaseCostProblem):
 class AdditiveCosts(BaseCostProblem):
     costs: list[BaseCostProblem]
 
-    def base_cost(self) -> torch.Tensor:
+    def __post_init__(self):
         assert len(self.costs) > 0, "No costs to add"
+
+    def base_cost(self) -> torch.Tensor:
         return sum([cost.base_cost() for cost in self.costs])
 
     def __repr__(self) -> str:

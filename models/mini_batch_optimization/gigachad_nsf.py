@@ -300,6 +300,9 @@ class GigachadNSFModel(BaseOptimizationModel):
         speed_limit: float | None = None,
     ) -> BaseCostProblem:
         assert k >= 1, f"Expected k >= 1, but got {k}"
+        assert (
+            len(rep) > k
+        ), f"Requested {k} steps, but this requires at least {k + 1} frames; got {len(rep)} frames"
 
         costs = []
 
