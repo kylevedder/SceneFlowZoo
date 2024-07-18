@@ -16,7 +16,6 @@ from pathlib import Path
 from bucketed_scene_flow_eval.utils import save_pickle
 from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models import AbstractBatcher
-from pytorch_memlab import MemReporter
 
 
 class WholeBatchBatcher(AbstractBatcher):
