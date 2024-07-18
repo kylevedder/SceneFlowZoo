@@ -86,7 +86,7 @@ def cosine_embed(x: torch.Tensor, num_freq: int, freq_sample_method="log", scale
     return torch.cos(x[..., None] * (freq_bands[None, :]) * scale)
 
 
-class FourierSpatialTemporalEmbedding(SimpleEncoder):
+class FourierTemporalEmbedding(SimpleEncoder):
     def __init__(self, n_freq: int = 14):
         super().__init__()
         self.n_freq = n_freq
@@ -107,44 +107,6 @@ class FourierSpatialTemporalEmbedding(SimpleEncoder):
 
     def __len__(self):
         return super().__len__() + self.n_freq
-
-
-# def _make_time_feature(idx: int, total_entries: int, device: torch.device) -> torch.Tensor:
-#     # Make the time feature zero mean
-#     if total_entries <= 1:
-#         # Handle divide by zero
-#         return torch.tensor([0.0], dtype=torch.float32, device=device)
-#     max_idx = total_entries - 1
-#     return torch.tensor([(idx / max_idx) - 0.5], dtype=torch.float32, device=device)
-
-
-# def _make_input_feature(
-#     pc: torch.Tensor,
-#     idx: int,
-#     total_entries: int,
-#     query_direction: QueryDirection,
-# ) -> torch.Tensor:
-#     assert pc.shape[1] == 3, f"Expected 3, but got {pc.shape[1]}"
-#     assert pc.dim() == 2, f"Expected 2, but got {pc.dim()}"
-#     assert isinstance(
-#         query_direction, QueryDirection
-#     ), f"Expected QueryDirection, but got {query_direction}"
-
-#     time_feature = _make_time_feature(idx, total_entries, pc.device)  # 1x1
-
-#     direction_feature = torch.tensor(
-#         [query_direction.value], dtype=torch.float32, device=pc.device
-#     )  # 1x1
-#     pc_time_dim = time_feature.repeat(pc.shape[0], 1).contiguous()
-#     pc_direction_dim = direction_feature.repeat(pc.shape[0], 1).contiguous()
-
-#     normalized_pc = pc
-
-#     # Concatenate into a feature tensor
-#     return torch.cat(
-#         [normalized_pc, pc_time_dim, pc_direction_dim],
-#         dim=-1,
-#     )
 
 
 class GigaChadFlowMLP(NSFPRawMLP):
@@ -186,7 +148,7 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
         latent_dim: int = 128,
         act_fn: ActivationFn = ActivationFn.RELU,
         num_layers: int = 8,
-        encoder: BaseEncoder = FourierSpatialTemporalEmbedding(),
+        encoder: BaseEncoder = FourierTemporalEmbedding(),
     ):
         super().__init__(
             input_dim=len(encoder),

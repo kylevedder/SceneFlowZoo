@@ -4,7 +4,6 @@ save_output_folder = "/tmp/argoverse2/test_gigachad_perf/"
 
 model = dict(
     args=dict(
-        pc_distance_type="forward_only",
         epochs=1,
     ),
 )

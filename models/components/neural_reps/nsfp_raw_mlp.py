@@ -9,6 +9,7 @@ class ActivationFn(enum.Enum):
     RELU = "relu"
     SIGMOID = "sigmoid"
     SINC = "sinc"  # https://openreview.net/pdf?id=0Lqyut1y7M
+    GAUSSIAN = "gaussian"  # https://ar5iv.labs.arxiv.org/html/2204.05735
 
 
 class SinC(nn.Module):
@@ -17,6 +18,19 @@ class SinC(nn.Module):
 
     def forward(self, x):
         return torch.sinc(x)
+
+
+class Gaussian(nn.Module):
+    def __init__(
+        self,
+        sigma: float = 0.1,  # GARF default value
+    ):
+        super(Gaussian, self).__init__()
+        self.sigma = sigma
+
+    def forward(self, x):
+        # From https://github.com/sfchng/Gaussian-Activated-Radiance-Fields/blob/74d72387bb2526755a8d6c07f6f900ec6a1be594/model/nerf_gaussian.py#L457-L464
+        return (-0.5 * (x) ** 2 / self.sigma**2).exp()
 
 
 class NSFPRawMLP(nn.Module):
@@ -35,17 +49,20 @@ class NSFPRawMLP(nn.Module):
         self.output_dim = output_dim
         self.latent_dim = latent_dim
         self.act_fn = act_fn
-        self.nn_layers = torch.nn.Sequential(*self._make_model())
+        self.nn_layers = torch.compile(torch.nn.Sequential(*self._make_model()), dynamic=True)
 
     def _get_activation_fn(self) -> nn.Module:
-        if self.act_fn == ActivationFn.RELU:
-            return torch.nn.ReLU()
-        elif self.act_fn == ActivationFn.SIGMOID:
-            return torch.nn.Sigmoid()
-        elif self.act_fn == ActivationFn.SINC:
-            return SinC()
-        else:
-            raise ValueError(f"Unsupported activation function: {self.act_fn}")
+        match self.act_fn:
+            case ActivationFn.RELU:
+                return torch.nn.ReLU()
+            case ActivationFn.SIGMOID:
+                return torch.nn.Sigmoid()
+            case ActivationFn.SINC:
+                return SinC()
+            case ActivationFn.GAUSSIAN:
+                return Gaussian()
+            case _:
+                raise ValueError(f"Unsupported activation function: {self.act_fn}")
 
     def _make_model(self) -> torch.nn.ModuleList:
         nn_layers = torch.nn.ModuleList([])

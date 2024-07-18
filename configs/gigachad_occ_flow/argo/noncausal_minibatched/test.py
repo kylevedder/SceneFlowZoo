@@ -13,7 +13,6 @@ model = dict(
         minibatch_size=5,
         speed_threshold=60.0 / 10.0,
         lr=0.00008,
-        chamfer_distance_type="forward_only",
         epochs=2000,
         pc_target_type="lidar",
         pc_loss_type="truncated_kd_tree_forward_backward",

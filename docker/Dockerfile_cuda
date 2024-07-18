@@ -71,6 +71,7 @@ WORKDIR /torch_kdtree
 RUN pip install .
 
 RUN apt install -y ffmpeg
+RUN conda install -c conda-forge openh264
 
 # Setup environment to support running as non-root user
 ENV HOME=/home/user
@@ -80,9 +81,9 @@ COPY bashrc /payload_files/bashrc
 
 # Downloading: "https://github.com/facebookresearch/co-tracker/zipball/main" to /payload_files/cache/torch/hub/main.zip
 # Downloading: "https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth" to /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
-RUN mkdir -p /payload_files/cache/torch/hub/checkpoints
-RUN wget https://github.com/facebookresearch/co-tracker/zipball/main -O /payload_files/cache/torch/hub/main.zip
-RUN wget https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth -O /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
+# RUN mkdir -p /payload_files/cache/torch/hub/checkpoints
+# RUN wget https://github.com/facebookresearch/co-tracker/zipball/main -O /payload_files/cache/torch/hub/main.zip
+# RUN wget https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth -O /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
 
 WORKDIR /project
 COPY entrypoint.sh /entrypoint.sh
