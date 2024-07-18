@@ -96,8 +96,8 @@ class OccFlowModel:
         model = GigachadOccFlowModel(
             full_input_sequence=torch_input_sequence,
             speed_threshold=60.0 / 10.0,
-            chamfer_target_type="lidar_camera",
-            chamfer_distance_type="forward_only",
+            pc_target_type="lidar",
+            pc_loss_type="truncated_kd_tree_forward_backward",
         )
         model.load_state_dict(model_weights)
         model.eval()
@@ -213,38 +213,36 @@ class OccFlowVisualizer:
 
     def visualize_occ_flow(self, z_value: float, output_path: Path):
         # Create a figure and axes for plotting
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        fig, axes = plt.subplots(3, 1, figsize=(10, 30))
 
-        # Initialize image artists (placeholders for our images)
-        lidar_im = axes[0].imshow(np.zeros_like(self._make_lidar_image(0)))
-        flow_im = axes[1].imshow(
-            np.zeros_like(
-                self._make_flow_image(
-                    ModelOccFlowResult(torch.zeros(1, 3), torch.zeros(1)), z_value
-                )
-            )
-        )
-        occ_im = axes[2].imshow(
-            np.zeros_like(
-                self._make_occ_image(ModelOccFlowResult(torch.zeros(1, 3), torch.zeros(1)), z_value)
-            )
-        )
-
-        # Set titles for each subplot
-        axes[0].set_title("Lidar")
-        axes[1].set_title("Flow")
-        axes[2].set_title("Occupancy")
-
-        # Function to update the images for each frame
-        def update_images(idx):
+        def make_images(idx: int):
             occ_flow_res = self.model.inference_model(idx, z_value)
             lidar_image = self._make_lidar_image(idx)
             flow_image = self._make_flow_image(occ_flow_res, z_value)
             occ_image = self._make_occ_image(occ_flow_res, z_value)
+            return lidar_image, flow_image, occ_image
+
+        lidar_image_zero, flow_image_zero, occ_image_zero = make_images(0)
+        # Initialize image artists (placeholders for our images)
+        lidar_im = axes[0].imshow(lidar_image_zero, cmap="gray")
+        occ_im = axes[1].imshow(occ_image_zero, cmap="gray")
+        flow_im = axes[2].imshow(flow_image_zero)
+
+        # Set titles for each subplot
+        axes[0].set_title("Lidar")
+        axes[1].set_title("Occupancy")
+        axes[2].set_title("Flow")
+
+        bar = tqdm.tqdm(total=len(self.frame_list))
+
+        # Function to update the images for each frame
+        def update_images(idx):
+            lidar_image, flow_image, occ_image = make_images(idx)
 
             lidar_im.set_data(lidar_image)
-            flow_im.set_data(flow_image)
             occ_im.set_data(occ_image)
+            flow_im.set_data(flow_image)
+            bar.update(1)
 
             return lidar_im, flow_im, occ_im
 
@@ -257,9 +255,8 @@ class OccFlowVisualizer:
         output_path.mkdir(parents=True, exist_ok=True)
         output_file_path = output_path / "occ_flow_video.mp4"
         ani.save(output_file_path, writer="ffmpeg", fps=10)
-        print(f"Saved video to {output_path}")
-
-        plt.show()
+        bar.close()
+        print(f"Saved video to {output_file_path}")
 
 
 def main():
