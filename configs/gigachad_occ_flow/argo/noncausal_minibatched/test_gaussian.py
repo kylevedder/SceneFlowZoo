@@ -6,6 +6,5 @@ model = dict(
     name="GigachadOccFlowGaussianOptimizationLoop",
     args=dict(
         minibatch_size=4,
-        lr=0.00008 * (4 / 5),
     ),
 )
