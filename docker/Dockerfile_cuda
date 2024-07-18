@@ -70,6 +70,8 @@ RUN git checkout a406a62e5b3ca74a76b6db9a1cd7cf3578c50772
 WORKDIR /torch_kdtree
 RUN pip install .
 
+RUN apt install -y ffmpeg
+
 # Setup environment to support running as non-root user
 ENV HOME=/home/user
 RUN mkdir /payload_files

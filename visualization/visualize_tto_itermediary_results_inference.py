@@ -68,8 +68,8 @@ class ModelWeightsFlowLoader(FlowLoader):
         model = self.model_type(
             full_input_sequence=torch_input_sequence,
             speed_threshold=60.0 / 10.0,
-            chamfer_target_type="lidar_camera",
-            chamfer_distance_type="forward_only",
+            pc_target_type="lidar_camera",
+            pc_loss_type="forward_only",
         )
         model.load_state_dict(model_weights)
         model.eval()

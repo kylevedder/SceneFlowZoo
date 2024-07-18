@@ -27,14 +27,14 @@ from visualization.flow_to_rgb import flow_to_rgb
 import numpy as np
 
 
-class LossTypeEnum(enum.Enum):
-    TRUNCATED_CHAMFER = 0
-    DISTANCE_TRANSFORM = 1
-    TRUNCATED_KD_TREE_FORWARD = 2
-    TRUNCATED_KD_TREE_FORWARD_BACKWARD = 3
+class PointCloudLossType(enum.Enum):
+    TRUNCATED_CHAMFER_FORWARD = "truncated_chamfer"
+    TRUNCATED_CHAMFER_FORWARD_BACKWARD = "truncated_chamfer_forward_backward"
+    TRUNCATED_KD_TREE_FORWARD = "truncated_kd_tree_forward"
+    TRUNCATED_KD_TREE_FORWARD_BACKWARD = "truncated_kd_tree_forward_backward"
 
 
-class ChamferTargetType(enum.Enum):
+class PointCloudTargetType(enum.Enum):
     LIDAR = "lidar"
     LIDAR_CAMERA = "lidar_camera"
 
@@ -99,28 +99,30 @@ class GigachadNSFModel(BaseOptimizationModel):
         self,
         full_input_sequence: TorchFullFrameInputSequence,
         speed_threshold: float,
-        chamfer_target_type: ChamferTargetType | str,
-        chamfer_distance_type: ChamferDistanceType | str,
+        pc_target_type: PointCloudTargetType | str,
+        pc_loss_type: PointCloudLossType | str,
     ) -> None:
         super().__init__(full_input_sequence)
-        self.model = GigaChadFlowMLP()
+        self.model: torch.nn.Module = GigaChadFlowMLP()
         self.speed_threshold = speed_threshold
-        self.chamfer_target_type = ChamferTargetType(chamfer_target_type)
-        self.chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
+        self.pc_target_type = PointCloudTargetType(pc_target_type)
+        self.pc_loss_type = PointCloudLossType(pc_loss_type)
 
         self._prep_neural_prior(self.model)
 
-        self.kd_trees: list[KDTreeWrapper] = self._prep_kdtrees()
+        self.kd_trees: list[KDTreeWrapper] | None = None
 
     def _prep_kdtrees(self) -> list[KDTreeWrapper]:
         full_rep = self._preprocess(self.full_input_sequence)
         kd_trees = []
         for idx in tqdm.tqdm(range(len(full_rep)), desc="Building KD Trees"):
-            match self.chamfer_target_type:
-                case ChamferTargetType.LIDAR:
+            match self.pc_target_type:
+                case PointCloudTargetType.LIDAR:
                     target_pc = full_rep.get_global_lidar_pc(idx, with_grad=False)
-                case ChamferTargetType.LIDAR_CAMERA:
+                case PointCloudTargetType.LIDAR_CAMERA:
                     target_pc = full_rep.get_global_lidar_auxillary_pc(idx, with_grad=False)
+                case _:
+                    raise ValueError(f"Unknown point cloud target type: {self.pc_target_type}")
 
             kd_trees.append(KDTreeWrapper(target_pc))
         return kd_trees
@@ -213,6 +215,12 @@ class GigachadNSFModel(BaseOptimizationModel):
             cost_problems.extend(self._is_occupied_cost(model_res_reverse))
         return AdditiveCosts(cost_problems)
 
+    def _get_kd_tree(self, rep: GigaChadNSFPreprocessedInput, rep_idx: int) -> KDTreeWrapper:
+        global_idx = rep.sequence_idxes[rep_idx]
+        if self.kd_trees is None:
+            self.kd_trees = self._prep_kdtrees()
+        return self.kd_trees[global_idx]
+
     def _process_k_step_subk(
         self,
         rep: GigaChadNSFPreprocessedInput,
@@ -220,7 +228,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         anchor_idx: int,
         subk: int,
         query_direction: QueryDirection,
-        loss_type: LossTypeEnum,
+        loss_type: PointCloudLossType,
         speed_limit: float | None,
     ) -> tuple[BaseCostProblem, torch.Tensor]:
         sequence_idx = rep.sequence_idxes[anchor_idx]
@@ -235,35 +243,38 @@ class GigachadNSFModel(BaseOptimizationModel):
         index_offset = (subk + 1) * query_direction.value
 
         def _get_target_pc() -> torch.Tensor:
-            match self.chamfer_target_type:
-                case ChamferTargetType.LIDAR:
+            match self.pc_target_type:
+                case PointCloudTargetType.LIDAR:
                     target_pc = rep.get_global_lidar_pc(anchor_idx + index_offset)
-                case ChamferTargetType.LIDAR_CAMERA:
+                case PointCloudTargetType.LIDAR_CAMERA:
                     target_pc = rep.get_global_lidar_auxillary_pc(anchor_idx + index_offset)
             return target_pc
 
         match loss_type:
-            case LossTypeEnum.TRUNCATED_CHAMFER:
+            case PointCloudLossType.TRUNCATED_CHAMFER_FORWARD:
                 problem: BaseCostProblem = TruncatedChamferLossProblem(
                     warped_pc=anchor_pc,
                     target_pc=_get_target_pc(),
-                    distance_type=self.chamfer_distance_type,
+                    distance_type=ChamferDistanceType.FORWARD_ONLY,
                 )
-            case LossTypeEnum.TRUNCATED_KD_TREE_FORWARD:
-                global_idx = rep.sequence_idxes[anchor_idx + index_offset]
-                kd_tree = self.kd_trees[global_idx]
-                problem = TruncatedForwardKDTreeLossProblem(
+            case PointCloudLossType.TRUNCATED_CHAMFER_FORWARD_BACKWARD:
+                problem = TruncatedChamferLossProblem(
                     warped_pc=anchor_pc,
-                    kdtree=kd_tree,
+                    target_pc=_get_target_pc(),
+                    distance_type=ChamferDistanceType.BOTH_DIRECTION,
                 )
-            case LossTypeEnum.TRUNCATED_KD_TREE_FORWARD_BACKWARD:
+            case PointCloudLossType.TRUNCATED_KD_TREE_FORWARD:
+                problem = TruncatedForwardKDTreeLossProblem(
+                    warped_pc=anchor_pc, kdtree=self._get_kd_tree(rep, anchor_idx + index_offset)
+                )
+            case PointCloudLossType.TRUNCATED_KD_TREE_FORWARD_BACKWARD:
                 problem = TruncatedForwardBackwardKDTreeLossProblem(
                     warped_pc=anchor_pc,
                     target_pc=_get_target_pc(),
-                    kdtree=self.kd_trees[sequence_idx],
+                    kdtree=self._get_kd_tree(rep, anchor_idx + index_offset),
                 )
-            case LossTypeEnum.DISTANCE_TRANSFORM:
-                raise NotImplementedError("Distance transform not implemented")
+            case _:
+                raise ValueError(f"Unknown loss type: {loss_type}")
 
         problem_list = [problem]
 
@@ -284,7 +295,7 @@ class GigachadNSFModel(BaseOptimizationModel):
         rep: GigaChadNSFPreprocessedInput,
         k: int,
         query_direction: QueryDirection,
-        loss_type: LossTypeEnum = LossTypeEnum.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
+        loss_type: PointCloudLossType,
         speed_limit: float | None = None,
     ) -> BaseCostProblem:
         assert k >= 1, f"Expected k >= 1, but got {k}"
@@ -318,15 +329,17 @@ class GigachadNSFModel(BaseOptimizationModel):
         ), f"Expected non-causal, but got {input_sequence.loader_type}"
 
         rep = self._preprocess(input_sequence)
+        # fmt: off
         return AdditiveCosts(
             [
-                self._k_step_cost(rep, 1, QueryDirection.FORWARD, speed_limit=self.speed_threshold),
-                self._k_step_cost(rep, 1, QueryDirection.REVERSE, speed_limit=self.speed_threshold),
-                self._k_step_cost(rep, 3, QueryDirection.FORWARD),
-                self._k_step_cost(rep, 3, QueryDirection.REVERSE),
+                self._k_step_cost(rep, 1, QueryDirection.FORWARD, self.pc_loss_type, speed_limit=self.speed_threshold),
+                self._k_step_cost(rep, 1, QueryDirection.REVERSE, self.pc_loss_type, speed_limit=self.speed_threshold),
+                self._k_step_cost(rep, 3, QueryDirection.FORWARD, self.pc_loss_type),
+                self._k_step_cost(rep, 3, QueryDirection.REVERSE, self.pc_loss_type),
                 self._cycle_consistency(rep) * 0.01,
             ]
         )
+        # fmt: on
 
     def _compute_ego_flow(
         self,
@@ -486,22 +499,24 @@ class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
     def __init__(
         self,
         speed_threshold: float,
-        chamfer_target_type: ChamferTargetType | str,
-        chamfer_distance_type: ChamferDistanceType | str = ChamferDistanceType.BOTH_DIRECTION,
+        pc_target_type: PointCloudTargetType | str,
+        pc_loss_type: (
+            PointCloudLossType | str
+        ) = PointCloudLossType.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
         model_class: type[BaseOptimizationModel] = GigachadNSFModel,
         *args,
         **kwargs,
     ):
         super().__init__(model_class=model_class, *args, **kwargs)
         self.speed_threshold = speed_threshold
-        self.chamfer_target_type = ChamferTargetType(chamfer_target_type)
-        self.chamfer_distance_type = ChamferDistanceType(chamfer_distance_type)
+        self.pc_target_type = PointCloudTargetType(pc_target_type)
+        self.pc_loss_type = PointCloudLossType(pc_loss_type)
 
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
             speed_threshold=self.speed_threshold,
-            chamfer_target_type=self.chamfer_target_type,
-            chamfer_distance_type=self.chamfer_distance_type,
+            pc_target_type=self.pc_target_type,
+            pc_loss_type=self.pc_loss_type,
         )

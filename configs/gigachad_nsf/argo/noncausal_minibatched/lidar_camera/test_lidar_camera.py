@@ -5,6 +5,6 @@ save_output_folder = "/efs/argoverse2/test_gigachad_nsf_lidar_camera_flow_feathe
 
 model = dict(
     args=dict(
-        chamfer_target_type="lidar_camera",
+        pc_target_type="lidar_camera",
     ),
 )

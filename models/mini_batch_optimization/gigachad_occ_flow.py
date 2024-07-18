@@ -6,10 +6,11 @@ from .gigachad_nsf import (
     GigachadNSFModel,
     GigachadNSFOptimizationLoop,
     ChamferDistanceType,
-    ChamferTargetType,
+    PointCloudTargetType,
     ModelFlowResult,
     QueryDirection,
     GigaChadNSFPreprocessedInput,
+    PointCloudLossType,
 )
 
 from models.components.optimization.cost_functions import (
@@ -39,15 +40,10 @@ class GigachadOccFlowModel(GigachadNSFModel):
         self,
         full_input_sequence: TorchFullFrameInputSequence,
         speed_threshold: float,
-        chamfer_target_type: ChamferTargetType | str,
-        chamfer_distance_type: ChamferDistanceType | str,
+        pc_target_type: PointCloudTargetType | str,
+        pc_loss_type: PointCloudLossType | str,
     ) -> None:
-        super().__init__(
-            full_input_sequence=full_input_sequence,
-            speed_threshold=speed_threshold,
-            chamfer_target_type=chamfer_target_type,
-            chamfer_distance_type=chamfer_distance_type,
-        )
+        super().__init__(full_input_sequence, speed_threshold, pc_target_type, pc_loss_type)
         self.model = GigaChadOccFlowMLP()
 
     def _make_expected_zero_flow(self, model_res: ModelFlowResult) -> BaseCostProblem:
@@ -119,16 +115,18 @@ class GigachadOccFlowModel(GigachadNSFModel):
         ), f"Expected non-causal, but got {input_sequence.loader_type}"
 
         rep = self._preprocess(input_sequence)
+        # fmt: off
         return AdditiveCosts(
             [
-                self._k_step_cost(rep, 1, QueryDirection.FORWARD, speed_limit=self.speed_threshold),
-                self._k_step_cost(rep, 1, QueryDirection.REVERSE, speed_limit=self.speed_threshold),
-                self._k_step_cost(rep, 3, QueryDirection.FORWARD),
-                self._k_step_cost(rep, 3, QueryDirection.REVERSE),
-                self._free_space_regularization(rep),
+                self._k_step_cost(rep, 1, QueryDirection.FORWARD, self.pc_loss_type, speed_limit=self.speed_threshold),
+                self._k_step_cost(rep, 1, QueryDirection.REVERSE, self.pc_loss_type, speed_limit=self.speed_threshold),
+                self._k_step_cost(rep, 3, QueryDirection.FORWARD, self.pc_loss_type),
+                self._k_step_cost(rep, 3, QueryDirection.REVERSE, self.pc_loss_type),
                 self._cycle_consistency(rep) * 0.01,
+                self._free_space_regularization(rep),
             ]
         )
+        # fmt: on
 
     def _forward_single_noncausal(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
@@ -207,17 +205,14 @@ class GigachadOccFlowOptimizationLoop(GigachadNSFOptimizationLoop):
     def __init__(
         self,
         speed_threshold: float,
-        chamfer_target_type: ChamferTargetType | str,
-        chamfer_distance_type: ChamferDistanceType | str = ChamferDistanceType.BOTH_DIRECTION,
+        pc_target_type: PointCloudTargetType | str,
+        pc_loss_type: (
+            PointCloudLossType | str
+        ) = PointCloudLossType.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
         model_class: type[BaseOptimizationModel] = GigachadOccFlowModel,
         *args,
         **kwargs,
     ):
         super().__init__(
-            speed_threshold=speed_threshold,
-            chamfer_target_type=chamfer_target_type,
-            chamfer_distance_type=chamfer_distance_type,
-            model_class=model_class,
-            *args,
-            **kwargs,
+            speed_threshold, pc_target_type, pc_loss_type, model_class, *args, **kwargs
         )

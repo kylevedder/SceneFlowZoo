@@ -3,7 +3,7 @@ has_labels = False
 SEQUENCE_LENGTH = 150
 
 test_dataset_root = "/efs/argoverse2/test/"
-save_output_folder = "/efs/argoverse2/test_gigachad_nsf_flow_feather/"
+save_output_folder = "/efs/argoverse2/test_gigachad_nsf_kd_forward_backward_feather/"
 
 
 model = dict(
@@ -14,7 +14,8 @@ model = dict(
         speed_threshold=60.0 / 10.0,
         lr=0.00008,
         epochs=1000,
-        chamfer_target_type="lidar",
+        pc_target_type="lidar",
+        pc_loss_type="truncated_kd_tree_forward_backward",
     ),
 )
 
