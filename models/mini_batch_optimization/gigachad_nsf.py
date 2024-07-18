@@ -101,9 +101,10 @@ class GigachadNSFModel(BaseOptimizationModel):
         speed_threshold: float,
         pc_target_type: PointCloudTargetType | str,
         pc_loss_type: PointCloudLossType | str,
+        model: torch.nn.Module = GigaChadFlowMLP(),
     ) -> None:
         super().__init__(full_input_sequence)
-        self.model: torch.nn.Module = GigaChadFlowMLP()
+        self.model = model
         self.speed_threshold = speed_threshold
         self.pc_target_type = PointCloudTargetType(pc_target_type)
         self.pc_loss_type = PointCloudLossType(pc_loss_type)
@@ -496,6 +497,7 @@ class GigachadNSFModel(BaseOptimizationModel):
 
 
 class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
+
     def __init__(
         self,
         speed_threshold: float,
@@ -503,14 +505,16 @@ class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
         pc_loss_type: (
             PointCloudLossType | str
         ) = PointCloudLossType.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
-        model_class: type[BaseOptimizationModel] = GigachadNSFModel,
         *args,
         **kwargs,
     ):
-        super().__init__(model_class=model_class, *args, **kwargs)
+        super().__init__(model_class=self._model_class(), *args, **kwargs)
         self.speed_threshold = speed_threshold
         self.pc_target_type = PointCloudTargetType(pc_target_type)
         self.pc_loss_type = PointCloudLossType(pc_loss_type)
+
+    def _model_class(self) -> type[BaseOptimizationModel]:
+        return GigachadNSFModel
 
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence

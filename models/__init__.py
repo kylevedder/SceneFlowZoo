@@ -35,6 +35,7 @@ from .mini_batch_optimization import (
     GigachadNSFOptimizationLoop,
     NTPOptimizationLoop,
     GigachadOccFlowOptimizationLoop,
+    GigachadOccFlowGaussianOptimizationLoop,
 )
 
 
@@ -49,6 +50,7 @@ importable_models = [
     GigachadNSFOptimizationLoop,
     NTPOptimizationLoop,
     GigachadOccFlowOptimizationLoop,
+    GigachadOccFlowGaussianOptimizationLoop,
 ]
 
 # Ensure all importable models are based on the BaseModel class.
@@ -58,19 +60,3 @@ for cls in importable_models:
     ), f"{cls} is not a valid model class."
 
 name_to_class_lookup = {cls.__name__.lower(): cls for cls in importable_models}
-
-
-__all__ = [
-    "DeFlow",
-    "FastFlow3D",
-    "FastFlow3DBucketedLoaderLoss",
-    "FastFlow3DSelfSupervisedLoss",
-    "NSFPModel",
-    "FastNSFModel",
-    "FastNSFPlusPlusModel",
-    "Liu2024Model",
-    "GigaChadNSFModel",
-    "ConstantVectorBaseline",
-    "BaseTorchModel",
-    "ForwardMode",
-]

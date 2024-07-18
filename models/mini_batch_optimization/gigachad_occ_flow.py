@@ -1,6 +1,6 @@
 from pytorch_lightning.loggers import Logger, TensorBoardLogger
 from models.base_models import BaseOptimizationModel
-from models.components.neural_reps import GigaChadOccFlowMLP, ModelOccFlowResult
+from models.components.neural_reps import GigaChadOccFlowMLP, ModelOccFlowResult, ActivationFn
 from models.mini_batch_optimization.gigachad_nsf import ModelFlowResult
 from .gigachad_nsf import (
     GigachadNSFModel,
@@ -42,9 +42,9 @@ class GigachadOccFlowModel(GigachadNSFModel):
         speed_threshold: float,
         pc_target_type: PointCloudTargetType | str,
         pc_loss_type: PointCloudLossType | str,
+        model: torch.nn.Module = GigaChadOccFlowMLP(),
     ) -> None:
-        super().__init__(full_input_sequence, speed_threshold, pc_target_type, pc_loss_type)
-        self.model = GigaChadOccFlowMLP()
+        super().__init__(full_input_sequence, speed_threshold, pc_target_type, pc_loss_type, model)
 
     def _make_expected_zero_flow(self, model_res: ModelFlowResult) -> BaseCostProblem:
         assert isinstance(
@@ -202,17 +202,15 @@ class GigachadOccFlowModel(GigachadNSFModel):
 
 class GigachadOccFlowOptimizationLoop(GigachadNSFOptimizationLoop):
 
-    def __init__(
-        self,
-        speed_threshold: float,
-        pc_target_type: PointCloudTargetType | str,
-        pc_loss_type: (
-            PointCloudLossType | str
-        ) = PointCloudLossType.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
-        model_class: type[BaseOptimizationModel] = GigachadOccFlowModel,
-        *args,
-        **kwargs,
-    ):
-        super().__init__(
-            speed_threshold, pc_target_type, pc_loss_type, model_class, *args, **kwargs
+    def _model_class(self) -> type[BaseOptimizationModel]:
+        return GigachadOccFlowModel
+
+
+class GigachadOccFlowGaussianOptimizationLoop(GigachadOccFlowOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(act_fn=ActivationFn.GAUSSIAN)
         )
