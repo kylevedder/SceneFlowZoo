@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import torch
 import enum
 from abc import ABC, abstractmethod
-import numpy as np
+import typing
 
 
 class QueryDirection(enum.Enum):
@@ -128,6 +128,7 @@ class GigaChadFlowMLP(NSFPRawMLP):
         )
         self.encoder = encoder
 
+    @typing.no_type_check
     def forward(
         self,
         pc: torch.Tensor,
@@ -159,6 +160,7 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
         )
         self.encoder = encoder
 
+    @typing.no_type_check
     def forward(
         self,
         pc: torch.Tensor,
