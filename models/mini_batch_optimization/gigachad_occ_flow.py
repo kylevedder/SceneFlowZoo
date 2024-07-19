@@ -214,3 +214,13 @@ class GigachadOccFlowGaussianOptimizationLoop(GigachadOccFlowOptimizationLoop):
         return super()._model_constructor_args(full_input_sequence) | dict(
             model=GigaChadOccFlowMLP(act_fn=ActivationFn.GAUSSIAN)
         )
+
+
+class GigachadOccFlowSincOptimizationLoop(GigachadOccFlowOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(act_fn=ActivationFn.SINC)
+        )

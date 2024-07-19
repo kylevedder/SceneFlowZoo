@@ -36,6 +36,7 @@ from .mini_batch_optimization import (
     NTPOptimizationLoop,
     GigachadOccFlowOptimizationLoop,
     GigachadOccFlowGaussianOptimizationLoop,
+    GigachadOccFlowSincOptimizationLoop,
 )
 
 
@@ -51,6 +52,7 @@ importable_models = [
     NTPOptimizationLoop,
     GigachadOccFlowOptimizationLoop,
     GigachadOccFlowGaussianOptimizationLoop,
+    GigachadOccFlowSincOptimizationLoop,
 ]
 
 # Ensure all importable models are based on the BaseModel class.
