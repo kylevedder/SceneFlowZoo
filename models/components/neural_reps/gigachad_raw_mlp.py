@@ -22,7 +22,7 @@ class ModelOccFlowResult(ModelFlowResult):
     occ: torch.Tensor  # N
 
 
-class BaseEncoder(ABC):
+class BaseEncoder(ABC, torch.nn.Module):
 
     @abstractmethod
     def encode(
@@ -33,6 +33,10 @@ class BaseEncoder(ABC):
     @abstractmethod
     def __len__(self):
         raise NotImplementedError
+
+    def forward(self, entries: tuple[Tensor, int, int, QueryDirection]) -> Tensor:
+        (pc, idx, total_entries, query_direction) = entries
+        return self.encode(pc, idx, total_entries, query_direction)
 
 
 class SimpleEncoder(BaseEncoder):
@@ -126,7 +130,7 @@ class GigaChadFlowMLP(NSFPRawMLP):
             act_fn=act_fn,
             num_layers=num_layers,
         )
-        self.encoder = encoder
+        self.encoder_plus_nn_layers = torch.compile(torch.nn.Sequential(encoder, self.nn_layers))
 
     @typing.no_type_check
     def forward(
@@ -136,8 +140,8 @@ class GigaChadFlowMLP(NSFPRawMLP):
         total_entries: int,
         query_direction: QueryDirection,
     ) -> ModelFlowResult:
-        input_feature = self.encoder.encode(pc, idx, total_entries, query_direction)
-        res = super().forward(input_feature)
+        entries = (pc, idx, total_entries, query_direction)
+        res = self.encoder_plus_nn_layers(entries)
         return ModelFlowResult(flow=res)
 
 
@@ -158,7 +162,7 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
             act_fn=act_fn,
             num_layers=num_layers,
         )
-        self.encoder = encoder
+        self.encoder_plus_nn_layers = torch.compile(torch.nn.Sequential(encoder, self.nn_layers))
 
     @typing.no_type_check
     def forward(
@@ -168,7 +172,7 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
         total_entries: int,
         query_direction: QueryDirection,
     ) -> ModelOccFlowResult:
-        input_feature = self.encoder.encode(pc, idx, total_entries, query_direction)
-        res = super().forward(input_feature)
+        entries = (pc, idx, total_entries, query_direction)
+        res = self.encoder_plus_nn_layers(entries)
         assert res.shape[1] == 4, f"Expected 4, but got {res.shape[1]}"
         return ModelOccFlowResult(flow=res[:, :3], occ=res[:, 3])

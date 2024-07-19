@@ -8,8 +8,8 @@ from models.components.optimization.cost_functions import TruncatedChamferLossPr
 class ActivationFn(enum.Enum):
     RELU = "relu"
     SIGMOID = "sigmoid"
-    SINC = "sinc"  # https://openreview.net/pdf?id=0Lqyut1y7M
-    GAUSSIAN = "gaussian"  # https://ar5iv.labs.arxiv.org/html/2204.05735
+    SINC = "sinc"  # https://openreview.net/forum?id=0Lqyut1y7M
+    GAUSSIAN = "gaussian"  # https://arxiv.org/abs/2204.05735
 
 
 class SinC(nn.Module):

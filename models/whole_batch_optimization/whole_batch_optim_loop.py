@@ -16,6 +16,12 @@ from pathlib import Path
 from bucketed_scene_flow_eval.utils import save_pickle
 from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models import AbstractBatcher
+import enum
+
+
+class OptimizerType(enum.Enum):
+    ADAM = "adam"
+    ADAMW = "adamw"
 
 
 class WholeBatchBatcher(AbstractBatcher):
@@ -56,6 +62,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
             "StoppingScheduler", {"early_stopping": EarlyStopping()}
         ),
         epochs: int = 5000,
+        optimizer_type: OptimizerType | str = OptimizerType.ADAM,
         lr: float = 0.008,
         weight_decay: float = 0,
         compile_model: bool = False,
@@ -76,6 +83,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         self.scheduler_builder = scheduler
 
         self.epochs = epochs
+        self.optimizer_type = OptimizerType(optimizer_type)
         self.lr = lr
         self.weight_decay = weight_decay
 
@@ -191,7 +199,15 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         return WholeBatchBatcher(full_sequence)
 
     def _setup_optimizer(self, model: BaseOptimizationModel) -> torch.optim.Optimizer:
-        return torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        match self.optimizer_type:
+            case OptimizerType.ADAM:
+                return torch.optim.Adam(
+                    model.parameters(), lr=self.lr, weight_decay=self.weight_decay
+                )
+            case OptimizerType.ADAMW:
+                return torch.optim.AdamW(
+                    model.parameters(), lr=self.lr, weight_decay=self.weight_decay
+                )
 
     def _setup_profiler(self, profile: bool) -> torch.profiler.profile | DummyProfiler:
         if not profile:
