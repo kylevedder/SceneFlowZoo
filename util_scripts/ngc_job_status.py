@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
+# Add current directory to path
+import sys
+
+sys.path.append(".")
+
 
 import argparse
-import logging
 import sys
-from collections import defaultdict
-from pathlib import Path
-from typing import Dict, List
-
-import io
-import pandas as pd
 import paramiko
 
 
-def setup_logging() -> None:
-    logging.basicConfig(
-        level=logging.ERROR,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+from util_scripts.ngc_utils.utils import (
+    get_ssh_client,
+    NGCJobState,
+    get_job_states,
+)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -28,116 +25,41 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def get_ssh_client(hostname: str) -> paramiko.SSHClient:
-    client = paramiko.SSHClient()
-    client.load_system_host_keys()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+def print_jobs(
+    client: paramiko.SSHClient,
+) -> None:
+    print("Retrieving job states...")
+    job_states = get_job_states(client)
+    print("Retrieved job states.")
+    prefix_lookup: dict[str, list[NGCJobState]] = {}
 
-    ssh_config = paramiko.SSHConfig()
-    user_config_file = Path.home() / ".ssh" / "config"
-    if user_config_file.exists():
-        with user_config_file.open() as f:
-            ssh_config.parse(f)
+    for job in job_states.values():
+        prefix = job.get_job_prefix()
+        prefix_jobs = prefix_lookup.get(prefix, [])
+        prefix_jobs.append(job)
+        prefix_lookup[prefix] = prefix_jobs
 
-    user_config = ssh_config.lookup(hostname)
-
-    connect_kwargs = {
-        "hostname": user_config.get("hostname", hostname),
-        "port": int(user_config.get("port", 22)),
-        "username": user_config.get("user"),
-        "look_for_keys": True,
-        "allow_agent": True,
-    }
-
-    if "identityfile" in user_config:
-        connect_kwargs["key_filename"] = user_config["identityfile"]
-
-    logging.info(f"Attempting to connect with parameters: {connect_kwargs}")
-
-    try:
-        client.connect(**connect_kwargs)
-        return client
-    except paramiko.AuthenticationException:
-        logging.error("Authentication failed. Please check your SSH key and permissions.")
-        raise
-    except paramiko.SSHException as ssh_exception:
-        logging.error(f"SSH exception occurred: {str(ssh_exception)}")
-        raise
-    except Exception as e:
-        logging.error(f"An unexpected error occurred: {str(e)}")
-        raise
-
-
-def run_remote_command(client: paramiko.SSHClient, command: str) -> tuple[str, str, int]:
-    stdin, stdout, stderr = client.exec_command(command)
-    exit_status = stdout.channel.recv_exit_status()
-    return stdout.read().decode(), stderr.read().decode(), exit_status
-
-
-def get_job_status(client: paramiko.SSHClient) -> pd.DataFrame:
-    command = "ngc batch list --duration=7D --column=name --column=status --format_type csv"
-    stdout, stderr, exit_status = run_remote_command(client, command)
-    if exit_status != 0:
-        raise RuntimeError(f"Failed to get job status. Error: {stderr}")
-    df = pd.read_csv(io.StringIO(stdout), header=0)
-    # Convert the names of the columns to lowercase
-    df = df.rename(columns={col: col.lower() for col in df.columns})
-    return df
-
-
-def group_jobs_by_prefix(df: pd.DataFrame) -> Dict[str, Dict[str, int]]:
-    grouped_jobs = defaultdict(lambda: defaultdict(int))
-    latest_jobs = {}  # To keep track of the latest job for each unique name
-
-    # Ensure the dataframe is sorted by job ID in descending order (latest first)
-    df = df.sort_values(by="id", ascending=False)
-
-    for _, row in df.iterrows():
-        name = row["name"]
-        status = row["status"]
-
-        # If we've already seen this job name, skip this older instance
-        if name in latest_jobs:
-            continue
-
-        latest_jobs[name] = row["id"]  # Mark this as the latest job for this name
-
-        # Split on the last underscore to get the prefix
-        prefix = "_".join(name.split("_")[:-1])
-
-        grouped_jobs[prefix][status] += 1
-        grouped_jobs[prefix]["TOTAL"] += 1
-
-    return grouped_jobs
-
-
-def print_job_status_report(grouped_jobs: Dict[str, Dict[str, int]]) -> None:
-    for prefix, status_counts in grouped_jobs.items():
-        print(f"\nJob Prefix: {prefix}")
-        print("-" * 20)
-        for status, count in status_counts.items():
-            if status != "TOTAL":
-                print(f"{status}: {count}")
-        print(f"TOTAL: {status_counts['TOTAL']}")
-        print()
+    for prefix, jobs in prefix_lookup.items():
+        most_advanced_states = [job.most_advanced_state() for job in jobs]
+        state_counts = {
+            state: most_advanced_states.count(state) for state in set(most_advanced_states)
+        }
+        print("========================================")
+        print(f"Job Prefix: {prefix}")
+        print("========================================")
+        for state, count in state_counts.items():
+            print(f"\t{state}: {count}")
 
 
 def main() -> None:
-    setup_logging()
     args = parse_arguments()
 
     try:
         client = get_ssh_client(args.ssh_host)
-        logging.info(f"Connected to SSH host: {args.ssh_host}")
 
-        job_status_df = get_job_status(client)
-        grouped_jobs = group_jobs_by_prefix(job_status_df)
-        print_job_status_report(grouped_jobs)
-
-    except KeyboardInterrupt:
-        logging.info("Script interrupted by user. Exiting...")
+        print_jobs(client)
     except Exception as e:
-        logging.exception(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred: {e}")
     finally:
         if "client" in locals():
             client.close()
