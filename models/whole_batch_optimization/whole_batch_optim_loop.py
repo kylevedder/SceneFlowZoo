@@ -233,6 +233,34 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         return profiler
 
+    def _forward_optimize(
+        self,
+        model: BaseOptimizationModel,
+        batch: TorchFullFrameInputSequence,
+        logger: Logger,
+    ) -> BaseCostProblem:
+        try:
+            (output,) = model(ForwardMode.TRAIN, [batch], logger)
+        except Exception as e:
+            print(f"Error during training: {e}")
+            raise e
+        return output
+
+    def _forward_inference(
+        self,
+        model: BaseOptimizationModel,
+        full_batch: TorchFullFrameInputSequence,
+        logger: Logger,
+    ) -> TorchFullFrameOutputSequence:
+        try:
+            with torch.inference_mode():
+                with torch.no_grad():
+                    (output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
+        except Exception as e:
+            print(f"Error during inference: {e}")
+            raise e
+        return output
+
     def optimize(
         self,
         logger: Logger,
@@ -273,10 +301,8 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                 )
                 for minibatch_idx, minibatch in enumerate(minibatch_bar):
                     optimizer.zero_grad()
-                    (cost_problem,) = model(ForwardMode.TRAIN, [minibatch], logger)
-                    cost_problem: BaseCostProblem
+                    cost_problem = self._forward_optimize(model, minibatch, logger)
                     cost = cost_problem.cost()
-
                     cost.backward()
                     optimizer.step()
 
@@ -295,7 +321,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                     # Run in eval mode to avoid unnecessary computation
                     with torch.inference_mode():
                         with torch.no_grad():
-                            (best_output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
+                            best_output = self._forward_inference(model, full_batch, logger)
 
                 batch_cost = total_cost / len(batcher)
                 should_exit = scheduler.step(batch_cost)
@@ -318,6 +344,8 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         # Save the profiling results to a text file
         prof.save_results("self_cuda_memory_usage")
+
+        print(f"Exiting after {epoch_idx} epochs with lowest cost of {lowest_cost}")
 
         assert best_output is not None, "Best output is None; optimization failed"
         return best_output
