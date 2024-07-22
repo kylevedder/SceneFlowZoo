@@ -310,6 +310,10 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                     minibatch_bar.set_postfix(cost=f"{cost.item():0.6f}")
                     prof.step()
 
+                del minibatch  # Free up memory from the last minibatch
+                del cost_problem  # Free up memory from the last cost problem
+                del cost  # Free up memory from the last cost
+
                 if self.save_flow_every is not None:
                     if epoch_idx % self.save_flow_every == 0 or epoch_idx == self.epochs - 1:
                         self._save_model_state(
@@ -318,10 +322,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
                 if total_cost < lowest_cost:
                     lowest_cost = total_cost
-                    # Run in eval mode to avoid unnecessary computation
-                    with torch.inference_mode():
-                        with torch.no_grad():
-                            best_output = self._forward_inference(model, full_batch, logger)
+                    best_output = self._forward_inference(model, full_batch, logger)
 
                 batch_cost = total_cost / len(batcher)
                 should_exit = scheduler.step(batch_cost)
