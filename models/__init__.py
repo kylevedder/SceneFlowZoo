@@ -35,6 +35,7 @@ from .mini_batch_optimization import (
     GigachadNSFOptimizationLoop,
     NTPOptimizationLoop,
     GigachadOccFlowOptimizationLoop,
+    GigachadNSFSincOptimizationLoop,
     GigachadOccFlowGaussianOptimizationLoop,
     GigachadOccFlowSincOptimizationLoop,
 )
@@ -49,6 +50,7 @@ importable_models = [
     FastNSFModelOptimizationLoop,
     Liu2024OptimizationLoop,
     GigachadNSFOptimizationLoop,
+    GigachadNSFSincOptimizationLoop,
     NTPOptimizationLoop,
     GigachadOccFlowOptimizationLoop,
     GigachadOccFlowGaussianOptimizationLoop,

@@ -8,12 +8,7 @@ import argparse
 import logging
 import sys
 import time
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List
-
-import io
-import pandas as pd
 import paramiko
 
 from util_scripts.ngc_utils.utils import (

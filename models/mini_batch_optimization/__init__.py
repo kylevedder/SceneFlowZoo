@@ -1,5 +1,9 @@
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop
-from .gigachad_nsf import GigachadNSFOptimizationLoop, GigachadNSFModel
+from .gigachad_nsf import (
+    GigachadNSFModel,
+    GigachadNSFOptimizationLoop,
+    GigachadNSFSincOptimizationLoop,
+)
 from .gigachad_occ_flow import (
     GigachadOccFlowModel,
     GigachadOccFlowOptimizationLoop,

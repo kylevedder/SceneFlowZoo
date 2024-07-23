@@ -1,6 +1,11 @@
 from pytorch_lightning.loggers.logger import Logger
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop, MinibatchedSceneFlowInputSequence
-from models.components.neural_reps import GigaChadFlowMLP, QueryDirection, ModelFlowResult
+from models.components.neural_reps import (
+    GigaChadFlowMLP,
+    QueryDirection,
+    ModelFlowResult,
+    ActivationFn,
+)
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from dataclasses import dataclass
 from models import BaseOptimizationModel
@@ -526,4 +531,14 @@ class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
             speed_threshold=self.speed_threshold,
             pc_target_type=self.pc_target_type,
             pc_loss_type=self.pc_loss_type,
+        )
+
+
+class GigachadNSFSincOptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadFlowMLP(act_fn=ActivationFn.SINC)
         )
