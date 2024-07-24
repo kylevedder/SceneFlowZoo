@@ -18,6 +18,7 @@ from models.components.neural_reps import (
     GigaChadOccFlowMLP,
     SimpleEncoder,
     FourierTemporalEmbedding,
+    ActivationFn,
 )
 from models.mini_batch_optimization import GigachadOccFlowModel
 from models.components.neural_reps import ModelOccFlowResult, QueryDirection
@@ -103,7 +104,9 @@ class OccFlowModel:
             speed_threshold=60.0 / 10.0,
             pc_target_type="lidar",
             pc_loss_type="truncated_kd_tree_forward_backward",
-            model=GigaChadOccFlowMLP(encoder=FourierTemporalEmbedding(), with_compile=False),
+            model=GigaChadOccFlowMLP(
+                encoder=FourierTemporalEmbedding(), with_compile=True, act_fn=ActivationFn.SINC
+            ),
         )
         model.load_state_dict(model_weights)
         model.eval()
