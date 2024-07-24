@@ -42,6 +42,7 @@ class NSFPRawMLP(nn.Module):
         latent_dim: int = 128,
         act_fn: ActivationFn = ActivationFn.RELU,
         num_layers: int = 8,
+        with_compile: bool = True,
     ):
         super().__init__()
         self.layer_size = num_layers
@@ -49,7 +50,9 @@ class NSFPRawMLP(nn.Module):
         self.output_dim = output_dim
         self.latent_dim = latent_dim
         self.act_fn = act_fn
-        self.nn_layers = torch.compile(torch.nn.Sequential(*self._make_model()), dynamic=True)
+        self.nn_layers = torch.nn.Sequential(*self._make_model())
+        if with_compile:
+            self.nn_layers = torch.compile(self.nn_layers, dynamic=True)
 
     def _get_activation_fn(self) -> nn.Module:
         match self.act_fn:

@@ -14,6 +14,11 @@ from visualization.vis_lib import ColorEnum
 from dataclasses import dataclass
 import numpy as np
 import torch
+from models.components.neural_reps import (
+    GigaChadOccFlowMLP,
+    SimpleEncoder,
+    FourierTemporalEmbedding,
+)
 from models.mini_batch_optimization import GigachadOccFlowModel
 from models.components.neural_reps import ModelOccFlowResult, QueryDirection
 import tqdm
@@ -98,6 +103,7 @@ class OccFlowModel:
             speed_threshold=60.0 / 10.0,
             pc_target_type="lidar",
             pc_loss_type="truncated_kd_tree_forward_backward",
+            model=GigaChadOccFlowMLP(encoder=FourierTemporalEmbedding(), with_compile=False),
         )
         model.load_state_dict(model_weights)
         model.eval()
@@ -139,6 +145,7 @@ def load_frame_sequence(
             with_ground=False,
             range_crop_type="ego",
             use_gt_flow=False,
+            load_flow=False,
             log_subset=[sequence_id],
         ),
     )

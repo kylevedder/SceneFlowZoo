@@ -154,6 +154,7 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
         act_fn: ActivationFn = ActivationFn.RELU,
         num_layers: int = 8,
         encoder: BaseEncoder = FourierTemporalEmbedding(),
+        with_compile: bool = True,
     ):
         super().__init__(
             input_dim=len(encoder),
@@ -161,8 +162,11 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
             latent_dim=latent_dim,
             act_fn=act_fn,
             num_layers=num_layers,
+            with_compile=with_compile,
         )
-        self.encoder_plus_nn_layers = torch.compile(torch.nn.Sequential(encoder, self.nn_layers))
+        self.encoder_plus_nn_layers = torch.nn.Sequential(encoder, self.nn_layers)
+        if with_compile:
+            self.encoder_plus_nn_layers = torch.compile(self.encoder_plus_nn_layers)
 
     @typing.no_type_check
     def forward(
