@@ -5,6 +5,7 @@ from models.components.neural_reps import (
     QueryDirection,
     ModelFlowResult,
     ActivationFn,
+    FourierTemporalEmbedding,
 )
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from dataclasses import dataclass
@@ -541,4 +542,54 @@ class GigachadNSFSincOptimizationLoop(GigachadNSFOptimizationLoop):
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
             model=GigaChadFlowMLP(act_fn=ActivationFn.SINC)
+        )
+
+
+class GigachadNSFGaussianOptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadFlowMLP(act_fn=ActivationFn.GAUSSIAN)
+        )
+
+
+class GigachadNSFFourtierOptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadFlowMLP(encoder=FourierTemporalEmbedding())
+        )
+
+
+class GigachadNSFDepth10OptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadFlowMLP(num_layers=10)
+        )
+
+
+class GigachadNSFDepth4OptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadFlowMLP(num_layers=4)
+        )
+
+
+class GigachadNSFDepth2OptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadFlowMLP(num_layers=2)
         )

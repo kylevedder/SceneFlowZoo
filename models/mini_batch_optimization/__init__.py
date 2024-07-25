@@ -3,6 +3,11 @@ from .gigachad_nsf import (
     GigachadNSFModel,
     GigachadNSFOptimizationLoop,
     GigachadNSFSincOptimizationLoop,
+    GigachadNSFGaussianOptimizationLoop,
+    GigachadNSFFourtierOptimizationLoop,
+    GigachadNSFDepth10OptimizationLoop,
+    GigachadNSFDepth4OptimizationLoop,
+    GigachadNSFDepth2OptimizationLoop,
 )
 from .gigachad_occ_flow import (
     GigachadOccFlowModel,
