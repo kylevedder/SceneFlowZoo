@@ -24,7 +24,11 @@ def main():
     assert args.config.exists(), f"Config file {args.config} does not exist"
     cfg = Config.fromfile(args.config)
 
-    pl.seed_everything(42069)
+    seed = 42069
+    if "seed" in cfg:
+        seed = cfg.seed
+
+    pl.seed_everything(seed)
     logger = setup_tb_logger(cfg, "test_pl")
 
     test_dataloader, evaluator = make_dataloader(
