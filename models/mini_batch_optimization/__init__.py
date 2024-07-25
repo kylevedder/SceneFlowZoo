@@ -6,6 +6,7 @@ from .gigachad_nsf import (
     GigachadNSFGaussianOptimizationLoop,
     GigachadNSFFourtierOptimizationLoop,
     GigachadNSFDepth10OptimizationLoop,
+    GigachadNSFDepth6OptimizationLoop,
     GigachadNSFDepth4OptimizationLoop,
     GigachadNSFDepth2OptimizationLoop,
 )

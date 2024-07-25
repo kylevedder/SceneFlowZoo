@@ -41,6 +41,7 @@ from .mini_batch_optimization import (
     GigachadNSFGaussianOptimizationLoop,
     GigachadNSFFourtierOptimizationLoop,
     GigachadNSFDepth10OptimizationLoop,
+    GigachadNSFDepth6OptimizationLoop,
     GigachadNSFDepth4OptimizationLoop,
     GigachadNSFDepth2OptimizationLoop,
 )
@@ -63,6 +64,7 @@ importable_models = [
     GigachadNSFGaussianOptimizationLoop,
     GigachadNSFFourtierOptimizationLoop,
     GigachadNSFDepth10OptimizationLoop,
+    GigachadNSFDepth6OptimizationLoop,
     GigachadNSFDepth4OptimizationLoop,
     GigachadNSFDepth2OptimizationLoop,
 ]

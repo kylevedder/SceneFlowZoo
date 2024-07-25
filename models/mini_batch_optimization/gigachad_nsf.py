@@ -575,6 +575,16 @@ class GigachadNSFDepth10OptimizationLoop(GigachadNSFOptimizationLoop):
         )
 
 
+class GigachadNSFDepth6OptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadFlowMLP(num_layers=6)
+        )
+
+
 class GigachadNSFDepth4OptimizationLoop(GigachadNSFOptimizationLoop):
 
     def _model_constructor_args(
