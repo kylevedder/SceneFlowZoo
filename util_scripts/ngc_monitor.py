@@ -54,6 +54,7 @@ def monitor_loop(
     while True:
         categorized_jobs = categorize_jobs(client, launch_commands)
 
+        logging.info(f"For job prefix {job_prefix}:")
         logging.info(f"Found {len(categorized_jobs.unlaunched_jobs)} unlaunched jobs.")
         logging.info(f"Found {len(categorized_jobs.failed_jobs)} failed jobs.")
 
