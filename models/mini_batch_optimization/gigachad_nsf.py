@@ -493,6 +493,9 @@ class GigachadNSFModel(BaseOptimizationModel):
         self._log_flow_bev(logger, prefix, percent_query, epoch_idx, result, x, y, xy_idxes)
 
     def epoch_end_log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+        if (epoch_idx % 5) != 0:
+            # Skip logging grid samples for most epochs.
+            return
         x, y, xys, xy_idxes = self._build_grid_sample()
 
         percent_queries = [0.25, 0.5, 0.75]
