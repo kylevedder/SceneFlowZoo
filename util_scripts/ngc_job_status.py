@@ -47,7 +47,7 @@ def print_jobs(
         print("========================================")
         print(f"Job Prefix: {prefix}")
         print("========================================")
-        for state, count in state_counts.items():
+        for state, count in sorted(state_counts.items()):
             print(f"\t{state}: {count}")
 
 

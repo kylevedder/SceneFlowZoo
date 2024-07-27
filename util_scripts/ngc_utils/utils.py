@@ -175,7 +175,7 @@ def get_launch_commands(
 
 
 def get_job_states(client: paramiko.SSHClient) -> dict[str, NGCJobState]:
-    command = "ngc batch list --duration=7D --column=name --column=status --column=duration --format_type csv --begin-time 2024-07-26::12:00:00"
+    command = "ngc batch list --duration=7D --column=name --column=status --column=duration --format_type csv --begin-time 2024-07-26::22:30:00"
     stdout, stderr, exit_status = _run_remote_command(client, command)
     if exit_status != 0:
         raise RuntimeError(f"Failed to get job status. Error: {stderr}")
