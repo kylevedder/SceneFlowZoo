@@ -2,7 +2,6 @@ from .model_wrapper import ModelWrapper
 from .tb_logging import setup_tb_logger
 from .checkpointing import get_checkpoint_path, setup_model
 from .dataloading import make_dataloader
-from .model_saver import ModelStateDicts
 
 __all__ = [
     "ModelWrapper",

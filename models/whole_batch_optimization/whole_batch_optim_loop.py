@@ -17,7 +17,9 @@ from bucketed_scene_flow_eval.utils import save_pickle
 from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models import AbstractBatcher
 import enum
-from core_utils.model_saver import ModelStateDicts
+from models.whole_batch_optimization.checkpointing import (
+    OptimCheckpointStateDicts,
+)
 
 
 class OptimizerType(enum.Enum):
@@ -103,12 +105,12 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         epoch: int,
         logger: Logger,
     ) -> None:
-        checkpoint = {
-            "model": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "epoch": epoch,
-        }
+        model_state_dicts = OptimCheckpointStateDicts(
+            model.state_dict(),
+            optimizer.state_dict(),
+            scheduler.state_dict(),
+            epoch,
+        )
         model_save_path = (
             Path(logger.log_dir)
             / f"dataset_idx_{dataset_idx:010d}"
@@ -116,7 +118,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         )
         # Make parent directory if it doesn't exist
         model_save_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(checkpoint, model_save_path)
+        model_state_dicts.to_checkpoint(model_save_path)
 
     def _save_intermediary_results(
         self,
@@ -156,26 +158,20 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
     ) -> dict[str, any]:
         return dict(full_input_sequence=full_input_sequence)
 
-    def _load_from_checkpoint(
+    def _load_model_state(
         self, model: BaseOptimizationModel, checkpoint: Path | None
-    ) -> ModelStateDicts:
+    ) -> OptimCheckpointStateDicts:
         if checkpoint is None:
-            return ModelStateDicts.default()
-        checkpoint_data = torch.load(checkpoint)
-        assert "model" in checkpoint_data, "Checkpoint must contain a 'model' key"
-        assert "optimizer" in checkpoint_data, "Checkpoint must contain an 'optimizer' key"
-        assert "scheduler" in checkpoint_data, "Checkpoint must contain a 'scheduler' key"
-        assert "epoch" in checkpoint_data, "Checkpoint must contain an 'epoch' key"
-
-        model_state_dicts = ModelStateDicts(
-            model=checkpoint_data["model"],
-            optimizer=checkpoint_data["optimizer"],
-            scheduler=checkpoint_data["scheduler"],
-            epoch=checkpoint_data["epoch"],
-        )
-
+            return OptimCheckpointStateDicts.default()
+        model_state_dicts = OptimCheckpointStateDicts.from_checkpoint(checkpoint)
         model.load_state_dict(model_state_dicts.model)
         return model_state_dicts
+
+    def _construct_model(
+        self, input_sequence: TorchFullFrameInputSequence
+    ) -> BaseOptimizationModel:
+        model = self.model_class(**self._model_constructor_args(input_sequence))
+        return model.to(input_sequence.device)
 
     def inference_forward_single(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
@@ -185,21 +181,18 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
             assert (
                 self.checkpoint is not None
             ), "Must provide checkpoint for evaluation; eval_only is True"
-            model = self.model_class(**self._model_constructor_args(input_sequence))
+            model = self._construct_model(input_sequence)
             # Load from checkpoint if provided
-            model_state_dicts = self._load_from_checkpoint(model, self.checkpoint)
-            model = model.to(input_sequence.device).train()
+            model_state_dicts = self._load_model_state(model, self.checkpoint)
             return self._forward_inference(model, input_sequence, logger)
         else:
             # Build the model with gradient tracking
             with torch.inference_mode(False):
                 with torch.enable_grad():
-                    model = self.model_class(**self._model_constructor_args(input_sequence))
+                    model = self._construct_model(input_sequence)
                     # Load from checkpoint if provided
-                    model_state_dicts = self._load_from_checkpoint(model, self.checkpoint)
+                    model_state_dicts = self._load_model_state(model, self.checkpoint)
                     title = f"Optimizing {self.model_class.__name__}" if self.verbose else None
-
-                    model = model.to(input_sequence.device).train()
                     return self.optimize(
                         model=model,
                         full_batch=input_sequence,
@@ -213,7 +206,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         return WholeBatchBatcher(full_sequence)
 
     def _setup_optimizer(
-        self, model: BaseOptimizationModel, model_state_dicts: ModelStateDicts
+        self, model: BaseOptimizationModel, model_state_dicts: OptimCheckpointStateDicts
     ) -> torch.optim.Optimizer:
         match self.optimizer_type:
             case OptimizerType.ADAM:
@@ -255,7 +248,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         return profiler
 
-    def _setup_epochs(self, model_state_dicts: ModelStateDicts) -> list[int]:
+    def _setup_epochs(self, model_state_dicts: OptimCheckpointStateDicts) -> list[int]:
         return list(range(model_state_dicts.epoch, self.epochs))
 
     def _log_results(
@@ -327,7 +320,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         logger: Logger,
         model: BaseOptimizationModel,
         full_batch: TorchFullFrameInputSequence,
-        model_state_dicts: ModelStateDicts = ModelStateDicts.default(),
+        model_state_dicts: OptimCheckpointStateDicts = OptimCheckpointStateDicts.default(),
         title: str | None = "Optimizing Neur Rep",
         leave: bool = False,
         profile: bool = False,

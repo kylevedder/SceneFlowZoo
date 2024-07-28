@@ -6,7 +6,9 @@ from .stopping_schedulers import (
     ReduceLROnPlateauWithFloorRestart,
     PassThroughScheduler,
 )
-from core_utils.model_saver import ModelStateDicts
+from models.whole_batch_optimization.checkpointing.model_state_dicts import (
+    OptimCheckpointStateDicts,
+)
 
 
 @dataclass
@@ -19,7 +21,7 @@ class SchedulerBuilder:
         assert isinstance(self.args, dict), "args must be a dictionary"
 
     def to_scheduler(
-        self, optimizer: torch.optim.Optimizer, model_state_dict: ModelStateDicts
+        self, optimizer: torch.optim.Optimizer, model_state_dict: OptimCheckpointStateDicts
     ) -> StoppingScheduler:
         return construct_scheduler(optimizer, self.name, self.args, model_state_dict)
 
@@ -28,7 +30,7 @@ def construct_scheduler(
     optimizer: torch.optim.Optimizer,
     name: str,
     args: dict[str, object],
-    model_state_dict: ModelStateDicts,
+    model_state_dict: OptimCheckpointStateDicts,
 ) -> StoppingScheduler:
     name = name.lower()
     if name not in name_to_class_lookup:
