@@ -17,6 +17,7 @@ from bucketed_scene_flow_eval.utils import save_pickle
 from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models import AbstractBatcher
 import enum
+from core_utils.model_saver import ModelStateDicts
 
 
 class OptimizerType(enum.Enum):
@@ -155,59 +156,80 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
     ) -> dict[str, any]:
         return dict(full_input_sequence=full_input_sequence)
 
+    def _load_from_checkpoint(
+        self, model: BaseOptimizationModel, checkpoint: Path | None
+    ) -> ModelStateDicts:
+        if checkpoint is None:
+            return ModelStateDicts.default()
+        checkpoint_data = torch.load(checkpoint)
+        assert "model" in checkpoint_data, "Checkpoint must contain a 'model' key"
+        assert "optimizer" in checkpoint_data, "Checkpoint must contain an 'optimizer' key"
+        assert "scheduler" in checkpoint_data, "Checkpoint must contain a 'scheduler' key"
+        assert "epoch" in checkpoint_data, "Checkpoint must contain an 'epoch' key"
+
+        model_state_dicts = ModelStateDicts(
+            model=checkpoint_data["model"],
+            optimizer=checkpoint_data["optimizer"],
+            scheduler=checkpoint_data["scheduler"],
+            epoch=checkpoint_data["epoch"],
+        )
+
+        model.load_state_dict(model_state_dicts.model)
+        return model_state_dicts
+
     def inference_forward_single(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> TorchFullFrameOutputSequence:
-        # print(
-        #     f"Inference forward single for {input_sequence.sequence_log_id} {input_sequence.dataset_idx} with input_sequence of type {type(input_sequence)}"
-        # )
+        if self.eval_only:
+            # Build the model without any gradient tracking
+            assert (
+                self.checkpoint is not None
+            ), "Must provide checkpoint for evaluation; eval_only is True"
+            model = self.model_class(**self._model_constructor_args(input_sequence))
+            # Load from checkpoint if provided
+            model_state_dicts = self._load_from_checkpoint(model, self.checkpoint)
+            model = model.to(input_sequence.device).train()
+            return self._forward_inference(model, input_sequence, logger)
+        else:
+            # Build the model with gradient tracking
+            with torch.inference_mode(False):
+                with torch.enable_grad():
+                    model = self.model_class(**self._model_constructor_args(input_sequence))
+                    # Load from checkpoint if provided
+                    model_state_dicts = self._load_from_checkpoint(model, self.checkpoint)
+                    title = f"Optimizing {self.model_class.__name__}" if self.verbose else None
 
-        with torch.inference_mode(False):
-            with torch.enable_grad():
-                model = self.model_class(**self._model_constructor_args(input_sequence))
-                # Load checkpoint weights
-                if self.checkpoint is not None:
-                    print(f"Loading checkpoint from {self.checkpoint}")
-                    model.load_state_dict(torch.load(self.checkpoint))
-                model = model.to(input_sequence.device).train()
-
-                title = f"Optimizing {self.model_class.__name__}" if self.verbose else None
-
-                if self.eval_only:
-                    assert (
-                        self.checkpoint is not None
-                    ), "Must provide checkpoint for evaluation; eval_only is True"
-                    print("Running in eval mode")
-                    with torch.inference_mode():
-                        with torch.no_grad():
-                            (output,) = model(
-                                ForwardMode.VAL,
-                                [input_sequence.detach().requires_grad_(False)],
-                                logger,
-                            )
-                    return output
-
-                return self.optimize(
-                    model=model,
-                    full_batch=input_sequence,
-                    title=title,
-                    logger=logger,
-                    leave=True,
-                )
+                    model = model.to(input_sequence.device).train()
+                    return self.optimize(
+                        model=model,
+                        full_batch=input_sequence,
+                        model_state_dicts=model_state_dicts,
+                        title=title,
+                        logger=logger,
+                        leave=True,
+                    )
 
     def _setup_batcher(self, full_sequence: TorchFullFrameInputSequence) -> AbstractBatcher:
         return WholeBatchBatcher(full_sequence)
 
-    def _setup_optimizer(self, model: BaseOptimizationModel) -> torch.optim.Optimizer:
+    def _setup_optimizer(
+        self, model: BaseOptimizationModel, model_state_dicts: ModelStateDicts
+    ) -> torch.optim.Optimizer:
         match self.optimizer_type:
             case OptimizerType.ADAM:
-                return torch.optim.Adam(
+                optim = torch.optim.Adam(
                     model.parameters(), lr=self.lr, weight_decay=self.weight_decay
                 )
             case OptimizerType.ADAMW:
-                return torch.optim.AdamW(
+                optim = torch.optim.AdamW(
                     model.parameters(), lr=self.lr, weight_decay=self.weight_decay
                 )
+            case _:
+                raise ValueError(f"Invalid optimizer type: {self.optimizer_type}")
+
+        if model_state_dicts.optimizer is not None:
+            optim.load_state_dict(model_state_dicts.optimizer)
+        return optim
 
     def _setup_profiler(self, profile: bool) -> torch.profiler.profile | DummyProfiler:
         if not profile:
@@ -233,6 +255,29 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         return profiler
 
+    def _setup_epochs(self, model_state_dicts: ModelStateDicts) -> list[int]:
+        return list(range(model_state_dicts.epoch, self.epochs))
+
+    def _log_results(
+        self,
+        logger: Logger,
+        model: BaseOptimizationModel,
+        full_batch: TorchFullFrameInputSequence,
+        scheduler: StoppingScheduler,
+        epoch_idx: int,
+        batch_cost: float,
+    ) -> None:
+        logger_prefix = f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}"
+        logger.log_metrics(
+            {
+                f"{logger_prefix}/batch_cost": (batch_cost),
+                f"{logger_prefix}/lr": np.mean(scheduler.get_last_lr()),
+            },
+            step=epoch_idx,
+        )
+
+        model.epoch_end_log(logger, logger_prefix, epoch_idx)
+
     def _forward_optimize(
         self,
         model: BaseOptimizationModel,
@@ -255,17 +300,34 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         try:
             with torch.inference_mode():
                 with torch.no_grad():
-                    (output,) = model(ForwardMode.VAL, [full_batch.detach()], logger)
+                    (output,) = model(
+                        ForwardMode.VAL, [full_batch.detach().requires_grad_(False)], logger
+                    )
         except Exception as e:
             print(f"Error during inference: {e}")
             raise e
         return output
+
+    def _optimize_inner_loop(
+        self,
+        minibatch: TorchFullFrameInputSequence,
+        model: BaseOptimizationModel,
+        optimizer: torch.optim.Optimizer,
+        logger: Logger,
+    ) -> float:
+        optimizer.zero_grad()
+        cost_problem = self._forward_optimize(model, minibatch, logger)
+        cost = cost_problem.cost()
+        cost.backward()
+        optimizer.step()
+        return cost.item()
 
     def optimize(
         self,
         logger: Logger,
         model: BaseOptimizationModel,
         full_batch: TorchFullFrameInputSequence,
+        model_state_dicts: ModelStateDicts = ModelStateDicts.default(),
         title: str | None = "Optimizing Neur Rep",
         leave: bool = False,
         profile: bool = False,
@@ -276,8 +338,8 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         full_batch = full_batch.clone().detach().requires_grad_(True)
 
-        optimizer = self._setup_optimizer(model)
-        scheduler = self.scheduler_builder.to_scheduler(optimizer)
+        optimizer = self._setup_optimizer(model, model_state_dicts)
+        scheduler = self.scheduler_builder.to_scheduler(optimizer, model_state_dicts)
         batcher = self._setup_batcher(full_batch)
 
         lowest_cost = torch.inf
@@ -287,7 +349,11 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         with self._setup_profiler(profile=profile) as prof:
 
             epoch_bar = tqdm.tqdm(
-                range(self.epochs), leave=leave, desc=title, disable=title is None, position=1
+                self._setup_epochs(model_state_dicts),
+                leave=leave,
+                desc=title,
+                disable=title is None,
+                position=1,
             )
             for epoch_idx in epoch_bar:
                 batcher.shuffle_minibatches(seed=epoch_idx)
@@ -300,19 +366,18 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                     disable=(len(batcher) <= 1) or (title is None),
                 )
                 for minibatch_idx, minibatch in enumerate(minibatch_bar):
-                    optimizer.zero_grad()
-                    cost_problem = self._forward_optimize(model, minibatch, logger)
-                    cost = cost_problem.cost()
-                    cost.backward()
-                    optimizer.step()
+                    try:
+                        cost = self._optimize_inner_loop(minibatch, model, optimizer, logger)
+                    except Exception as e:
+                        print(f"Error during optimization: {e}")
+                        # Print stack trace
 
-                    total_cost += cost.item()
-                    minibatch_bar.set_postfix(cost=f"{cost.item():0.6f}")
+                        raise e
+                    total_cost += cost
+                    minibatch_bar.set_postfix(cost=f"{cost:0.6f}")
                     prof.step()
 
                 del minibatch  # Free up memory from the last minibatch
-                del cost_problem  # Free up memory from the last cost problem
-                del cost  # Free up memory from the last cost
 
                 if self.save_flow_every is not None:
                     if epoch_idx % self.save_flow_every == 0 or epoch_idx == self.epochs - 1:
@@ -327,19 +392,14 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                 batch_cost = total_cost / len(batcher)
                 should_exit = scheduler.step(batch_cost)
 
-                logger_prefix = f"{full_batch.sequence_log_id}/{full_batch.dataset_idx:06d}"
-                logger.log_metrics(
-                    {
-                        f"{logger_prefix}/batch_cost": (batch_cost),
-                        f"{logger_prefix}/lr": np.mean(scheduler.get_last_lr()),
-                    },
-                    step=epoch_idx,
+                self._log_results(
+                    logger,
+                    model,
+                    full_batch,
+                    scheduler,
+                    epoch_idx,
+                    batch_cost,
                 )
-
-                model.epoch_end_log(logger, logger_prefix, epoch_idx)
-
-                epoch_bar.set_postfix(cost=f"{batch_cost:0.6f}")
-
                 if should_exit:
                     break
 

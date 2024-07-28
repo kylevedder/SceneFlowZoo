@@ -35,7 +35,7 @@ def get_checkpoint_path(cfg: Config) -> Path:
         return checkpoint_path
 
 
-def setup_model(cfg: Config, evaluator: EvalWrapper, checkpoint: Optional[Path]):
+def setup_model(cfg: Config, evaluator: EvalWrapper, checkpoint: Path | None):
     if hasattr(cfg, "float32_matmul_precision"):
         print(f"Setting float32_matmul_precision to {cfg.float32_matmul_precision}")
         torch.set_float32_matmul_precision(cfg.float32_matmul_precision)

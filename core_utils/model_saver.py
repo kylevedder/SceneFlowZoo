@@ -5,6 +5,20 @@ from bucketed_scene_flow_eval.datastructures import EgoLidarFlow
 from bucketed_scene_flow_eval.utils import save_feather
 import pandas as pd
 from bucketed_scene_flow_eval.interfaces import LoaderType
+from dataclasses import dataclass
+import torch
+
+
+@dataclass
+class ModelStateDicts:
+    model: dict[str, torch.Tensor] | None
+    optimizer: dict[str, torch.Tensor] | None
+    scheduler: dict[str, torch.Tensor] | None
+    epoch: int
+
+    @staticmethod
+    def default() -> "ModelStateDicts":
+        return ModelStateDicts(None, None, None, 0)
 
 
 class ModelOutSaver(ABC):
