@@ -1,4 +1,3 @@
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -8,7 +7,7 @@ import torch.optim as optim
 from bucketed_scene_flow_eval.datastructures import *
 import models
 from models import ForwardMode
-from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence, EvalWrapper
+from dataloaders import TorchFullFrameInputSequence, EvalWrapper
 
 from .model_saver import ModelOutSaver, FlowNoSave, FlowSave
 

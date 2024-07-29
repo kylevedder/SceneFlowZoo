@@ -17,7 +17,7 @@ from bucketed_scene_flow_eval.utils import save_pickle
 from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models import AbstractBatcher
 import enum
-from models.whole_batch_optimization.checkpointing import (
+from models.whole_batch_optimization.checkpointing.model_state_dicts import (
     OptimCheckpointStateDicts,
 )
 

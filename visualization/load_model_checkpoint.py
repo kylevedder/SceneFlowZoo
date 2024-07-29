@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 
-from models.whole_batch_optimization.checkpointing import (
+from models.whole_batch_optimization.checkpointing.model_loader import (
     OptimCheckpointModelLoader,
 )
 

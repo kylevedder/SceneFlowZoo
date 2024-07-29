@@ -1,13 +1,12 @@
+from .model_state_dicts import OptimCheckpointStateDicts
+
 from pathlib import Path
 from mmengine import Config
 from bucketed_scene_flow_eval.utils import load_json
 from dataloaders import TorchFullFrameInputSequence, BaseDataset
-from models import BaseOptimizationModel
-from core_utils import ModelWrapper
 import tempfile
 import dataloaders
 from core_utils.checkpointing import setup_model
-from .model_state_dicts import OptimCheckpointStateDicts
 
 
 class OptimCheckpointModelLoader:
@@ -50,7 +49,7 @@ class OptimCheckpointModelLoader:
             sequence_id_to_length[sequence_id],
         )
 
-    def load_model(self) -> BaseOptimizationModel:
+    def load_model(self):
         # Load the checkpoint
         model_state_dicts = OptimCheckpointStateDicts.from_checkpoint(self.checkpoint)
 
@@ -58,15 +57,9 @@ class OptimCheckpointModelLoader:
         dataset_sequence, base_dataset = self._load_dataset_info(config)
 
         model_wrapper = setup_model(config, base_dataset.evaluator(), None)
-        assert isinstance(
-            model_wrapper, ModelWrapper
-        ), f"Expected ModelWrapper, got {type(model_wrapper)}"
         model_loop = model_wrapper.model
         model = model_loop._construct_model(dataset_sequence)
 
-        assert isinstance(
-            model, BaseOptimizationModel
-        ), f"Expected BaseOptimizationModel, got {type(model)}"
         model.load_state_dict(model_state_dicts.model)
         return model
 
