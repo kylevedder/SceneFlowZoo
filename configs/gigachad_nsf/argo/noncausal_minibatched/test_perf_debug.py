@@ -1,11 +1,10 @@
-_base_ = "./test_lidar_camera.py"
+_base_ = "./test.py"
 
 save_output_folder = "/efs/argoverse2/test_gigachad_perf/"
 
 model = dict(
     args=dict(
-        pc_distance_type="forward_only",
-        epochs=2,
+        epochs=1,
     ),
 )
 

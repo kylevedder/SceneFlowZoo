@@ -7,6 +7,7 @@ from dataloaders import TorchFullFrameInputSequence, BaseDataset
 import tempfile
 import dataloaders
 from core_utils.checkpointing import setup_model
+import torch
 
 
 class OptimCheckpointModelLoader:
@@ -42,12 +43,36 @@ class OptimCheckpointModelLoader:
         sequence_id_to_length = _load_sizes(sequence_id_to_length_file)
         assert sequence_id in sequence_id_to_length, f"Sequence ID {sequence_id} not found"
 
+        print(f"Loading checkpoint {full_checkpoint}")
+
         return OptimCheckpointModelLoader(
             root_config,
             full_checkpoint,
             sequence_id,
             sequence_id_to_length[sequence_id],
         )
+
+    def monkey_patch_model_weights(
+        self,
+        expected_model_weights: dict[str, torch.Tensor],
+        found_model_weights: dict[str, torch.Tensor],
+    ) -> dict[str, torch.Tensor]:
+
+        print("Expected model weights")
+        for key in expected_model_weights:
+            print(key)
+
+        print("Found model weights")
+        for key in found_model_weights:
+            print(key)
+
+        return {
+            key.replace(
+                "model.nn_layers._orig_mod.", "model.nn_layers._orig_mod.1._orig_mod."
+            ): value
+            for key, value in found_model_weights.items()
+            if not key.startswith("model.encoder_plus_nn_layers")
+        }
 
     def load_model(self):
         # Load the checkpoint
@@ -60,7 +85,16 @@ class OptimCheckpointModelLoader:
         model_loop = model_wrapper.model
         model = model_loop._construct_model(dataset_sequence)
 
-        model.load_state_dict(model_state_dicts.model)
+        try:
+            model.load_state_dict(model_state_dicts.model)
+        except RuntimeError as e:
+            print("Unable to load model state dict, monkey patching...")
+            expected_model_weights = model.state_dict()
+            found_model_weights = model_state_dicts.model
+            monkey_patched_weights = self.monkey_patch_model_weights(
+                expected_model_weights, found_model_weights
+            )
+            model.load_state_dict(monkey_patched_weights)
         return model
 
     def _load_dataset_info(self, cfg: Config) -> tuple[TorchFullFrameInputSequence, BaseDataset]:

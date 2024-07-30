@@ -130,7 +130,7 @@ class GigaChadFlowMLP(NSFPRawMLP):
             act_fn=act_fn,
             num_layers=num_layers,
         )
-        self.encoder_plus_nn_layers = torch.compile(torch.nn.Sequential(encoder, self.nn_layers))
+        self.nn_layers = torch.compile(torch.nn.Sequential(encoder, self.nn_layers))
 
     @typing.no_type_check
     def forward(
@@ -141,7 +141,7 @@ class GigaChadFlowMLP(NSFPRawMLP):
         query_direction: QueryDirection,
     ) -> ModelFlowResult:
         entries = (pc, idx, total_entries, query_direction)
-        res = self.encoder_plus_nn_layers(entries)
+        res = self.nn_layers(entries)
         return ModelFlowResult(flow=res)
 
 
@@ -164,9 +164,9 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
             num_layers=num_layers,
             with_compile=with_compile,
         )
-        self.encoder_plus_nn_layers = torch.nn.Sequential(encoder, self.nn_layers)
+        self.nn_layers = torch.nn.Sequential(encoder, self.nn_layers)
         if with_compile:
-            self.encoder_plus_nn_layers = torch.compile(self.encoder_plus_nn_layers)
+            self.nn_layers = torch.compile(self.nn_layers)
 
     @typing.no_type_check
     def forward(
@@ -177,6 +177,6 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
         query_direction: QueryDirection,
     ) -> ModelOccFlowResult:
         entries = (pc, idx, total_entries, query_direction)
-        res = self.encoder_plus_nn_layers(entries)
+        res = self.nn_layers(entries)
         assert res.shape[1] == 4, f"Expected 4, but got {res.shape[1]}"
         return ModelOccFlowResult(flow=res[:, :3], occ=res[:, 3])
