@@ -46,8 +46,9 @@ class DummyProfiler:
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Return False to re-raise any exceptions
+        return False
 
     def step(self):
         pass
@@ -301,7 +302,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
             raise e
         return output
 
-    def _optimize_inner_loop(
+    def _optimize_minibatch_inner_loop(
         self,
         minibatch: TorchFullFrameInputSequence,
         model: BaseOptimizationModel,
@@ -314,6 +315,34 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         cost.backward()
         optimizer.step()
         return cost.item()
+
+    def _optimize_epoch_inner_loop(
+        self,
+        model: BaseOptimizationModel,
+        optimizer: torch.optim.Optimizer,
+        logger: Logger,
+        title: str | None,
+        prof: torch.profiler.profile | DummyProfiler,
+        epoch_idx: int,
+        batcher: AbstractBatcher,
+    ) -> float:
+        batcher.shuffle_minibatches(seed=epoch_idx)
+        total_cost = 0
+        minibatch_bar = tqdm.tqdm(
+            batcher,
+            leave=False,
+            position=2,
+            desc="Minibatches",
+            disable=(len(batcher) <= 1) or (title is None),
+        )
+        for minibatch in minibatch_bar:
+
+            cost = self._optimize_minibatch_inner_loop(minibatch, model, optimizer, logger)
+            total_cost += cost
+            minibatch_bar.set_postfix(cost=f"{cost:0.6f}")
+            prof.step()
+
+        return total_cost
 
     def optimize(
         self,
@@ -340,7 +369,6 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         # Profile the training step
         with self._setup_profiler(profile=profile) as prof:
-
             epoch_bar = tqdm.tqdm(
                 self._setup_epochs(model_state_dicts),
                 leave=leave,
@@ -349,33 +377,20 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                 position=1,
             )
             for epoch_idx in epoch_bar:
-                batcher.shuffle_minibatches(seed=epoch_idx)
-                total_cost = 0
-                minibatch_bar = tqdm.tqdm(
-                    batcher,
-                    leave=False,
-                    position=2,
-                    desc="Minibatches",
-                    disable=(len(batcher) <= 1) or (title is None),
+
+                total_cost = self._optimize_epoch_inner_loop(
+                    model, optimizer, logger, title, prof, epoch_idx, batcher
                 )
-                for minibatch_idx, minibatch in enumerate(minibatch_bar):
-                    try:
-                        cost = self._optimize_inner_loop(minibatch, model, optimizer, logger)
-                    except Exception as e:
-                        print(f"Error during optimization: {e}")
-                        # Print stack trace
-
-                        raise e
-                    total_cost += cost
-                    minibatch_bar.set_postfix(cost=f"{cost:0.6f}")
-                    prof.step()
-
-                del minibatch  # Free up memory from the last minibatch
 
                 if self.save_flow_every is not None:
                     if epoch_idx % self.save_flow_every == 0 or epoch_idx == self.epochs - 1:
                         self._save_model_state(
-                            model, optimizer, scheduler, full_batch.dataset_idx, epoch_idx, logger
+                            model,
+                            optimizer,
+                            scheduler,
+                            full_batch.dataset_idx,
+                            epoch_idx,
+                            logger,
                         )
 
                 if total_cost < lowest_cost:
