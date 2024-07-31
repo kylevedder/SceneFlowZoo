@@ -20,7 +20,7 @@ def main():
     model_loader = OptimCheckpointModelLoader.from_checkpoint_dirs(
         args.config, args.checkpoint_root, args.sequence_id, args.sequence_id_to_length
     )
-    model = model_loader.load_model()
+    model, full_sequence = model_loader.load_model()
     breakpoint()
 
 

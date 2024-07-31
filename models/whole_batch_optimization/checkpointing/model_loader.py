@@ -8,6 +8,8 @@ import tempfile
 import dataloaders
 from core_utils.checkpointing import setup_model
 import torch
+from models import BaseOptimizationModel
+from models.whole_batch_optimization import WholeBatchOptimizationLoop
 
 
 class OptimCheckpointModelLoader:
@@ -74,7 +76,7 @@ class OptimCheckpointModelLoader:
             if not key.startswith("model.encoder_plus_nn_layers")
         }
 
-    def load_model(self):
+    def load_model(self) -> tuple[BaseOptimizationModel, TorchFullFrameInputSequence]:
         # Load the checkpoint
         model_state_dicts = OptimCheckpointStateDicts.from_checkpoint(self.checkpoint)
 
@@ -82,20 +84,20 @@ class OptimCheckpointModelLoader:
         dataset_sequence, base_dataset = self._load_dataset_info(config)
 
         model_wrapper = setup_model(config, base_dataset.evaluator(), None)
-        model_loop = model_wrapper.model
-        model = model_loop._construct_model(dataset_sequence)
+        model_loop: WholeBatchOptimizationLoop = model_wrapper.model
+        assert isinstance(model_loop, WholeBatchOptimizationLoop)
+        model: BaseOptimizationModel = model_loop._construct_model(dataset_sequence)
+        assert isinstance(model, BaseOptimizationModel)
 
         try:
             model.load_state_dict(model_state_dicts.model)
         except RuntimeError as e:
             print("Unable to load model state dict, monkey patching...")
-            expected_model_weights = model.state_dict()
-            found_model_weights = model_state_dicts.model
             monkey_patched_weights = self.monkey_patch_model_weights(
-                expected_model_weights, found_model_weights
+                model.state_dict(), model_state_dicts.model
             )
             model.load_state_dict(monkey_patched_weights)
-        return model
+        return model, dataset_sequence
 
     def _load_dataset_info(self, cfg: Config) -> tuple[TorchFullFrameInputSequence, BaseDataset]:
         dataset = dataloaders.construct_dataset(cfg.test_dataset.name, cfg.test_dataset.args)

@@ -26,6 +26,8 @@ import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from visualization.flow_to_rgb import flow_to_rgb
+from models.whole_batch_optimization.checkpointing.model_loader import OptimCheckpointModelLoader
+from models import ForwardMode
 
 
 @dataclass
@@ -80,40 +82,14 @@ class GridSampler:
 
 class OccFlowModel:
 
-    def __init__(self, model_checkpoint: Path, dataset_frame_list: list[TimeSyncedSceneFlowFrame]):
-        self.frame_list = dataset_frame_list
-        self.model, self.torch_input_sequence = self._setup_model(
-            model_checkpoint, dataset_frame_list
-        )
+    def __init__(
+        self,
+        torch_input_sequence: TorchFullFrameInputSequence,
+        optimization_model: GigachadOccFlowModel,
+    ):
+        self.torch_input_sequence = torch_input_sequence
+        self.optimization_model = optimization_model
         self.grid_sampler = GridSampler.from_torch_grid(self.torch_input_sequence)
-
-    def _setup_model(
-        self, model_checkpoint: Path, dataset_frame_list: list[TimeSyncedSceneFlowFrame]
-    ) -> tuple[GigachadOccFlowModel, TorchFullFrameInputSequence]:
-        torch_input_sequence = TorchFullFrameInputSequence.from_frame_list(
-            0, dataset_frame_list, 120000, LoaderType.NON_CAUSAL
-        )
-
-        print(f"Loading checkpoint from {model_checkpoint}")
-        assert model_checkpoint.is_file(), f"Expected a file, but got {model_checkpoint}"
-        checkpoint_dict = torch.load(model_checkpoint)
-        print(f"Loaded checkpoint")
-        model_weights = checkpoint_dict["model"]
-        model = GigachadOccFlowModel(
-            full_input_sequence=torch_input_sequence,
-            speed_threshold=60.0 / 10.0,
-            pc_target_type="lidar",
-            pc_loss_type="truncated_kd_tree_forward_backward",
-            model=GigaChadOccFlowMLP(
-                encoder=FourierTemporalEmbedding(), with_compile=True, act_fn=ActivationFn.SINC
-            ),
-        )
-        model.load_state_dict(model_weights)
-        model.eval()
-        model = model.to("cuda")
-        torch_input_sequence = torch_input_sequence.to("cuda")
-
-        return model, torch_input_sequence
 
     def inference_model(
         self,
@@ -123,10 +99,10 @@ class OccFlowModel:
         xyzs = self.grid_sampler.make_xyzs(z_value)
         with torch.no_grad():
             xyzs_torch = torch.tensor(xyzs, dtype=torch.float32, device="cuda")
-            occ_flow_res: ModelOccFlowResult = self.model.model(
+            occ_flow_res: ModelOccFlowResult = self.optimization_model.model(
                 xyzs_torch,
                 idx,
-                len(self.frame_list),
+                len(self.torch_input_sequence),
                 QueryDirection.FORWARD,
             )
         return occ_flow_res
@@ -158,8 +134,7 @@ def load_frame_sequence(
 
 class OccFlowVisualizer:
 
-    def __init__(self, frame_list: list[TimeSyncedSceneFlowFrame], occ_flow_loader: OccFlowModel):
-        self.frame_list = frame_list
+    def __init__(self, occ_flow_loader: OccFlowModel):
         self.model = occ_flow_loader
 
     def _make_flow_image(self, model_res: ModelOccFlowResult, z_value: float) -> np.ndarray:
@@ -187,7 +162,7 @@ class OccFlowVisualizer:
         return occ_bev_image
 
     def _make_lidar_image(self, idx: int) -> np.ndarray:
-        pc = self.frame_list[idx].pc.global_pc.points
+        pc = self.model.torch_input_sequence.get_ego_pc(idx).clone().cpu().numpy()
         lidar_image = np.zeros(
             (
                 len(self.model.grid_sampler.x),
@@ -243,7 +218,7 @@ class OccFlowVisualizer:
         axes[1].set_title("Occupancy")
         axes[2].set_title("Flow")
 
-        bar = tqdm.tqdm(total=len(self.frame_list))
+        bar = tqdm.tqdm(total=len(self.model.torch_input_sequence))
 
         # Function to update the images for each frame
         def update_images(idx):
@@ -258,7 +233,7 @@ class OccFlowVisualizer:
 
         # Create the animation
         ani = animation.FuncAnimation(
-            fig, update_images, frames=len(self.frame_list), interval=100, blit=True
+            fig, update_images, frames=len(self.model.torch_input_sequence), interval=100, blit=True
         )  # 100 ms interval for 10 Hz
 
         # Save the animation
@@ -271,29 +246,23 @@ class OccFlowVisualizer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", type=str, default="Argoverse2NonCausalSceneFlow")
-    parser.add_argument("--root_dir", type=Path, required=True)
-    parser.add_argument("--sequence_length", type=int, required=True)
-    parser.add_argument("--sequence_id", type=str, required=True)
-    parser.add_argument("--checkpoint_path", type=Path, required=True)
-    parser.add_argument("--output_path", type=Path, required=True)
+    parser.add_argument("config", type=Path)
+    parser.add_argument("checkpoint_root", type=Path)
+    parser.add_argument("sequence_id", type=str)
+    parser.add_argument("output_path", type=Path)
+    parser.add_argument(
+        "--sequence_id_to_length",
+        type=Path,
+        default=Path("data_prep_scripts/argo/av2_test_sizes.json"),
+    )
     args = parser.parse_args()
 
-    frame_list = load_frame_sequence(
-        args.root_dir,
-        args.sequence_id,
-        args.sequence_length,
+    model_loader = OptimCheckpointModelLoader.from_checkpoint_dirs(
+        args.config, args.checkpoint_root, args.sequence_id, args.sequence_id_to_length
     )
+    model, full_torch_sequence = model_loader.load_model()
 
-    occ_flow_loader = OccFlowModel(
-        model_checkpoint=args.checkpoint_path,
-        dataset_frame_list=frame_list,
-    )
-
-    visualizer = OccFlowVisualizer(
-        frame_list=frame_list,
-        occ_flow_loader=occ_flow_loader,
-    )
+    visualizer = OccFlowVisualizer(OccFlowModel(full_torch_sequence, model))
 
     visualizer.visualize_occ_flow(z_value=0.5, output_path=args.output_path)
 
