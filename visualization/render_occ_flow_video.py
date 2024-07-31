@@ -150,6 +150,9 @@ class OccFlowVisualizer:
 
     def _make_occ_image(self, model_res: ModelOccFlowResult, z_value: float) -> np.ndarray:
         occ = model_res.occ.cpu().numpy()
+
+        # Clamp the occupancy to [0, 1]
+        occ = np.clip(occ, 0, 1)
         occ_bev_image = np.zeros(
             (
                 len(self.model.grid_sampler.x),
@@ -162,7 +165,7 @@ class OccFlowVisualizer:
         return occ_bev_image
 
     def _make_lidar_image(self, idx: int) -> np.ndarray:
-        pc = self.model.torch_input_sequence.get_ego_pc(idx).clone().cpu().numpy()
+        pc = self.model.torch_input_sequence.get_global_pc(idx).clone().cpu().numpy()
         lidar_image = np.zeros(
             (
                 len(self.model.grid_sampler.x),
@@ -188,6 +191,21 @@ class OccFlowVisualizer:
         lidar_image[x_idxes, y_idxes] = 1.0
         return lidar_image
 
+    def _make_composite(self, occ_image: np.ndarray, flow_image: np.ndarray) -> np.ndarray:
+        """
+        Use the occ image as a mask to overlay the flow image
+        """
+        flow_image_float = flow_image.astype(np.float32) / 255
+        flattened_flow_image = flow_image_float.reshape(-1, 3)
+        height, width = occ_image.shape
+        base_image_grayscale = occ_image.reshape(-1)
+        # Turn the (N,) array into an (N, 3) array
+        base_image_color = np.stack([base_image_grayscale] * 3, axis=1)
+        is_occ = (occ_image > 0.5).reshape(-1)
+        base_image_color[is_occ] = flattened_flow_image[is_occ]
+        composite_image = base_image_color.reshape(height, width, 3)
+        return composite_image
+
     # def visualize_occ_flow(self, z_value: float):
     #     for idx in tqdm.tqdm(range(len(self.frame_list))):
     #         occ_flow_res = self.model.inference_model(idx, z_value)
@@ -198,38 +216,44 @@ class OccFlowVisualizer:
 
     def visualize_occ_flow(self, z_value: float, output_path: Path):
         # Create a figure and axes for plotting
-        fig, axes = plt.subplots(3, 1, figsize=(10, 30))
+        fig, axes = plt.subplots(2, 2, figsize=(20, 20))
+        axes = axes.reshape(-1)
 
         def make_images(idx: int):
             occ_flow_res = self.model.inference_model(idx, z_value)
             lidar_image = self._make_lidar_image(idx)
             flow_image = self._make_flow_image(occ_flow_res, z_value)
             occ_image = self._make_occ_image(occ_flow_res, z_value)
-            return lidar_image, flow_image, occ_image
+            composite_image = self._make_composite(occ_image.copy(), flow_image.copy())
+            return lidar_image, flow_image, occ_image, composite_image
 
-        lidar_image_zero, flow_image_zero, occ_image_zero = make_images(0)
+        lidar_image_zero, flow_image_zero, occ_image_zero, composite_image_zero = make_images(0)
         # Initialize image artists (placeholders for our images)
         lidar_im = axes[0].imshow(lidar_image_zero, cmap="gray")
-        occ_im = axes[1].imshow(occ_image_zero, cmap="gray")
-        flow_im = axes[2].imshow(flow_image_zero)
+        composite_im = axes[1].imshow(composite_image_zero)
+        occ_im = axes[2].imshow(occ_image_zero, cmap="gray")
+        flow_im = axes[3].imshow(flow_image_zero)
 
         # Set titles for each subplot
         axes[0].set_title("Lidar")
-        axes[1].set_title("Occupancy")
-        axes[2].set_title("Flow")
+        axes[1].set_title("Composite")
+        axes[2].set_title("Occupancy")
+        axes[3].set_title("Flow")
 
         bar = tqdm.tqdm(total=len(self.model.torch_input_sequence))
 
         # Function to update the images for each frame
         def update_images(idx):
-            lidar_image, flow_image, occ_image = make_images(idx)
+            lidar_image, flow_image, occ_image, composite_image = make_images(idx)
 
             lidar_im.set_data(lidar_image)
+            composite_im.set_data(composite_image)
             occ_im.set_data(occ_image)
             flow_im.set_data(flow_image)
+
             bar.update(1)
 
-            return lidar_im, flow_im, occ_im
+            return lidar_im, composite_im  # , flow_im, occ_im
 
         # Create the animation
         ani = animation.FuncAnimation(
@@ -264,7 +288,7 @@ def main():
 
     visualizer = OccFlowVisualizer(OccFlowModel(full_torch_sequence, model))
 
-    visualizer.visualize_occ_flow(z_value=0.5, output_path=args.output_path)
+    visualizer.visualize_occ_flow(z_value=0.5, output_path=args.output_path / args.sequence_id)
 
 
 if __name__ == "__main__":
