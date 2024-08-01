@@ -105,54 +105,25 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         dataset_idx: int,
         epoch: int,
         logger: Logger,
-    ) -> None:
+        is_best: bool = False,
+    ) -> Path:
         model_state_dicts = OptimCheckpointStateDicts(
             model.state_dict(),
             optimizer.state_dict(),
             scheduler.state_dict(),
             epoch,
         )
-        model_save_path = (
-            Path(logger.log_dir)
-            / f"dataset_idx_{dataset_idx:010d}"
-            / f"epoch_{epoch:08d}_checkpoint.pth"
-        )
-        # Make parent directory if it doesn't exist
-        model_save_path.parent.mkdir(parents=True, exist_ok=True)
+        model_save_path = Path(logger.log_dir) / f"dataset_idx_{dataset_idx:010d}"
+        model_save_path.mkdir(parents=True, exist_ok=True)
+        if is_best:
+            model_save_path /= "best_weights.pth"
+            # Delete the best weights if they already exist
+            if model_save_path.exists():
+                model_save_path.unlink()
+        else:
+            model_save_path /= f"epoch_{epoch:08d}_checkpoint.pth"
         model_state_dicts.to_checkpoint(model_save_path)
-
-    def _save_intermediary_results(
-        self,
-        model: BaseOptimizationModel,
-        problem: TorchFullFrameInputSequence,
-        logger: Logger,
-        optimization_step: int,
-    ) -> None:
-        model_save_path = (
-            Path(logger.log_dir)
-            / f"dataset_idx_{problem.dataset_idx:010d}"
-            / f"opt_step_{optimization_step:08d}_weights.pth"
-        )
-        torch.save(model.state_dict(), model_save_path)
-
-        with torch.inference_mode():
-            with torch.no_grad():
-                (output,) = model(ForwardMode.VAL, [problem], logger)
-        output: TorchFullFrameOutputSequence
-        ego_flows = output.to_ego_lidar_flow_list()
-        raw_ego_flows = [
-            (
-                ego_flow.full_flow,
-                ego_flow.mask,
-            )
-            for ego_flow in ego_flows
-        ]
-        save_path = (
-            Path(logger.log_dir)
-            / f"dataset_idx_{problem.dataset_idx:010d}"
-            / f"opt_step_{optimization_step:08d}.pkl"
-        )
-        save_pickle(save_path, raw_ego_flows, verbose=self.verbose)
+        return model_save_path
 
     def _model_constructor_args(
         self, full_input_sequence: TorchFullFrameInputSequence
@@ -365,7 +336,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         batcher = self._setup_batcher(full_batch)
 
         lowest_cost = torch.inf
-        best_output: TorchFullFrameOutputSequence = None
+        best_checkpoint_path: Path | None = None
 
         # Profile the training step
         with self._setup_profiler(profile=profile) as prof:
@@ -395,7 +366,15 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
                 if total_cost < lowest_cost:
                     lowest_cost = total_cost
-                    best_output = self._forward_inference(model, full_batch, logger)
+                    best_checkpoint_path = self._save_model_state(
+                        model,
+                        optimizer,
+                        scheduler,
+                        full_batch.dataset_idx,
+                        epoch_idx,
+                        logger,
+                        is_best=True,
+                    )
 
                 batch_cost = total_cost / len(batcher)
                 should_exit = scheduler.step(batch_cost)
@@ -416,8 +395,12 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         print(f"Exiting after {epoch_idx} epochs with lowest cost of {lowest_cost}")
 
-        assert best_output is not None, "Best output is None; optimization failed"
-        return best_output
+        assert best_checkpoint_path is not None, "Best checkpoint path should not be None"
+
+        with torch.inference_mode():
+            with torch.no_grad():
+                self._load_model_state(model, best_checkpoint_path)
+                return self._forward_inference(model, full_batch, logger)
 
     def loss_fn(
         self,

@@ -671,6 +671,13 @@ class TorchFullFrameOutputSequence(BaseOutputSequence):
     def __len__(self) -> int:
         return self.ego_flows.shape[0]
 
+    def _apply_to_vars(self, func: callable) -> "TorchFullFrameOutputSequence":
+        copied_args = {
+            key: func(value) if isinstance(value, torch.Tensor) else value
+            for key, value in vars(self).items()
+        }
+        return type(self)(**copied_args)
+
     def to(self, device: str | torch.device) -> "TorchFullFrameOutputSequence":
         """
         Copy tensors in this batch to the target device.
@@ -678,9 +685,7 @@ class TorchFullFrameOutputSequence(BaseOutputSequence):
         Args:
             device: the string (and optional ordinal) used to construct the device object ex. 'cuda:0'
         """
-        self.ego_flows = self.ego_flows.to(device)
-        self.valid_flow_mask = self.valid_flow_mask.to(device)
-
+        self = self._apply_to_vars(lambda x: x.to(device) if isinstance(x, torch.Tensor) else x)
         return self
 
     def to_ego_lidar_flow_list(self) -> list[EgoLidarFlow]:
@@ -713,25 +718,22 @@ class TorchFullFrameOutputSequence(BaseOutputSequence):
         """
         Clone this object.
         """
-        return TorchFullFrameOutputSequence(
-            ego_flows=self.ego_flows.clone(),
-            valid_flow_mask=self.valid_flow_mask.clone(),
-        )
+        return self._apply_to_vars(lambda x: x.clone() if isinstance(x, torch.Tensor) else x)
 
     def detach(self) -> "TorchFullFrameOutputSequence":
         """
         Detach all tensors in this object.
         """
-        self.ego_flows = self.ego_flows.detach()
-        self.valid_flow_mask = self.valid_flow_mask.detach()
+        self = self._apply_to_vars(lambda x: x.detach() if isinstance(x, torch.Tensor) else x)
         return self
 
     def requires_grad_(self, requires_grad: bool) -> "TorchFullFrameOutputSequence":
         """
         Set the requires_grad attribute of all tensors in this object.
         """
-        self.ego_flows.requires_grad_(requires_grad)
-        self.valid_flow_mask.requires_grad_(requires_grad)
+        self = self._apply_to_vars(
+            lambda x: x.requires_grad_(requires_grad) if isinstance(x, torch.Tensor) else x
+        )
         return self
 
     def slice(self, start_idx: int, end_idx: int) -> "TorchFullFrameOutputSequence":
@@ -739,7 +741,6 @@ class TorchFullFrameOutputSequence(BaseOutputSequence):
         # For K length tensors, the slice is [start_idx:end_idx]
         # For K - 1 length tensors, the slice is [start_idx:end_idx - 1]
 
-        return TorchFullFrameOutputSequence(
-            ego_flows=self.ego_flows[start_idx:end_idx],
-            valid_flow_mask=self.valid_flow_mask[start_idx:end_idx],
+        return self._apply_to_vars(
+            lambda x: x[start_idx:end_idx] if isinstance(x, torch.Tensor) else x
         )
