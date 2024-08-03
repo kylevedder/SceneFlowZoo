@@ -399,8 +399,13 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
 
         with torch.inference_mode():
             with torch.no_grad():
+                print(f"Loading best weights from {best_checkpoint_path}")
                 self._load_model_state(model, best_checkpoint_path)
-                return self._forward_inference(model, full_batch, logger)
+
+                print(f"Running inference on best weights")
+                result = self._forward_inference(model, full_batch, logger)
+                print(f"Finished running inference on best weights")
+                return result
 
     def loss_fn(
         self,

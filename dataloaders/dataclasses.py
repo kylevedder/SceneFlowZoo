@@ -7,6 +7,7 @@ from bucketed_scene_flow_eval.datastructures import (
     RGBImage,
     RGBFrameLookup,
     EgoLidarFlow,
+    EgoLidarDistance,
     PointCloudFrame,
     RGBFrame,
     PointCloud,
@@ -744,3 +745,50 @@ class TorchFullFrameOutputSequence(BaseOutputSequence):
         return self._apply_to_vars(
             lambda x: x[start_idx:end_idx] if isinstance(x, torch.Tensor) else x
         )
+
+
+@dataclass
+class TorchFullFrameOutputSequenceWithDistance(TorchFullFrameOutputSequence):
+    """
+    A standardized set of outputs for Bucketed Scene Flow evaluation with distance.
+
+    Args:
+        ego_flows: torch.Tensor  # (K - 1, PadN, 3)
+        valid_flow_mask: torch.Tensor  # (K - 1, PadN,)
+        distances: torch.Tensor  # (K - 1, PadN)
+        valid_distance_mask: torch.Tensor  # (K - 1, PadN,)
+    """
+
+    distances: torch.Tensor
+    is_colliding_mask: torch.Tensor
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert (
+            self.distances.dim() == 2
+        ), f"Expected distances to have shape (K - 1, PadN), got {self.distances.shape}"
+        assert (
+            self.is_colliding_mask.dim() == 2
+        ), f"Expected valid_distance_mask to have shape (K - 1, PadN), got {self.is_colliding_mask.shape}"
+        assert (
+            self.distances.shape == self.is_colliding_mask.shape
+        ), f"Shape mismatch: distances {self.distances.shape} vs valid_distance_mask {self.is_colliding_mask.shape}"
+
+    def to_ego_lidar_distance_list(self) -> list[EgoLidarDistance]:
+        """
+        Convert the distances and is_colliding_mask to a list of EgoLidarDistance objects.
+        """
+
+        def _to_ego_lidar_distance(
+            padded_distances: torch.Tensor, padded_mask: torch.Tensor
+        ) -> EgoLidarDistance:
+            unpad = from_fixed_array_valid_mask_torch(padded_mask)
+            return EgoLidarDistance(
+                distances=padded_distances[unpad].detach().cpu().numpy(),
+                is_colliding_mask=(padded_mask[unpad] != 0).detach().cpu().numpy(),
+            )
+
+        return [
+            _to_ego_lidar_distance(distances, mask)
+            for distances, mask in zip(self.distances, self.is_colliding_mask)
+        ]

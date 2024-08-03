@@ -9,7 +9,7 @@ import models
 from models import ForwardMode
 from dataloaders import TorchFullFrameInputSequence, EvalWrapper
 
-from .model_saver import ModelOutSaver, FlowNoSave, FlowSave
+from .model_saver import ModelOutSaver, OutputNoSave, OutputSave
 
 
 def _get_cfg_or_default(cfg, key, default, key_transform=lambda e: e):
@@ -34,14 +34,14 @@ class ModelWrapper(pl.LightningModule):
         )
 
         self.model_out_saver: ModelOutSaver = _get_cfg_or_default(
-            cfg, "save_output_folder", FlowNoSave(), FlowSave
+            cfg, "save_output_folder", OutputNoSave(), OutputSave
         )
         self.cache_validation_outputs: bool = _get_cfg_or_default(
             cfg, "cache_validation_outputs", False
         )
         assert (not self.cache_validation_outputs) or (
-            not isinstance(self.model_out_saver, FlowNoSave)
-        ), f"Cannot cache outputs with FlowNoSave saver"
+            not isinstance(self.model_out_saver, OutputNoSave)
+        ), f"Cannot cache outputs with OutputNoSave saver"
 
     def on_load_checkpoint(self, checkpoint):
         checkpoint_lrs = set()

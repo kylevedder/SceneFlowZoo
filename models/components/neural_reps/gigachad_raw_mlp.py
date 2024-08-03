@@ -151,7 +151,7 @@ class GigaChadOccFlowMLP(NSFPRawMLP):
         self,
         output_dim: int = 4,
         latent_dim: int = 128,
-        act_fn: ActivationFn = ActivationFn.RELU,
+        act_fn: ActivationFn = ActivationFn.SINC,
         num_layers: int = 8,
         encoder: BaseEncoder = FourierTemporalEmbedding(),
         with_compile: bool = True,

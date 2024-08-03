@@ -66,6 +66,10 @@ class GigaChadNSFPreprocessedInput:
     def __len__(self):
         return len(self.full_global_pcs)
 
+    def get_global_position(self, idx: int) -> torch.Tensor:
+        ego_to_global_transform = self.ego_to_globals[idx]
+        return ego_to_global_transform[:3, 3]
+
     def get_full_global_pc(self, idx: int) -> torch.Tensor:
         return self.full_global_pcs[idx]
 

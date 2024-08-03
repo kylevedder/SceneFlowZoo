@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
-from bucketed_scene_flow_eval.datastructures import EgoLidarFlow
+from dataloaders import (
+    TorchFullFrameInputSequence,
+    TorchFullFrameOutputSequence,
+    TorchFullFrameOutputSequenceWithDistance,
+)
+from bucketed_scene_flow_eval.datastructures import EgoLidarFlow, EgoLidarDistance
 from bucketed_scene_flow_eval.utils import save_feather
 import pandas as pd
 from bucketed_scene_flow_eval.interfaces import LoaderType
@@ -40,7 +44,7 @@ class ModelOutSaver(ABC):
         return [self.load_saved(input) for input in input_batch]
 
 
-class FlowNoSave(ModelOutSaver):
+class OutputNoSave(ModelOutSaver):
     def save(self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence):
         pass
 
@@ -48,7 +52,7 @@ class FlowNoSave(ModelOutSaver):
         return False
 
 
-class FlowSave(ModelOutSaver):
+class OutputSave(ModelOutSaver):
 
     def __init__(self, save_root: Path) -> None:
         if isinstance(save_root, str):
@@ -82,6 +86,24 @@ class FlowSave(ModelOutSaver):
             verbose=False,
         )
 
+    def _save_occ(self, save_path: Path, ego_flow: EgoLidarFlow, ego_distance: EgoLidarDistance):
+        assert ego_flow.mask.shape == ego_distance.is_colliding_mask.shape, (
+            f"Expected the mask shapes to be the same, but got {ego_flow.mask.shape} and "
+            f"{ego_distance.is_colliding_mask.shape}"
+        )
+        output_df = pd.DataFrame(
+            {
+                "is_valid": ego_flow.mask,
+                "is_colliding": ego_distance.is_colliding_mask,
+                "distances_m": ego_distance.distances,
+            }
+        )
+        save_feather(
+            save_path,
+            output_df,
+            verbose=False,
+        )
+
     def _load_flow(self, save_path: Path) -> EgoLidarFlow:
         assert save_path.exists(), f"Expected {save_path} to exist, but it does not."
         output_df = pd.read_feather(save_path)
@@ -90,7 +112,7 @@ class FlowSave(ModelOutSaver):
             mask=output_df["is_valid"].to_numpy(),
         )
 
-    def _single_save_file(self, input: TorchFullFrameInputSequence) -> Path:
+    def _single_flow_save_file(self, input: TorchFullFrameInputSequence) -> Path:
         return (
             Path(self.save_root)
             / f"sequence_len_{len(input):03d}"
@@ -98,7 +120,7 @@ class FlowSave(ModelOutSaver):
             / f"{input.dataset_idx:010d}.feather"
         )
 
-    def _multi_save_files(self, input: TorchFullFrameInputSequence) -> list[Path]:
+    def _multi_flow_save_files(self, input: TorchFullFrameInputSequence) -> list[Path]:
         return [
             Path(self.save_root)
             / f"{input.loader_type}"
@@ -109,19 +131,38 @@ class FlowSave(ModelOutSaver):
             for idx in range(len(input) - 1)
         ]
 
+    def _single_occ_save_file(self, input: TorchFullFrameOutputSequenceWithDistance) -> Path:
+        return (
+            Path(self.save_root)
+            / f"sequence_len_{len(input):03d}"
+            / f"{input.sequence_log_id}"
+            / f"{input.dataset_idx:010d}_occ.feather"
+        )
+
+    def _multi_occ_save_files(self, input: TorchFullFrameOutputSequenceWithDistance) -> list[Path]:
+        return [
+            Path(self.save_root)
+            / f"{input.loader_type}"
+            / f"sequence_len_{len(input):03d}"
+            / f"{input.sequence_log_id}"
+            / f"{input.dataset_idx:06d}"
+            / f"{idx:010d}_occ.feather"
+            for idx in range(len(input) - 1)
+        ]
+
     def _save_single_flow(
         self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence
     ):
 
         ego_flows = output.to_ego_lidar_flow_list()
         assert len(ego_flows) == 1, f"Expected a single ego flow, but got {len(ego_flows)}"
-        self._save_flow(self._single_save_file(input), ego_flows[0])
+        self._save_flow(self._single_flow_save_file(input), ego_flows[0])
 
     def _save_multi_flow(
         self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence
     ):
         ego_flows = output.to_ego_lidar_flow_list()
-        save_paths = self._multi_save_files(input)
+        save_paths = self._multi_flow_save_files(input)
         assert (
             len(ego_flows) == len(input) - 1
         ), f"Expected {len(input) - 1} ego flows, but got {len(ego_flows)}"
@@ -131,11 +172,37 @@ class FlowSave(ModelOutSaver):
         for ego_flow, save_path in zip(ego_flows, save_paths):
             self._save_flow(save_path, ego_flow)
 
+    def _save_single_occ(
+        self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequenceWithDistance
+    ):
+        distances = output.to_ego_lidar_distance_list()
+        ego_flows = output.to_ego_lidar_flow_list()
+        assert len(distances) == 1, f"Expected a single distance, but got {len(distances)}"
+        self._save_occ(self._single_occ_save_file(input), ego_flows[0], distances[0])
+
+    def _save_multi_occ(
+        self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequenceWithDistance
+    ):
+        distances = output.to_ego_lidar_distance_list()
+        ego_flows = output.to_ego_lidar_flow_list()
+        save_paths = self._multi_occ_save_files(input)
+        assert (
+            len(distances) == len(input) - 1
+        ), f"Expected {len(input) - 1} distances, but got {len(distances)}"
+        assert len(ego_flows) == len(
+            distances
+        ), f"Expected {len(distances)} ego flows, but got {len(ego_flows)}"
+        assert len(save_paths) == len(
+            distances
+        ), f"Expected {len(distances)} save paths, but got {len(save_paths)}"
+        for ego_flow, distance, save_path in zip(ego_flows, distances, save_paths):
+            self._save_occ(save_path, ego_flow, distance)
+
     def _is_saved_multi(self, input: TorchFullFrameInputSequence) -> bool:
-        return all([save_path.exists() for save_path in self._multi_save_files(input)])
+        return all([save_path.exists() for save_path in self._multi_flow_save_files(input)])
 
     def _is_saved_single(self, input: TorchFullFrameInputSequence) -> bool:
-        return self._single_save_file(input).exists()
+        return self._single_flow_save_file(input).exists()
 
     def save(self, input: TorchFullFrameInputSequence, output: TorchFullFrameOutputSequence):
         assert isinstance(
@@ -147,8 +214,12 @@ class FlowSave(ModelOutSaver):
         match input.loader_type:
             case LoaderType.CAUSAL:
                 self._save_single_flow(input, output)
+                if isinstance(output, TorchFullFrameOutputSequenceWithDistance):
+                    self._save_single_occ(input, output)
             case LoaderType.NON_CAUSAL:
                 self._save_multi_flow(input, output)
+                if isinstance(output, TorchFullFrameOutputSequenceWithDistance):
+                    self._save_multi_occ(input, output)
             case _:
                 raise ValueError(f"Unknown loader type: {input.loader_type}")
 
@@ -162,10 +233,10 @@ class FlowSave(ModelOutSaver):
                 raise ValueError(f"Unknown loader type: {input.loader_type}")
 
     def _load_single_flow(self, input: TorchFullFrameInputSequence) -> EgoLidarFlow:
-        return self._load_flow(self._single_save_file(input))
+        return self._load_flow(self._single_flow_save_file(input))
 
     def _load_multi_flow(self, input: TorchFullFrameInputSequence) -> list[EgoLidarFlow]:
-        return [self._load_flow(save_path) for save_path in self._multi_save_files(input)]
+        return [self._load_flow(save_path) for save_path in self._multi_flow_save_files(input)]
 
     def load_saved(self, input: TorchFullFrameInputSequence) -> TorchFullFrameOutputSequence:
         _, PadN, _ = input.full_pc.shape

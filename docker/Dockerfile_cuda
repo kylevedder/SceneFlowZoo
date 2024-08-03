@@ -67,12 +67,13 @@ RUN git checkout a406a62e5b3ca74a76b6db9a1cd7cf3578c50772
 WORKDIR /torch_kdtree
 RUN pip install .
 
+RUN apt update --fix-missing
 RUN apt install -y ffmpeg
 RUN conda install -c conda-forge openh264
 RUN pip install pytorch_memlab
 RUN apt install -y nano
 
-RUN pip install bucketed-scene-flow-eval==2.0.19
+RUN pip install bucketed-scene-flow-eval==2.0.20
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user

@@ -1,5 +1,10 @@
 from .abstract_dataset import BaseDataset, EvalWrapper, TorchEvalWrapper
-from .dataclasses import TorchFullFrameInputSequence, TorchFullFrameOutputSequence, FreeSpaceRays
+from .dataclasses import (
+    TorchFullFrameInputSequence,
+    TorchFullFrameOutputSequence,
+    FreeSpaceRays,
+    TorchFullFrameOutputSequenceWithDistance,
+)
 
 
 # Defined before the importable classes to avoid circular imports if they use this function.

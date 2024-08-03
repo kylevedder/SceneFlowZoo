@@ -19,7 +19,12 @@ from models.components.optimization.cost_functions import (
     AdditiveCosts,
 )
 
-from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence, FreeSpaceRays
+from dataloaders import (
+    TorchFullFrameInputSequence,
+    TorchFullFrameOutputSequence,
+    TorchFullFrameOutputSequenceWithDistance,
+    FreeSpaceRays,
+)
 from models.components.optimization.cost_functions import BaseCostProblem
 from bucketed_scene_flow_eval.interfaces import LoaderType
 from pointclouds import to_fixed_array_torch
@@ -27,6 +32,7 @@ import torch
 import numpy as np
 from dataclasses import dataclass
 from visualization.flow_to_rgb import flow_to_rgb
+import tqdm
 
 
 @dataclass
@@ -128,9 +134,103 @@ class GigachadOccFlowModel(GigachadNSFModel):
         )
         # fmt: on
 
+    def _compute_depth_reconstruction(
+        self,
+        rep: GigaChadNSFPreprocessedInput,
+        query_idx: int,
+        max_range_m: float = 50,
+        num_ray_samples: int = 500,
+        is_occupied_threshold: float = 0.75,
+        direction: QueryDirection = QueryDirection.FORWARD,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+
+        lidar_endpoints = rep.get_full_global_pc(query_idx)  # Nx3
+        lidar_origin = rep.get_global_position(query_idx)  # 3
+        # Subtract the origin from the endpoints to get the direction
+        lidar_direction = lidar_endpoints - lidar_origin  # Nx3
+        # Make them unit vectors
+        lidar_unit_vectors = torch.nn.functional.normalize(lidar_direction, p=2, dim=1)
+
+        sample_step_size = max_range_m / num_ray_samples
+
+        # N x num_ray_samples matrix for recording the occupancy
+        p_occupied_matrix = torch.zeros(
+            (lidar_endpoints.shape[0], num_ray_samples), dtype=lidar_endpoints.dtype
+        )
+
+        for sample_idx in range(num_ray_samples):
+            sample_ray_distance = sample_idx * sample_step_size
+            sample_ray_endpoints = lidar_origin + (sample_ray_distance * lidar_unit_vectors)
+
+            model_res: ModelOccFlowResult = self.model(
+                sample_ray_endpoints,
+                query_idx,
+                len(rep),
+                direction,
+            )
+
+            # Move to the CPU and numpy
+            occ = model_res.occ.cpu()
+            p_occupied_matrix[:, sample_idx] = occ
+
+        is_free_threshold = 1.0 - is_occupied_threshold
+        # Clamp the values to 0-1
+        p_occupied_matrix = torch.clip(p_occupied_matrix, 0, 1)
+        p_free_matrix = 1.0 - p_occupied_matrix
+        # Do integration via cumulative product
+        p_free_matrix_cumprod = torch.cumprod(p_free_matrix, axis=1)
+
+        # Find the first index where the probability of being free is less than the threshold
+        # We do this by taking the is free mask and summing along the columns to get the index
+        # of the transition from free to occupied
+        is_free_mask_matrix = p_free_matrix_cumprod > is_free_threshold
+        is_free_mask_cumsum = torch.cumsum(is_free_mask_matrix, axis=1)
+        # Max along the columns to get the first index where the transition occurs
+        first_occupied_idx = torch.max(is_free_mask_cumsum, axis=1).indices
+        # last unoccupied index is the first occupied index - 1. Perform a max with 0 to handle the
+        # case where the first occupied index is 0
+        last_unoccupied_idx = torch.maximum(
+            first_occupied_idx - 1, torch.zeros_like(first_occupied_idx)
+        )
+
+        first_occupied_distance = first_occupied_idx * sample_step_size
+        last_unoccupied_distance = last_unoccupied_idx * sample_step_size
+
+        first_occupied_free_space_probabilities = p_free_matrix[
+            torch.arange(p_free_matrix.shape[0]), first_occupied_idx
+        ]
+        last_unoccupied_free_space_probabilities = p_free_matrix[
+            torch.arange(p_free_matrix.shape[0]), last_unoccupied_idx
+        ]
+
+        # Linearly interpolate between the two distances based on the free space probabilities.
+        interpolated_distance = (
+            last_unoccupied_distance
+            + (first_occupied_distance - last_unoccupied_distance)
+            * last_unoccupied_free_space_probabilities
+        )
+        # Handle the case where the free space probability starts below the threshold
+        interpolated_distance = torch.where(
+            # The last unoccupied p(free space) is below the threshold, i.e. collision from the beginning
+            last_unoccupied_free_space_probabilities < is_free_threshold,
+            last_unoccupied_distance,
+            interpolated_distance,
+        )
+        # Handle the case where the free space probability never drops below the threshold
+        interpolated_distance = torch.where(
+            # The last occupied p(free space) is above the threshold, i.e. no collision
+            first_occupied_free_space_probabilities > is_free_threshold,
+            first_occupied_distance,
+            interpolated_distance,
+        )
+
+        is_colliding_ray = first_occupied_free_space_probabilities <= is_free_threshold
+
+        return interpolated_distance, is_colliding_ray
+
     def _forward_single_noncausal(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
-    ) -> TorchFullFrameOutputSequence:
+    ) -> TorchFullFrameOutputSequenceWithDistance:
         assert (
             input_sequence.loader_type == LoaderType.NON_CAUSAL
         ), f"Expected non-causal, but got {input_sequence.loader_type}"
@@ -140,23 +240,32 @@ class GigachadOccFlowModel(GigachadNSFModel):
 
         ego_flows = []
         valid_flow_masks = []
+        depths = []
+        is_colliding_ray_masks = []
 
         # For each index from 0 to len - 2, get the flow
-        for idx in range(len(rep) - 1):
+        for idx in tqdm.tqdm(range(len(rep) - 1), desc="Inference frame"):
             ego_flow, full_pc_mask = self._compute_ego_flow(rep, idx)
+            depth, is_colliding_ray_mask = self._compute_depth_reconstruction(rep, idx)
             padded_ego_flow = to_fixed_array_torch(ego_flow, padded_n)
             padded_full_pc_mask = to_fixed_array_torch(full_pc_mask, padded_n)
+            padded_depth = to_fixed_array_torch(depth, padded_n)
+            padded_is_colliding_ray_mask = to_fixed_array_torch(is_colliding_ray_mask, padded_n)
             ego_flows.append(padded_ego_flow)
             valid_flow_masks.append(padded_full_pc_mask)
+            depths.append(padded_depth)
+            is_colliding_ray_masks.append(padded_is_colliding_ray_mask)
 
-        return TorchFullFrameOutputSequence(
+        return TorchFullFrameOutputSequenceWithDistance(
             ego_flows=torch.stack(ego_flows),
             valid_flow_mask=torch.stack(valid_flow_masks),
+            distances=torch.stack(depths),
+            is_colliding_mask=torch.stack(is_colliding_ray_masks),
         )
 
     def inference_forward_single(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
-    ) -> TorchFullFrameOutputSequence:
+    ) -> TorchFullFrameOutputSequenceWithDistance:
 
         assert (
             input_sequence.loader_type == LoaderType.NON_CAUSAL
@@ -223,4 +332,34 @@ class GigachadOccFlowSincOptimizationLoop(GigachadOccFlowOptimizationLoop):
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
             model=GigaChadOccFlowMLP(act_fn=ActivationFn.SINC)
+        )
+
+
+class GigachadOccFlowSincDepth10OptimizationLoop(GigachadOccFlowSincOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(num_layers=10)
+        )
+
+
+class GigachadOccFlowSincDepth12OptimizationLoop(GigachadOccFlowSincOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(num_layers=12)
+        )
+
+
+class GigachadOccFlowSincDepth14OptimizationLoop(GigachadOccFlowSincOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(num_layers=14)
         )
