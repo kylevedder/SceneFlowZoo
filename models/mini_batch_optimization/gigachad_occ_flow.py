@@ -49,8 +49,10 @@ class GigachadOccFlowModel(GigachadNSFModel):
         pc_target_type: PointCloudTargetType | str,
         pc_loss_type: PointCloudLossType | str,
         model: torch.nn.Module = GigaChadOccFlowMLP(),
+        max_unroll: int = 3,
     ) -> None:
         super().__init__(full_input_sequence, speed_threshold, pc_target_type, pc_loss_type, model)
+        self.max_unroll = max_unroll
 
     def _make_expected_zero_flow(self, model_res: ModelFlowResult) -> BaseCostProblem:
         assert isinstance(
@@ -126,8 +128,8 @@ class GigachadOccFlowModel(GigachadNSFModel):
             [
                 self._k_step_cost(rep, 1, QueryDirection.FORWARD, self.pc_loss_type, speed_limit=self.speed_threshold),
                 self._k_step_cost(rep, 1, QueryDirection.REVERSE, self.pc_loss_type, speed_limit=self.speed_threshold),
-                self._k_step_cost(rep, 3, QueryDirection.FORWARD, self.pc_loss_type),
-                self._k_step_cost(rep, 3, QueryDirection.REVERSE, self.pc_loss_type),
+                self._k_step_cost(rep, self.max_unroll, QueryDirection.FORWARD, self.pc_loss_type),
+                self._k_step_cost(rep, self.max_unroll, QueryDirection.REVERSE, self.pc_loss_type),
                 self._cycle_consistency(rep) * 0.01,
                 self._free_space_regularization(rep),
             ]
@@ -341,7 +343,7 @@ class GigachadOccFlowSincDepth10OptimizationLoop(GigachadOccFlowSincOptimization
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=GigaChadOccFlowMLP(num_layers=10)
+            model=GigaChadOccFlowMLP(num_layers=10), max_unroll=2
         )
 
 
@@ -351,7 +353,7 @@ class GigachadOccFlowSincDepth12OptimizationLoop(GigachadOccFlowSincOptimization
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=GigaChadOccFlowMLP(num_layers=12)
+            model=GigaChadOccFlowMLP(num_layers=12), max_unroll=2
         )
 
 
@@ -361,5 +363,5 @@ class GigachadOccFlowSincDepth14OptimizationLoop(GigachadOccFlowSincOptimization
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=GigaChadOccFlowMLP(num_layers=14)
+            model=GigaChadOccFlowMLP(num_layers=14), max_unroll=2
         )
