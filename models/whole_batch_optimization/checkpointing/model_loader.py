@@ -35,7 +35,18 @@ class OptimCheckpointModelLoader:
         def _load_checkpoint_path(checkpoint_root: Path, sequence_id: Path) -> Path:
             checkpoint_dir = checkpoint_root / f"job_{sequence_id}"
             checkpoints = sorted(checkpoint_dir.glob("*.pth"))
-            assert len(checkpoints) == 1, f"No checkpoints found in {checkpoint_dir}"
+            if len(checkpoints) == 0:
+                raise FileNotFoundError(f"No checkpoints found in {checkpoint_dir}")
+
+            # Try to grab the best checkpoint
+            best_weights = checkpoint_dir / "best_weights.pth"
+            if best_weights.exists():
+                return best_weights
+
+            if len(checkpoints) > 1:
+                raise ValueError(
+                    f"Multiple checkpoints found in {checkpoint_dir}. None are best_weights.pth"
+                )
             return checkpoints[0]
 
         # Load the checkpoint
