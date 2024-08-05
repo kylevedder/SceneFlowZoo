@@ -24,7 +24,7 @@ def get_latest_and_best_checkpoint(job_dir: Path) -> tuple[Path | None, Path | N
         return int(match.group(1))
 
     latest_checkpoint = max(pth_files, key=get_epoch_number)
-    best_checkpoint = latest_timestamp_dir / "best_weights.pth"
+    best_checkpoint = latest_timestamp_dir / "dataset_idx_0000000000" / "best_weights.pth"
 
     if not latest_checkpoint.exists():
         latest_checkpoint = None
