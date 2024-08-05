@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 
-def get_latest_checkpoint(job_dir: Path) -> Path | None:
+def get_latest_and_best_checkpoint(job_dir: Path) -> tuple[Path | None, Path | None]:
     # Find all subdirectories matching the timestamp pattern
     timestamp_dirs = list(job_dir.glob("*"))
 
@@ -14,7 +14,7 @@ def get_latest_checkpoint(job_dir: Path) -> Path | None:
     latest_timestamp_dir = max(timestamp_dirs, key=lambda x: x.name)
 
     # Find all .pth files in the latest timestamp directory
-    pth_files = list(latest_timestamp_dir.glob("dataset_idx_*/*.pth"))
+    pth_files = list(latest_timestamp_dir.glob("dataset_idx_*/epoch_*.pth"))
 
     assert pth_files, f"No .pth files found in {latest_timestamp_dir}"
 
@@ -23,7 +23,15 @@ def get_latest_checkpoint(job_dir: Path) -> Path | None:
         assert match is not None, f"Failed to extract epoch number from {file_path.name}"
         return int(match.group(1))
 
-    return max(pth_files, key=get_epoch_number)
+    latest_checkpoint = max(pth_files, key=get_epoch_number)
+    best_checkpoint = latest_timestamp_dir / "best_weights.pth"
+
+    if not latest_checkpoint.exists():
+        latest_checkpoint = None
+    if not best_checkpoint.exists():
+        best_checkpoint = None
+
+    return latest_checkpoint, best_checkpoint
 
 
 def main():
@@ -49,14 +57,18 @@ def main():
 
         with zipfile.ZipFile(args.output_zip, "w") as zipf:
             for job_dir in job_dirs:
-                latest_checkpoint = get_latest_checkpoint(job_dir)
-                if latest_checkpoint:
-                    # Use the job directory name in the zip file path
-                    zip_path = Path(job_dir.name) / latest_checkpoint.name
-                    zipf.write(latest_checkpoint, zip_path)
+                latest_checkpoint, best_checkpoint = get_latest_and_best_checkpoint(job_dir)
+
+                def add_checkpoint_if_exists(checkpoint: Path | None):
+                    if not checkpoint:
+                        return
+
+                    zip_path = Path(job_dir.name) / checkpoint.name
+                    zipf.write(checkpoint, zip_path)
                     print(f"Added {zip_path} to {args.output_zip}")
-                else:
-                    print(f"No checkpoint found in {job_dir}")
+
+                add_checkpoint_if_exists(latest_checkpoint)
+                add_checkpoint_if_exists(best_checkpoint)
 
         print(f"Successfully created {args.output_zip}")
     except Exception as e:
