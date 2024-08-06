@@ -93,10 +93,16 @@ class GigachadOccFlowModel(GigachadNSFModel):
             rep, GigaChadOccFlowPreprocessedInput
         ), f"Expected GigaChadOccFlowPreprocessedInput, but got {type(rep)}"
 
-        def _make_random_ray_distances(dim: int, min_dist: float, max_dist: float) -> torch.Tensor:
+        def _make_random_ray_distances(
+            free_space_rays: FreeSpaceRays, min_dist: float, max_dist: float
+        ) -> torch.Tensor:
+            dim = len(free_space_rays)
             # Make random tensor with values uniformly distributed between min_dist and max_dist
-            random_tensor = torch.rand(dim) * (max_dist - min_dist) + min_dist
-            return random_tensor
+            random_tensor = (
+                torch.rand(dim, device=free_space_rays.rays.device) * (max_dist - min_dist)
+                + min_dist
+            )
+            return random_tensor[:, None]
 
         match self.sampling_type:
             case "fixed":
@@ -114,7 +120,7 @@ class GigachadOccFlowModel(GigachadNSFModel):
                 free_space_rays = rep.free_space_rays[idx]
                 if np.isnan(range_scaler):
                     free_space_pc = free_space_rays.get_freespace_pc(
-                        _make_random_ray_distances(len(free_space_rays), 0.0, 0.98)
+                        _make_random_ray_distances(free_space_rays, 0.0, 0.98)
                     )
                 else:
                     free_space_pc = free_space_rays.get_freespace_pc(range_scaler)
