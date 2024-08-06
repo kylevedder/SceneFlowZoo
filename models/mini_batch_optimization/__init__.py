@@ -21,5 +21,6 @@ from .gigachad_occ_flow import (
     GigachadOccFlowSincDepth10OptimizationLoop,
     GigachadOccFlowSincDepth12OptimizationLoop,
     GigachadOccFlowSincDepth14OptimizationLoop,
+    GigachadOccFlowSincDepth10RandomSampleOptimizationLoop,
 )
 from .ntp import NTPOptimizationLoop

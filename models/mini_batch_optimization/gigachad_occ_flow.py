@@ -49,10 +49,12 @@ class GigachadOccFlowModel(GigachadNSFModel):
         pc_target_type: PointCloudTargetType | str,
         pc_loss_type: PointCloudLossType | str,
         model: torch.nn.Module = GigaChadOccFlowMLP(),
+        sampling_type: str = "fixed",
         max_unroll: int = 3,
     ) -> None:
         super().__init__(full_input_sequence, speed_threshold, pc_target_type, pc_loss_type, model)
         self.max_unroll = max_unroll
+        self.sampling_type = sampling_type
 
     def _make_expected_zero_flow(self, model_res: ModelFlowResult) -> BaseCostProblem:
         assert isinstance(
@@ -96,7 +98,13 @@ class GigachadOccFlowModel(GigachadNSFModel):
             random_tensor = torch.rand(dim) * (max_dist - min_dist) + min_dist
             return random_tensor
 
-        distance_schedule = [np.nan, np.nan, 0.98]
+        match self.sampling_type:
+            case "fixed":
+                distance_schedule = [0.3, 0.6, 0.98]
+            case "random":
+                distance_schedule = [np.nan, np.nan, 0.98]
+            case _:
+                raise ValueError(f"Unknown sampling type {self.sampling_type}")
 
         def _sample_at_distance(range_scaler: float) -> BaseCostProblem:
 
@@ -422,4 +430,14 @@ class GigachadOccFlowSincDepth14OptimizationLoop(GigachadOccFlowSincOptimization
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
             model=GigaChadOccFlowMLP(num_layers=14), max_unroll=2
+        )
+
+
+class GigachadOccFlowSincDepth10RandomSampleOptimizationLoop(GigachadOccFlowSincOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(num_layers=10), max_unroll=2, sampling_type="random"
         )
