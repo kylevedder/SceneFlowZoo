@@ -90,14 +90,27 @@ class GigachadOccFlowModel(GigachadNSFModel):
         assert isinstance(
             rep, GigaChadOccFlowPreprocessedInput
         ), f"Expected GigaChadOccFlowPreprocessedInput, but got {type(rep)}"
-        distance_schedule = [0.3, 0.6, 0.98]
 
-        def _sample_at_distance(distance: float) -> BaseCostProblem:
+        def _make_random_ray_distances(dim: int, min_dist: float, max_dist: float) -> torch.Tensor:
+            # Make random tensor with values uniformly distributed between min_dist and max_dist
+            random_tensor = torch.rand(dim) * (max_dist - min_dist) + min_dist
+            return random_tensor
+
+        distance_schedule = [np.nan, np.nan, 0.98]
+
+        def _sample_at_distance(range_scaler: float) -> BaseCostProblem:
 
             costs = []
 
             for idx in range(len(rep)):
-                free_space_pc = rep.free_space_rays[idx].get_freespace_pc(distance)
+                free_space_rays = rep.free_space_rays[idx]
+                if np.isnan(range_scaler):
+                    free_space_pc = free_space_rays.get_freespace_pc(
+                        _make_random_ray_distances(len(free_space_rays), 0.0, 0.98)
+                    )
+                else:
+                    free_space_pc = free_space_rays.get_freespace_pc(range_scaler)
+
                 sequence_idx = rep.sequence_idxes[idx]
 
                 model_res: ModelOccFlowResult = self.model(
@@ -136,59 +149,15 @@ class GigachadOccFlowModel(GigachadNSFModel):
         )
         # fmt: on
 
-    def _compute_depth_reconstruction(
+    def _interpolate_position(
         self,
-        rep: GigaChadNSFPreprocessedInput,
-        query_idx: int,
-        max_range_m: float = 50,
-        num_ray_samples: int = 500,
-        is_occupied_threshold: float = 0.75,
-        direction: QueryDirection = QueryDirection.FORWARD,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-
-        lidar_endpoints = rep.get_full_global_pc(query_idx)  # Nx3
-        lidar_origin = rep.get_global_position(query_idx)  # 3
-        # Subtract the origin from the endpoints to get the direction
-        lidar_direction = lidar_endpoints - lidar_origin  # Nx3
-        # Make them unit vectors
-        lidar_unit_vectors = torch.nn.functional.normalize(lidar_direction, p=2, dim=1)
-
-        sample_step_size = max_range_m / num_ray_samples
-
-        # N x num_ray_samples matrix for recording the occupancy
-        p_occupied_matrix = torch.zeros(
-            (lidar_endpoints.shape[0], num_ray_samples), dtype=lidar_endpoints.dtype
-        )
-
-        for sample_idx in range(num_ray_samples):
-            sample_ray_distance = sample_idx * sample_step_size
-            sample_ray_endpoints = lidar_origin + (sample_ray_distance * lidar_unit_vectors)
-
-            model_res: ModelOccFlowResult = self.model(
-                sample_ray_endpoints,
-                query_idx,
-                len(rep),
-                direction,
-            )
-
-            # Move to the CPU and numpy
-            occ = model_res.occ.cpu()
-            p_occupied_matrix[:, sample_idx] = occ
-
-        is_free_threshold = 1.0 - is_occupied_threshold
-        # Clamp the values to 0-1
-        p_occupied_matrix = torch.clip(p_occupied_matrix, 0, 1)
+        p_occupied_matrix: torch.Tensor,
+        first_occupied_idx: torch.Tensor,
+        is_occupied_threshold: float,
+        sample_step_size: float,
+    ):
         p_free_matrix = 1.0 - p_occupied_matrix
-        # Do integration via cumulative product
-        p_free_matrix_cumprod = torch.cumprod(p_free_matrix, axis=1)
-
-        # Find the first index where the probability of being free is less than the threshold
-        # We do this by taking the is free mask and summing along the columns to get the index
-        # of the transition from free to occupied
-        is_free_mask_matrix = p_free_matrix_cumprod > is_free_threshold
-        is_free_mask_cumsum = torch.cumsum(is_free_mask_matrix, axis=1)
-        # Max along the columns to get the first index where the transition occurs
-        first_occupied_idx = torch.max(is_free_mask_cumsum, axis=1).indices
+        is_free_threshold = 1.0 - is_occupied_threshold
         # last unoccupied index is the first occupied index - 1. Perform a max with 0 to handle the
         # case where the first occupied index is 0
         last_unoccupied_idx = torch.maximum(
@@ -229,6 +198,95 @@ class GigachadOccFlowModel(GigachadNSFModel):
         is_colliding_ray = first_occupied_free_space_probabilities <= is_free_threshold
 
         return interpolated_distance, is_colliding_ray
+
+    def _nerf_style_ray_marching(
+        self,
+        p_occupied_matrix: torch.Tensor,
+        is_occupied_threshold: float,
+        sample_step_size: float,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        is_free_threshold = 1.0 - is_occupied_threshold
+        # Clamp the values to 0-1
+        p_occupied_matrix = torch.clip(p_occupied_matrix, 0, 1)
+        p_free_matrix = 1.0 - p_occupied_matrix
+        # Do integration via cumulative product
+        p_free_matrix_cumprod = torch.cumprod(p_free_matrix, axis=1)
+
+        # Find the first index where the probability of being free is less than the threshold
+        # We do this by taking the is free mask and summing along the columns to get the index
+        # of the transition from free to occupied
+        is_free_mask_matrix = p_free_matrix_cumprod > is_free_threshold
+        is_free_mask_cumsum = torch.cumsum(is_free_mask_matrix, axis=1)
+        # Max along the columns to get the first index where the transition occurs
+        first_occupied_idx = torch.max(is_free_mask_cumsum, axis=1).indices
+
+        return self._interpolate_position(
+            p_occupied_matrix, first_occupied_idx, is_occupied_threshold, sample_step_size
+        )
+
+    def _simple_above_threshold(
+        self,
+        p_occupied_matrix: torch.Tensor,
+        is_occupied_threshold: float,
+        sample_step_size: float,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Compute the first index that is above threshold
+        is_above_threshold_mask = p_occupied_matrix > is_occupied_threshold
+        first_occupied_idx = torch.argmax(is_above_threshold_mask.float(), axis=1)
+        return self._interpolate_position(
+            p_occupied_matrix, first_occupied_idx, is_occupied_threshold, sample_step_size
+        )
+
+    def _compute_depth_reconstruction(
+        self,
+        rep: GigaChadNSFPreprocessedInput,
+        query_idx: int,
+        max_range_m: float = 50,
+        num_ray_samples: int = 500,
+        is_occupied_threshold: float = 0.99,
+        direction: QueryDirection = QueryDirection.FORWARD,
+        style: str = "value",
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+
+        lidar_endpoints = rep.get_full_global_pc(query_idx)  # Nx3
+        lidar_origin = rep.get_global_position(query_idx)  # 3
+        # Subtract the origin from the endpoints to get the direction
+        lidar_direction = lidar_endpoints - lidar_origin  # Nx3
+        # Make them unit vectors
+        lidar_unit_vectors = torch.nn.functional.normalize(lidar_direction, p=2, dim=1)
+
+        sample_step_size = max_range_m / num_ray_samples
+
+        # N x num_ray_samples matrix for recording the occupancy
+        p_occupied_matrix = torch.zeros(
+            (lidar_endpoints.shape[0], num_ray_samples), dtype=lidar_endpoints.dtype
+        )
+
+        for sample_idx in range(num_ray_samples):
+            sample_ray_distance = sample_idx * sample_step_size
+            sample_ray_endpoints = lidar_origin + (sample_ray_distance * lidar_unit_vectors)
+
+            model_res: ModelOccFlowResult = self.model(
+                sample_ray_endpoints,
+                query_idx,
+                len(rep),
+                direction,
+            )
+
+            # Move to the CPU and numpy
+            occ = model_res.occ.cpu()
+            p_occupied_matrix[:, sample_idx] = occ
+
+        if style == "nerf":
+            return self._nerf_style_ray_marching(
+                p_occupied_matrix, is_occupied_threshold, sample_step_size
+            )
+        elif style == "value":
+            return self._simple_above_threshold(
+                p_occupied_matrix, is_occupied_threshold, sample_step_size
+            )
+        else:
+            raise ValueError(f"Unknown style {style}")
 
     def _forward_single_noncausal(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger

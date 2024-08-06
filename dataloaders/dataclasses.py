@@ -55,11 +55,14 @@ class FreeSpaceRays:
             self.origin.dim() == 1 and self.origin.shape[0] == 3
         ), f"Invalid origin shape {self.origin.shape}"
 
-    def get_freespace_pc(self, range_scalar: float) -> torch.Tensor:
+    def get_freespace_pc(self, range_scalar: float | torch.Tensor) -> torch.Tensor:
         """
         Get the free space point cloud by extending the rays by the range scalar.
         """
         return self.origin + self.rays * range_scalar
+
+    def __len__(self) -> int:
+        return self.rays.shape[0]
 
 
 @dataclass
