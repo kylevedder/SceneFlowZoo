@@ -51,10 +51,12 @@ class GigachadOccFlowModel(GigachadNSFModel):
         model: torch.nn.Module = GigaChadOccFlowMLP(),
         sampling_type: str = "fixed",
         max_unroll: int = 3,
+        free_space_regularization_scalar: float = 1.0,
     ) -> None:
         super().__init__(full_input_sequence, speed_threshold, pc_target_type, pc_loss_type, model)
         self.max_unroll = max_unroll
         self.sampling_type = sampling_type
+        self.free_space_regularization_scalar = free_space_regularization_scalar
 
     def _make_expected_zero_flow(self, model_res: ModelFlowResult) -> BaseCostProblem:
         assert isinstance(
@@ -158,7 +160,7 @@ class GigachadOccFlowModel(GigachadNSFModel):
                 self._k_step_cost(rep, self.max_unroll, QueryDirection.FORWARD, self.pc_loss_type),
                 self._k_step_cost(rep, self.max_unroll, QueryDirection.REVERSE, self.pc_loss_type),
                 self._cycle_consistency(rep) * 0.01,
-                self._free_space_regularization(rep),
+                self._free_space_regularization(rep) * self.free_space_regularization_scalar,
             ]
         )
         # fmt: on
@@ -446,4 +448,29 @@ class GigachadOccFlowSincDepth10RandomSampleOptimizationLoop(GigachadOccFlowSinc
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
             model=GigaChadOccFlowMLP(num_layers=10), max_unroll=2, sampling_type="random"
+        )
+
+
+class GigachadOccFlowSincDepth10RandomSampleOptimizationLoop(GigachadOccFlowSincOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(num_layers=10), max_unroll=2, sampling_type="random"
+        )
+
+
+class GigachadOccFlowSincDepth10RandomSampleFreespace2xOptimizationLoop(
+    GigachadOccFlowSincOptimizationLoop
+):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            model=GigaChadOccFlowMLP(num_layers=10),
+            max_unroll=2,
+            sampling_type="random",
+            free_space_regularization_scalar=2.0,
         )
