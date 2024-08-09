@@ -1,10 +1,10 @@
-from bucketed_scene_flow_eval.datastructures import O3DVisualizer
+from bucketed_scene_flow_eval.datastructures import O3DVisualizer, TimeSyncedSceneFlowFrame
 import open3d as o3d
 from bucketed_scene_flow_eval.interfaces import (
     AbstractSequenceLoader,
     AbstractAVLidarSequence,
 )
-from .lazy_frame_matrix import NonCausalLazyFrameMatrix
+from .lazy_frame_matrix import EagerFrameMatrix
 
 from dataclasses import dataclass
 from .lazy_frame_matrix import AbstractFrameMatrix
@@ -62,7 +62,7 @@ class SequenceVisualizer(BaseCallbackVisualizer):
 
     def __init__(
         self,
-        name_sequence_list: list[tuple[str, AbstractAVLidarSequence]],
+        name_sequence_list: list[tuple[str, list[TimeSyncedSceneFlowFrame]]],
         sequence_id: str,
         frame_idx: int = 0,
         subsequence_length: int = 2,
@@ -74,7 +74,7 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         self.name_lst = [name for name, _ in name_sequence_list]
         sequence_lst = [sequence for _, sequence in name_sequence_list]
         self.vis_state = VisState(
-            full_frame_matrix=NonCausalLazyFrameMatrix(
+            full_frame_matrix=EagerFrameMatrix(
                 sequences=sequence_lst, subsequence_length=subsequence_length
             ),
             frame_idx=frame_idx,
@@ -85,6 +85,8 @@ class SequenceVisualizer(BaseCallbackVisualizer):
     def _register_callbacks(self, vis: o3d.visualization.VisualizerWithKeyCallback):
         vis.register_key_callback(ord("S"), self.save_screenshot)
         vis.register_key_callback(ord("F"), self.toggle_flow_lines)
+        vis.register_key_callback(ord("C"), self.save_camera_pose)
+        vis.register_key_callback(ord("L"), self.load_camera_pose)
         # left arrow decrease starter_idx
         vis.register_key_callback(263, self.decrease_frame_idx)
         # right arrow increase starter_idx
@@ -109,6 +111,19 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         if self.vis_state.sequence_idx >= len(self.vis_state.full_frame_matrix):
             self.vis_state.sequence_idx = 0
         self.draw_everything(vis, reset_view=False)
+
+    def save_camera_pose(self, vis):
+        camera = vis.get_view_control().convert_to_pinhole_camera_parameters()
+        save_path = self.screenshot_path / self.sequence_id / "camera.json"
+        o3d.io.write_pinhole_camera_parameters(str(save_path), camera)
+        print(f"Saved camera pose to {save_path}")
+
+    def load_camera_pose(self, vis):
+        camera = o3d.io.read_pinhole_camera_parameters(
+            str(self.screenshot_path / self.sequence_id / "camera.json")
+        )
+        vis.get_view_control().convert_from_pinhole_camera_parameters(camera, allow_arbitrary=True)
+        print(f"Loaded camera pose from {self.screenshot_path / self.sequence_id / 'camera.json'}")
 
     def decrease_sequence_idx(self, vis):
         self.vis_state.sequence_idx -= 1
@@ -143,8 +158,7 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         ]
         color_list = self._frame_list_to_color_list(len(frame_list))
 
-        for idx, frame_dict in enumerate(frame_list):
-            flow_frame, _ = frame_dict
+        for idx, flow_frame in enumerate(frame_list):
             pc = flow_frame.pc.global_pc
             self.add_pointcloud(pc, color=color_list[idx])
             flowed_pc = flow_frame.pc.flow(flow_frame.flow).global_pc

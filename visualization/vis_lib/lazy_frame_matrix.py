@@ -18,7 +18,7 @@ class bcolors:
 
 class AbstractFrameMatrix(ABC):
 
-    def __init__(self, sequences: list[AbstractAVLidarSequence], subsequence_length: int = 2):
+    def __init__(self, sequences: list[TimeSyncedSceneFlowFrame], subsequence_length: int = 2):
         assert len(sequences) > 0, "At least one sequence must be provided."
 
         sequence_lengths = [len(sequence) for sequence in sequences]
@@ -38,42 +38,26 @@ class AbstractFrameMatrix(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def __getitem__(
-        self, idx_tuple: tuple[int, int]
-    ) -> list[tuple[TimeSyncedSceneFlowFrame, TimeSyncedAVLidarData]]:
+    def __getitem__(self, idx_tuple: tuple[int, int]) -> list[TimeSyncedSceneFlowFrame]:
         raise NotImplementedError
 
     def __len__(self) -> int:
         return self.shape[0]
 
 
-class CausalLazyFrameMatrix(AbstractFrameMatrix):
+class EagerFrameMatrix(AbstractFrameMatrix):
 
     @property
     def shape(self):
         return len(self.sequences), len(self.sequences[0])
 
-    def _rel_idx_to_with_flow(self, relative_idx: int) -> bool:
-        return relative_idx == (self.subsequence_length - 2)
-
-    def __getitem__(
-        self, idx_tuple: tuple[int, int]
-    ) -> list[tuple[TimeSyncedSceneFlowFrame, TimeSyncedAVLidarData]]:
+    def __getitem__(self, idx_tuple: tuple[int, int]) -> list[TimeSyncedSceneFlowFrame]:
         sequence_idx, frame_idx = idx_tuple
         assert sequence_idx < len(
             self.sequences
         ), f"Invalid sequence index {sequence_idx} for len {len(self.sequences)}."
         sequence = self.sequences[sequence_idx]
-
-        return [
-            sequence.load(
-                idx, relative_to_idx=0, with_flow=self._rel_idx_to_with_flow(idx - frame_idx)
-            )
-            for idx in range(frame_idx, frame_idx + self.subsequence_length)
-        ]
-
-
-class NonCausalLazyFrameMatrix(CausalLazyFrameMatrix):
-
-    def _rel_idx_to_with_flow(self, relative_idx: int) -> bool:
-        return relative_idx <= (self.subsequence_length - 2)
+        assert frame_idx < len(
+            sequence
+        ), f"Invalid frame index {frame_idx} for sequence of len {len(sequence)}."
+        return sequence[frame_idx : frame_idx + self.subsequence_length]
