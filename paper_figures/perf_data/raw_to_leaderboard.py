@@ -47,7 +47,7 @@ def process(raw_file: Path, save_file: Path, is_supervised: bool):
     save_json(raw_data, save_file)
 
 
-root_folder = Path()
+root_folder = Path("av2_test_volume_split/bucketed_epe")
 # fmt: off
 process(root_folder / "deflow_raw.json", root_folder / "deflow.json", is_supervised=True)
 process(root_folder / "fastflow3d_raw.json", root_folder / "fastflow3d.json", is_supervised=True)
@@ -58,4 +58,15 @@ process(root_folder / "zeroflow_3x_raw.json", root_folder / "zeroflow_3x.json", 
 process(root_folder / "zeroflow_5x_raw.json", root_folder / "zeroflow_5x.json", is_supervised=False)
 process(root_folder / "zeroflow_xl_3x_raw.json", root_folder / "zeroflow_xl_3x.json", is_supervised=False)
 process(root_folder / "zeroflow_xl_5x_raw.json", root_folder / "zeroflow_xl_5x.json", is_supervised=False)
+# fmt: on
+
+
+root_folder = Path("av2_val/bucketed_epe")
+# fmt: off
+process(root_folder / "gigachad_depth6_raw.json", root_folder / "gigachad_depth6.json", is_supervised=False)
+process(root_folder / "gigachad_depth8_raw.json", root_folder / "gigachad_depth8.json", is_supervised=False)
+process(root_folder / "gigachad_depth10_raw.json", root_folder / "gigachad_depth10.json", is_supervised=False)
+process(root_folder / "gigachad_depth12_raw.json", root_folder / "gigachad_depth12.json", is_supervised=False)
+process(root_folder / "gigachad_depth14_raw.json", root_folder / "gigachad_depth14.json", is_supervised=False)
+process(root_folder / "gigachad_depth16_raw.json", root_folder / "gigachad_depth16.json", is_supervised=False)
 # fmt: on

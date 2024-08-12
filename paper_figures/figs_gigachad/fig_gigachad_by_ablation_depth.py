@@ -7,7 +7,7 @@ import copy
 fig_size = 5.5
 
 
-def plot_ablation_barchart(eval_stats: List[BucketedEvalStats], save_folder: Path):
+def plot_depth_ablation_barchart(eval_stats: List[BucketedEvalStats], save_folder: Path):
     plt.gcf().set_size_inches(fig_size, fig_size / 1.6)
 
     names = [eval_stat.name for eval_stat in eval_stats]
