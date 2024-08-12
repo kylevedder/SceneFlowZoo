@@ -5,6 +5,7 @@ from typing import List, Tuple, Dict, Any, Optional
 from pathlib import Path
 import json
 from bucketed_scene_flow_eval.datasets.argoverse2.av2_metacategories import BUCKETED_METACATAGORIES
+from matplotlib.colors import ListedColormap
 
 linewidth = 0.5
 minor_tick_color = (0.9, 0.9, 0.9)
@@ -148,6 +149,7 @@ def centered_barchart_offset(elem_idx: int, total_elems: int, bar_width: float) 
 
 def color_map(rev: bool = False):
     # return 'gist_earth'
+    return "white"
     if rev:
         return "magma_r"
     return "magma"
