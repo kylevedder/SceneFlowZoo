@@ -4,7 +4,10 @@ from paper_figures.plot_lib import *
 import argparse
 
 from paper_figures.figs_gigachad.fig_gigachad_by_ablation_depth import plot_depth_ablation_barchart
-from paper_figures.figs_gigachad.fig_dynamic_norm_epe_bar import plot_dynamic_norm_epe_bar
+from paper_figures.figs_gigachad.fig_dynamic_norm_epe_bar import (
+    plot_dynamic_norm_epe_bar,
+    plot_dynamic_norm_epe_bar_black,
+)
 from paper_figures.figs_gigachad.fig_per_metacatagory_bar import plot_per_metacatagory_bar
 
 # Get path to methods from command line
@@ -26,28 +29,28 @@ av2_class_val_data_root_dir = Path("./paper_figures/perf_data/av2_val/bucketed_e
 
 # fmt: off
 gigachad_test_ablations = [
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 4", "gigachad_4"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 6", "gigachad_6"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 8", "gigachad_8"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 8 + Fourtier", "gigachad_fourtier"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 10", "gigachad_10"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 12", "gigachad_12"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 14", "gigachad_14"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad Depth 16", "gigachad_16"),    
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 4", "gigachad_4"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 6", "gigachad_6"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 8", "gigachad_8"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 8 + Fourtier", "gigachad_fourtier"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 10", "gigachad_10"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 12", "gigachad_12"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 14", "gigachad_14"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 16", "gigachad_16"),    
 ]
 
 gigachad_val_ablations = [
-    BucketedEvalStats(av2_class_val_data_root_dir, "Gigachad Depth 6", "gigachad_depth6"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "Gigachad Depth 8", "gigachad_depth8"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "Gigachad Depth 10", "gigachad_depth10"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "Gigachad Depth 12", "gigachad_depth12"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "Gigachad Depth 14", "gigachad_depth14"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "Gigachad Depth 16", "gigachad_depth16"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 6", "gigachad_depth6"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 8", "gigachad_depth8"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 10", "gigachad_depth10"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 12", "gigachad_depth12"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 14", "gigachad_depth14"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 16", "gigachad_depth16"),
 ]
 
 class_bucketed_eval_stats = [
-    BucketedEvalStats(av2_class_test_data_root_dir, "Gigachad (Ours)", "gigachad_10"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "Flow4D 5 Frame", "flow4d"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD (Ours)", "gigachad_16"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "Flow4D", "flow4d"),
     BucketedEvalStats(av2_class_test_data_root_dir, "TrackFlow", "trackflow"),
     BucketedEvalStats(av2_class_test_data_root_dir, "DeFlow++", "deflowpp"),
     BucketedEvalStats(av2_class_test_data_root_dir, "ICP Flow", "icp_flow"),
@@ -82,3 +85,4 @@ plot_depth_ablation_barchart(gigachad_val_ablations, av2_class_val_save_dir)
 plot_per_metacatagory_bar(gigachad_val_ablations, av2_class_val_save_dir)
 
 plot_dynamic_norm_epe_bar(class_bucketed_eval_stats, av2_class_test_save_dir)
+plot_dynamic_norm_epe_bar_black(class_bucketed_eval_stats, av2_class_test_save_dir)

@@ -149,7 +149,7 @@ def centered_barchart_offset(elem_idx: int, total_elems: int, bar_width: float) 
 
 def color_map(rev: bool = False):
     # return 'gist_earth'
-    return "white"
+    return ListedColormap(["white"])
     if rev:
         return "magma_r"
     return "magma"
