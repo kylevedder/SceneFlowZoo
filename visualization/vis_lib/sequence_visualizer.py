@@ -48,7 +48,6 @@ class ColorEnum(enum.Enum):
 
 @dataclass(kw_only=True)
 class VisState:
-    full_frame_matrix: AbstractFrameMatrix
     sequence_idx: int
     frame_idx: int
     flow_color: ColorEnum = ColorEnum.RED
@@ -65,18 +64,15 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         name_sequence_list: list[tuple[str, list[TimeSyncedSceneFlowFrame]]],
         sequence_id: str,
         frame_idx: int = 0,
-        subsequence_length: int = 2,
+        subsequence_lengths: list[int] = [2],
         point_size: float = 0.1,
         step_size: int = 1,
     ):
         super().__init__(point_size=point_size)
         self.sequence_id = sequence_id
         self.name_lst = [name for name, _ in name_sequence_list]
-        sequence_lst = [sequence for _, sequence in name_sequence_list]
+        self.sequence_lst = [sequence for _, sequence in name_sequence_list]
         self.vis_state = VisState(
-            full_frame_matrix=EagerFrameMatrix(
-                sequences=sequence_lst, subsequence_length=subsequence_length
-            ),
             frame_idx=frame_idx,
             frame_step_size=step_size,
             sequence_idx=0,
@@ -152,10 +148,7 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         print(
             f"Vis State: {self.get_current_method_name()}, frame {self.vis_state.frame_idx} - {self.vis_state.frame_idx + self.vis_state.full_frame_matrix.subsequence_length - 1}"
         )
-        frame_list = self.vis_state.full_frame_matrix[
-            self.vis_state.sequence_idx,
-            self.vis_state.frame_idx,
-        ]
+        frame_list = self.sequence_lst[self.vis_state.sequence_idx]
         color_list = self._frame_list_to_color_list(len(frame_list))
 
         for idx, flow_frame in enumerate(frame_list):

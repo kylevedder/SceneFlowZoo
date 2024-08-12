@@ -5,8 +5,17 @@ from pathlib import Path
 
 
 def get_latest_and_best_checkpoint(job_dir: Path) -> tuple[Path | None, Path | None]:
+
+    def has_valid_dataset_idx_dir(timestamp_dir: Path) -> bool:
+        has_dataset_dir = any(
+            subdir.name.startswith("dataset_idx_") for subdir in timestamp_dir.iterdir()
+        )
+        return has_dataset_dir
+
     # Find all subdirectories matching the timestamp pattern
-    timestamp_dirs = list(job_dir.glob("*"))
+    timestamp_dirs = sorted(
+        e for e in job_dir.glob("*") if e.is_dir() and has_valid_dataset_idx_dir(e)
+    )
 
     assert timestamp_dirs, f"No timestamp directories found in {job_dir}"
 
