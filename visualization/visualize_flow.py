@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--point_size", type=float, default=3)
     parser.add_argument("--frame_idx_step_size", type=int, default=1)
     parser.add_argument("--frame_idx_start", type=int, default=0)
+    parser.add_argument("--camera_pose_file", type=Path, default=None)
 
     args = parser.parse_args()
     return args
@@ -80,6 +81,7 @@ def main():
     point_size = args.point_size
     frame_idx_step_size = args.frame_idx_step_size
     frame_idx_start = args.frame_idx_start
+    camera_pose_file = args.camera_pose_file
     print("Sequence ID: ", sequence_id)
 
     for flow_folder in flow_folders:
@@ -89,12 +91,13 @@ def main():
     vis = SequenceVisualizer(
         sequences,
         sequence_id,
-        subsequence_length=sequence_length,
+        subsequence_lengths=[sequence_length, 2],
         point_size=point_size,
         step_size=frame_idx_step_size,
         frame_idx=frame_idx_start,
+        color_map_name="zebra",
     )
-    vis.run()
+    vis.run(camera_pose_path=camera_pose_file)
 
 
 if __name__ == "__main__":

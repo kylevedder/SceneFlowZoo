@@ -48,10 +48,11 @@ class ColorEnum(enum.Enum):
 
 @dataclass(kw_only=True)
 class VisState:
-    sequence_idx: int
-    frame_idx: int
+    sequence_idx: int  # Index into the list of possible sequences (different methods)
+    subsequence_length_idx: int  # Index into teh subsequence length (different frame lengths)
+    frame_idx: int  # Index into the frame list (only relevant if the subsequence is not the length of the full sequence)
+    frame_step_size: int
     flow_color: ColorEnum = ColorEnum.RED
-    frame_step_size: int = 1
 
     def __str__(self):
         return f"sequence_idx: {self.sequence_idx}, frame__idx: {self.frame_idx}, "
@@ -67,22 +68,27 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         subsequence_lengths: list[int] = [2],
         point_size: float = 0.1,
         step_size: int = 1,
+        color_map_name: str = "default",
     ):
         super().__init__(point_size=point_size)
         self.sequence_id = sequence_id
         self.name_lst = [name for name, _ in name_sequence_list]
         self.sequence_lst = [sequence for _, sequence in name_sequence_list]
+        self.subsequence_lengths = subsequence_lengths
         self.vis_state = VisState(
             frame_idx=frame_idx,
             frame_step_size=step_size,
             sequence_idx=0,
+            subsequence_length_idx=0,
         )
+        self.color_map_name = color_map_name
 
     def _register_callbacks(self, vis: o3d.visualization.VisualizerWithKeyCallback):
         vis.register_key_callback(ord("S"), self.save_screenshot)
         vis.register_key_callback(ord("F"), self.toggle_flow_lines)
         vis.register_key_callback(ord("C"), self.save_camera_pose)
-        vis.register_key_callback(ord("L"), self.load_camera_pose)
+        vis.register_key_callback(ord("V"), self.load_camera_pose)
+        vis.register_key_callback(ord("L"), self.increase_subsequence_length_idx)
         # left arrow decrease starter_idx
         vis.register_key_callback(263, self.decrease_frame_idx)
         # right arrow increase starter_idx
@@ -99,44 +105,53 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         return (
             self.screenshot_path
             / self.sequence_id
-            / f"{self.vis_state.frame_idx:06d}_{self.get_current_method_name()}.png"
+            / f"{self.vis_state.frame_idx:06d}_{self.get_current_method_name()}_subsequence_length_{self.get_current_subsequence_length()}.png"
         )
+
+    def get_num_sequences(self) -> int:
+        return len(self.sequence_lst)
+
+    def get_current_subsequence_length(self) -> int:
+        return self.subsequence_lengths[self.vis_state.subsequence_length_idx]
+
+    def get_current_full_sequence(self) -> list[TimeSyncedSceneFlowFrame]:
+        return self.sequence_lst[self.vis_state.sequence_idx]
+
+    def get_current_subsequence(self) -> list[TimeSyncedSceneFlowFrame]:
+        full_sequence = self.get_current_full_sequence()
+        subsequence_length = self.get_current_subsequence_length()
+        return full_sequence[
+            self.vis_state.frame_idx : self.vis_state.frame_idx + subsequence_length
+        ]
 
     def increase_sequence_idx(self, vis):
         self.vis_state.sequence_idx += 1
-        if self.vis_state.sequence_idx >= len(self.vis_state.full_frame_matrix):
+        if self.vis_state.sequence_idx >= len(self.get_current_full_sequence()):
             self.vis_state.sequence_idx = 0
         self.draw_everything(vis, reset_view=False)
-
-    def save_camera_pose(self, vis):
-        camera = vis.get_view_control().convert_to_pinhole_camera_parameters()
-        save_path = self.screenshot_path / self.sequence_id / "camera.json"
-        o3d.io.write_pinhole_camera_parameters(str(save_path), camera)
-        print(f"Saved camera pose to {save_path}")
-
-    def load_camera_pose(self, vis):
-        camera = o3d.io.read_pinhole_camera_parameters(
-            str(self.screenshot_path / self.sequence_id / "camera.json")
-        )
-        vis.get_view_control().convert_from_pinhole_camera_parameters(camera, allow_arbitrary=True)
-        print(f"Loaded camera pose from {self.screenshot_path / self.sequence_id / 'camera.json'}")
 
     def decrease_sequence_idx(self, vis):
         self.vis_state.sequence_idx -= 1
         if self.vis_state.sequence_idx < 0:
-            self.vis_state.sequence_idx = len(self.vis_state.full_frame_matrix) - 1
+            self.vis_state.sequence_idx = len(self.get_current_full_sequence()) - 1
+        self.draw_everything(vis, reset_view=False)
+
+    def increase_subsequence_length_idx(self, vis):
+        self.vis_state.subsequence_length_idx += 1
+        if self.vis_state.subsequence_length_idx >= len(self.subsequence_lengths):
+            self.vis_state.subsequence_length_idx = 0
         self.draw_everything(vis, reset_view=False)
 
     def increase_frame_idx(self, vis):
         self.vis_state.frame_idx += self.vis_state.frame_step_size
-        if self.vis_state.frame_idx >= self.vis_state.full_frame_matrix.shape[1] - 1:
+        if self.vis_state.frame_idx >= len(self.get_current_full_sequence()) - 1:
             self.vis_state.frame_idx = 0
         self.draw_everything(vis, reset_view=False)
 
     def decrease_frame_idx(self, vis):
         self.vis_state.frame_idx -= self.vis_state.frame_step_size
         if self.vis_state.frame_idx < 0:
-            self.vis_state.frame_idx = self.vis_state.full_frame_matrix.shape[1] - 2
+            self.vis_state.frame_idx = len(self.get_current_full_sequence()) - 2
         self.draw_everything(vis, reset_view=False)
 
     def toggle_flow_lines(self, vis):
@@ -146,10 +161,10 @@ class SequenceVisualizer(BaseCallbackVisualizer):
     def draw_everything(self, vis, reset_view=False):
         self.geometry_list.clear()
         print(
-            f"Vis State: {self.get_current_method_name()}, frame {self.vis_state.frame_idx} - {self.vis_state.frame_idx + self.vis_state.full_frame_matrix.subsequence_length - 1}"
+            f"Vis State: {self.get_current_method_name()}, frame {self.vis_state.frame_idx} - {self.vis_state.frame_idx + self.get_current_subsequence_length() - 1}"
         )
-        frame_list = self.sequence_lst[self.vis_state.sequence_idx]
-        color_list = self._frame_list_to_color_list(len(frame_list))
+        frame_list = self.get_current_subsequence()
+        color_list = self._frame_list_to_color_list(len(frame_list), self.color_map_name)
 
         for idx, flow_frame in enumerate(frame_list):
             pc = flow_frame.pc.global_pc
@@ -168,6 +183,9 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         print("#############################################################")
         print("Flow moves from the gray point cloud to the white point cloud\n")
         print("Press F to toggle flow lines")
+        print("Press C to save camera pose")
+        print("Press V to load camera pose")
+        print("Press L to change subsequence length idx")
         print("Press left or right arrow to change starter_idx")
         print(f"Press S to save screenshot (saved to {self.screenshot_path.absolute()})")
         print("#############################################################")
