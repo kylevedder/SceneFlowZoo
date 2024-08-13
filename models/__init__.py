@@ -55,6 +55,8 @@ from .mini_batch_optimization import (
     GigachadNSFDepth6OptimizationLoop,
     GigachadNSFDepth4OptimizationLoop,
     GigachadNSFDepth2OptimizationLoop,
+    GigachadNSFNoCycleConsistencyLossOptimizationLoop,
+    GigachadNSFNoKStepLossOptimizationLoop,
 )
 
 
@@ -89,6 +91,8 @@ importable_models = [
     GigachadNSFDepth6OptimizationLoop,
     GigachadNSFDepth4OptimizationLoop,
     GigachadNSFDepth2OptimizationLoop,
+    GigachadNSFNoCycleConsistencyLossOptimizationLoop,
+    GigachadNSFNoKStepLossOptimizationLoop,
 ]
 
 # Ensure all importable models are based on the BaseModel class.

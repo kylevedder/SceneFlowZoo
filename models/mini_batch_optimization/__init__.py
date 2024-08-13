@@ -15,6 +15,8 @@ from .gigachad_nsf import (
     GigachadNSFDepth6OptimizationLoop,
     GigachadNSFDepth4OptimizationLoop,
     GigachadNSFDepth2OptimizationLoop,
+    GigachadNSFNoKStepLossOptimizationLoop,
+    GigachadNSFNoCycleConsistencyLossOptimizationLoop,
 )
 from .gigachad_occ_flow import (
     GigachadOccFlowModel,

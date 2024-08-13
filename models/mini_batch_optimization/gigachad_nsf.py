@@ -111,6 +111,8 @@ class GigachadNSFModel(BaseOptimizationModel):
         speed_threshold: float,
         pc_target_type: PointCloudTargetType | str,
         pc_loss_type: PointCloudLossType | str,
+        enable_k_step_loss: bool = True,
+        enable_cycle_consistency: bool = True,
         model: torch.nn.Module = GigaChadFlowMLP(),
     ) -> None:
         super().__init__(full_input_sequence)
@@ -120,6 +122,8 @@ class GigachadNSFModel(BaseOptimizationModel):
         self.pc_loss_type = PointCloudLossType(pc_loss_type)
 
         self._prep_neural_prior(self.model)
+        self.enable_k_step_loss = enable_k_step_loss
+        self.enable_cycle_consistency = enable_cycle_consistency
 
         self.kd_trees: list[KDTreeWrapper] | None = None
 
@@ -343,17 +347,21 @@ class GigachadNSFModel(BaseOptimizationModel):
         ), f"Expected non-causal, but got {input_sequence.loader_type}"
 
         rep = self._preprocess(input_sequence)
-        # fmt: off
-        return AdditiveCosts(
-            [
-                self._k_step_cost(rep, 1, QueryDirection.FORWARD, self.pc_loss_type, speed_limit=self.speed_threshold),
-                self._k_step_cost(rep, 1, QueryDirection.REVERSE, self.pc_loss_type, speed_limit=self.speed_threshold),
-                self._k_step_cost(rep, 3, QueryDirection.FORWARD, self.pc_loss_type),
-                self._k_step_cost(rep, 3, QueryDirection.REVERSE, self.pc_loss_type),
-                self._cycle_consistency(rep) * 0.01,
-            ]
-        )
-        # fmt: on
+
+        additive_cost_list = [
+            self._k_step_cost(rep, 1, QueryDirection.FORWARD, self.pc_loss_type, speed_limit=self.speed_threshold),
+            self._k_step_cost(rep, 1, QueryDirection.REVERSE, self.pc_loss_type, speed_limit=self.speed_threshold),
+        ]
+        if self.enable_k_step_loss:
+            additive_cost_list.extend(
+                [
+                    self._k_step_cost(rep, 3, QueryDirection.FORWARD, self.pc_loss_type),
+                    self._k_step_cost(rep, 3, QueryDirection.REVERSE, self.pc_loss_type),
+                ]
+            )
+        if self.enable_cycle_consistency:
+            additive_cost_list.append(self._cycle_consistency(rep) * 0.01)
+        return AdditiveCosts(additive_cost_list)
 
     def _compute_ego_flow(
         self,
@@ -541,6 +549,24 @@ class GigachadNSFOptimizationLoop(MiniBatchOptimizationLoop):
             pc_loss_type=self.pc_loss_type,
         )
 
+
+class GigachadNSFNoKStepLossOptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            enable_k_step_loss=False
+        )
+    
+class GigachadNSFNoCycleConsistencyLossOptimizationLoop(GigachadNSFOptimizationLoop):
+
+    def _model_constructor_args(
+        self, full_input_sequence: TorchFullFrameInputSequence
+    ) -> dict[str, any]:
+        return super()._model_constructor_args(full_input_sequence) | dict(
+            enable_cycle_consistency=False
+        )
 
 class GigachadNSFSincOptimizationLoop(GigachadNSFOptimizationLoop):
 
