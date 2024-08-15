@@ -39,6 +39,7 @@ class_bucketed_eval_stats = [
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "DeFlow++", "deflowpp"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "ICP Flow", "icp_flow"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "DeFlow", "deflow"),
+    BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "Liu et al. 2024", "liu_et_al"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "SeFlow", "seflow"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "FastNSF", "fast_nsf"),
     BucketedEvalStats(av2_class_test_bucketed_data_root_dir, "NSFP", "nsfp"),
