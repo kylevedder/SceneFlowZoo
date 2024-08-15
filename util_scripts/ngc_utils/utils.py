@@ -156,12 +156,29 @@ def setup_logging() -> None:
 def get_launch_commands(
     client: paramiko.SSHClient, launch_script: Path
 ) -> tuple[str, dict[str, LauchCommand]]:
-    """Extract all launch commands from the launch script."""
-    command = f"grep 'ngc batch run' {launch_script}"
-    stdout, stderr, exit_status = _run_remote_command(client, command)
-    if exit_status != 0:
-        raise ValueError("Could not find launch commands in launch script.")
-    raw_commands = stdout.splitlines()
+    tmp_file = Path("/tmp") / "launch_scripts" / launch_script.parent.name / launch_script.name
+    # if tmp_file exists, delete it
+    if tmp_file.exists():
+        tmp_file.unlink()
+    tmp_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Expand the ~ on the remote machine
+    expanded_launch_script, _, _ = _run_remote_command(client, f"echo {launch_script}")
+    expanded_launch_script = expanded_launch_script.strip()
+
+    # SFTP the launch script to the tmp file from the remote machine
+    print(f"Copying {expanded_launch_script} to {tmp_file}")
+    sftp = client.open_sftp()
+    try:
+        sftp.get(str(expanded_launch_script), str(tmp_file))
+        print(f"File successfully copied to {tmp_file}")
+    finally:
+        sftp.close()
+
+    # Load the file contents to memory
+    with open(tmp_file, "r") as f:
+        raw_commands = f.readlines()
+
     job_name_to_command = {}
     for raw_command in raw_commands:
         # Extract the job name from the command
