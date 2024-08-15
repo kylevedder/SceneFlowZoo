@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 from bucketed_scene_flow_eval.datastructures import PointCloud
 
 
@@ -23,6 +22,8 @@ def to_fixed_array_np(
 
 
 def to_fixed_array_torch(tensor, max_len, pad_val=float("nan"), allow_pc_slicing: bool = False):
+    import torch
+
     assert isinstance(tensor, torch.Tensor), f"Expected torch.Tensor, got {type(tensor)}"
 
     tensor = tensor.float()
@@ -76,7 +77,9 @@ def from_fixed_array_valid_mask_np(array: np.ndarray) -> np.ndarray:
     return are_valid_points
 
 
-def from_fixed_array_valid_mask_torch(array: torch.Tensor) -> torch.Tensor:
+def from_fixed_array_valid_mask_torch(array: "torch.Tensor") -> "torch.Tensor":
+    import torch
+
     assert isinstance(array, torch.Tensor), f"Expected torch tensor, got {type(array)}"
     if len(array.shape) == 2:
         # If it's an Nx3 array like a point cloud, all three dimensions are the
@@ -100,13 +103,17 @@ def from_fixed_array_np(array: np.ndarray) -> np.ndarray:
     return array[are_valid_points]
 
 
-def from_fixed_array_torch(array: torch.Tensor) -> torch.Tensor:
+def from_fixed_array_torch(array: "torch.Tensor") -> "torch.Tensor":
+    import torch
+
     assert isinstance(array, torch.Tensor), f"Expected torch tensor, got {type(array)}"
     are_valid_points = from_fixed_array_valid_mask_torch(array)
     return array[are_valid_points]
 
 
-def transform_pc(pc: torch.Tensor, transform: torch.Tensor) -> torch.Tensor:
+def transform_pc(pc: "torch.Tensor", transform: "torch.Tensor") -> "torch.Tensor":
+    import torch
+
     """
     Transform an Nx3 point cloud by a 4x4 transformation matrix.
     """
@@ -117,10 +124,11 @@ def transform_pc(pc: torch.Tensor, transform: torch.Tensor) -> torch.Tensor:
 
 
 def global_to_ego_flow(
-    global_full_pc: torch.Tensor,
-    global_warped_full_pc: torch.Tensor,
-    global_to_ego: torch.Tensor,
-) -> torch.Tensor:
+    global_full_pc: "torch.Tensor",
+    global_warped_full_pc: "torch.Tensor",
+    global_to_ego: "torch.Tensor",
+) -> "torch.Tensor":
+    import torch
 
     ego_full_pc0 = transform_pc(global_full_pc, global_to_ego)
     ego_warped_full_pc0 = transform_pc(global_warped_full_pc, global_to_ego)

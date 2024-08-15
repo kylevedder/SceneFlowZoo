@@ -9,7 +9,7 @@ from pathlib import Path
 from joblib import Parallel, delayed
 import numpy as np
 from typing import Tuple, List, Dict
-from pointclouds import PointCloud, SE3, SE2
+from bucketed_scene_flow_eval.datastructures import PointCloud, SE3, SE2
 from bucketed_scene_flow_eval.utils import load_json, save_pickle
 
 from waymo_open_dataset import dataset_pb2
