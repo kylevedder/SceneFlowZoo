@@ -21,6 +21,15 @@ class NGCJob:
     duration: str
 
 
+def _get_job_prefix(name: str) -> str:
+    job_prefix = name
+    if "-" in job_prefix:
+        job_prefix = job_prefix.split("-")[0]
+    if "_" in job_prefix:
+        job_prefix = "_".join(job_prefix.split("_")[:-1])
+    return job_prefix
+
+
 @dataclass
 class NGCJobState:
     name: str
@@ -61,10 +70,7 @@ class NGCJobState:
         return all(job.status in failed_states for job in self.jobs)
 
     def get_job_prefix(self) -> str:
-        job_prefix = self.name
-        if "_" in job_prefix:
-            job_prefix = "_".join(job_prefix.split("_")[:-1])
-        return job_prefix
+        return _get_job_prefix(self.name)
 
 
 @dataclass
@@ -186,8 +192,7 @@ def get_launch_commands(
         job_name_to_command[job_name] = LauchCommand(job_name, raw_command)
 
     job_prefix = list(job_name_to_command.keys())[0]
-    if "_" in job_prefix:
-        job_prefix = "_".join(job_prefix.split("_")[:-1])
+    job_prefix = _get_job_prefix(job_prefix)
     return job_prefix, job_name_to_command
 
 

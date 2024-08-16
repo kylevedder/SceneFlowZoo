@@ -25,6 +25,7 @@ train_dataset = dict(
         dataset_name="WaymoOpenNonCausalSceneFlow",
         root_dir=test_dataset_root,
         with_rgb=False,
+        max_pc_points=150000,
         eval_type="bucketed_epe",
         eval_args=dict(),
         subsequence_length=SEQUENCE_LENGTH,
