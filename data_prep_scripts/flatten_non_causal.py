@@ -13,7 +13,7 @@ def validate_and_symlink_sequences(
     json_data: Dict[str, int], base_path: Path, target_dir: Path
 ) -> None:
     for sequence_name, sequence_len in sorted(json_data.items()):
-        sequence_path = base_path / f"sequence_len_{sequence_len}" / sequence_name / "000000"
+        sequence_path = base_path / f"sequence_len_{sequence_len:03d}" / sequence_name / "000000"
         if not sequence_path.exists():
             raise ValueError(f"Invalid path: {sequence_path} does not exist")
 
