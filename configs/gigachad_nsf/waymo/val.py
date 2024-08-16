@@ -26,6 +26,7 @@ train_dataset = dict(
         root_dir=test_dataset_root,
         with_rgb=False,
         max_pc_points=150000,
+        allow_pc_slicing=True,
         eval_type="bucketed_epe",
         eval_args=dict(),
         subsequence_length=SEQUENCE_LENGTH,

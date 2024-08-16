@@ -18,6 +18,7 @@ class TorchFullFrameDataset(SplitFullFrameDataset):
         dataset_name: str,
         root_dir: Path,
         max_pc_points: int = 120000,
+        allow_pc_slicing: bool = False,
         set_length: int | None = None,
         split: FullFrameDatasetSplit | dict[str, int] = FullFrameDatasetSplit(0, 1),
         **kwargs,
@@ -25,6 +26,7 @@ class TorchFullFrameDataset(SplitFullFrameDataset):
         super().__init__(split=split, set_length=set_length)
         self.dataset = construct_dataset(dataset_name, dict(root_dir=root_dir, **kwargs))
         self.max_pc_points = max_pc_points
+        self.allow_pc_slicing = allow_pc_slicing
 
     def evaluator(self) -> TorchEvalWrapper:
         return TorchEvalWrapper(self.dataset)
@@ -42,4 +44,5 @@ class TorchFullFrameDataset(SplitFullFrameDataset):
             frame_list,
             pc_max_len=self.max_pc_points,
             loader_type=self.dataset.loader_type(),
+            allow_pc_slicing=self.allow_pc_slicing,
         )

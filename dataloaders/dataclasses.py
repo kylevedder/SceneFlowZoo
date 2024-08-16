@@ -314,6 +314,7 @@ class TorchFullFrameInputSequence(BaseInputSequence):
         frame_list: list[TimeSyncedSceneFlowFrame],
         pc_max_len: int,
         loader_type: LoaderType,
+        allow_pc_slicing: bool = False,
     ) -> "TorchFullFrameInputSequence":
         """
         Create a BucketedSceneFlowItem from a list of TimeSyncedSceneFlowFrame objects.
@@ -325,13 +326,23 @@ class TorchFullFrameInputSequence(BaseInputSequence):
         # PC data
         full_pc = torch.stack(
             [
-                torch.from_numpy(to_fixed_array_np(frame.pc.full_pc.points, max_len=pc_max_len))
+                torch.from_numpy(
+                    to_fixed_array_np(
+                        frame.pc.full_pc.points,
+                        max_len=pc_max_len,
+                        allow_pc_slicing=allow_pc_slicing,
+                    )
+                )
                 for frame in frame_list
             ]
         )
         full_pc_mask = torch.stack(
             [
-                torch.from_numpy(to_fixed_array_np(frame.pc.mask, max_len=pc_max_len))
+                torch.from_numpy(
+                    to_fixed_array_np(
+                        frame.pc.mask, max_len=pc_max_len, allow_pc_slicing=allow_pc_slicing
+                    )
+                )
                 for frame in frame_list
             ]
         )
@@ -344,7 +355,11 @@ class TorchFullFrameInputSequence(BaseInputSequence):
             return torch.stack(
                 [
                     torch.from_numpy(
-                        to_fixed_array_np(frame.auxillary_pc.full_pc.points, max_len=pc_max_len)
+                        to_fixed_array_np(
+                            frame.auxillary_pc.full_pc.points,
+                            max_len=pc_max_len,
+                            allow_pc_slicing=allow_pc_slicing,
+                        )
                     )
                     for frame in frame_list
                 ]
@@ -360,21 +375,35 @@ class TorchFullFrameInputSequence(BaseInputSequence):
 
         full_pc_gt_flowed = torch.stack(
             [
-                torch.from_numpy(to_fixed_array_np(frame.full_pc.points, max_len=pc_max_len))
+                torch.from_numpy(
+                    to_fixed_array_np(
+                        frame.full_pc.points, max_len=pc_max_len, allow_pc_slicing=allow_pc_slicing
+                    )
+                )
                 for frame in flowed_pc_frame_list
             ]
         )
 
         full_pc_gt_flowed_mask = torch.stack(
             [
-                torch.from_numpy(to_fixed_array_np(frame.mask, max_len=pc_max_len))
+                torch.from_numpy(
+                    to_fixed_array_np(
+                        frame.mask, max_len=pc_max_len, allow_pc_slicing=allow_pc_slicing
+                    )
+                )
                 for frame in flowed_pc_frame_list
             ]
         )
 
         full_pc_gt_class = torch.stack(
             [
-                torch.from_numpy(to_fixed_array_np(frame.pc.full_pc_classes, max_len=pc_max_len))
+                torch.from_numpy(
+                    to_fixed_array_np(
+                        frame.pc.full_pc_classes,
+                        max_len=pc_max_len,
+                        allow_pc_slicing=allow_pc_slicing,
+                    )
+                )
                 for frame in flow_frame_list
             ]
         )
@@ -496,10 +525,11 @@ class TorchFullFrameInputSequence(BaseInputSequence):
             )
 
             padded_pixels = [
-                to_fixed_array_np(pixels, max_len=pc_max_len) for pixels in jagged_pixels
+                to_fixed_array_np(pixels, max_len=pc_max_len, allow_pc_slicing=allow_pc_slicing)
+                for pixels in jagged_pixels
             ]
             padded_valid_mask = [
-                to_fixed_array_np(valid_mask, max_len=pc_max_len)
+                to_fixed_array_np(valid_mask, max_len=pc_max_len, allow_pc_slicing=allow_pc_slicing)
                 for valid_mask in jagged_valid_mask
             ]
 
@@ -618,7 +648,7 @@ class TorchFullFrameOutputSequence(BaseOutputSequence):
 
     @staticmethod
     def from_ego_lidar_flow_list(
-        ego_lidar_flows: list[EgoLidarFlow], max_len: int
+        ego_lidar_flows: list[EgoLidarFlow], max_len: int, allow_pc_slicing: bool = False
     ) -> "TorchFullFrameOutputSequence":
         """
         Create a BucketedSceneFlowOutputSequence from a list of EgoLidarFlow objects.
@@ -626,13 +656,19 @@ class TorchFullFrameOutputSequence(BaseOutputSequence):
 
         ego_flows = torch.stack(
             [
-                torch.from_numpy(to_fixed_array_np(flow.full_flow, max_len=max_len))
+                torch.from_numpy(
+                    to_fixed_array_np(
+                        flow.full_flow, max_len=max_len, allow_pc_slicing=allow_pc_slicing
+                    )
+                )
                 for flow in ego_lidar_flows
             ]
         )
         valid_flow_mask = torch.stack(
             [
-                torch.from_numpy(to_fixed_array_np(flow.mask, max_len=max_len))
+                torch.from_numpy(
+                    to_fixed_array_np(flow.mask, max_len=max_len, allow_pc_slicing=allow_pc_slicing)
+                )
                 for flow in ego_lidar_flows
             ]
         )
