@@ -59,7 +59,7 @@ def main():
     parser.add_argument(
         "--validation_json",
         type=Path,
-        default="data_prep_scripts/argo/av2_test_sizes.json",
+        default="data_prep_scripts/argo/av2_test_correct_num_flow_feathers.json",
         help="Path to the validation JSON file.",
     )
     parser.add_argument(
