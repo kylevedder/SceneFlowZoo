@@ -7,7 +7,7 @@ import copy
 fig_size = 5.5
 
 
-def plot_depth_ablation_barchart(eval_stats: List[BucketedEvalStats], save_folder: Path):
+def plot_ablation_barchart(eval_stats: List[BucketedEvalStats], save_folder: Path):
     plt.gcf().set_size_inches(fig_size, fig_size / 1.6)
 
     names = [eval_stat.name for eval_stat in eval_stats]
@@ -18,4 +18,5 @@ def plot_depth_ablation_barchart(eval_stats: List[BucketedEvalStats], save_folde
     ax = plt.gca()
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    save_folder.mkdir(exist_ok=True, parents=True)
     savefig(save_folder, "ablation_barchart")

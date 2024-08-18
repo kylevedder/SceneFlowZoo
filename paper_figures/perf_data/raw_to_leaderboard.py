@@ -69,4 +69,12 @@ process(root_folder / "gigachad_depth10_raw.json", root_folder / "gigachad_depth
 process(root_folder / "gigachad_depth12_raw.json", root_folder / "gigachad_depth12.json", is_supervised=False)
 process(root_folder / "gigachad_depth14_raw.json", root_folder / "gigachad_depth14.json", is_supervised=False)
 process(root_folder / "gigachad_depth16_raw.json", root_folder / "gigachad_depth16.json", is_supervised=False)
+process(root_folder / "gigachad_depth18_raw.json", root_folder / "gigachad_depth18.json", is_supervised=False)
+process(root_folder / "gigachad_depth20_raw.json", root_folder / "gigachad_depth20.json", is_supervised=False)
+process(root_folder / "gigachad_depth22_raw.json", root_folder / "gigachad_depth22.json", is_supervised=False)
+
+process(root_folder / "gigachad_seq_len_50_raw.json", root_folder / "gigachad_seq_len_50.json", is_supervised=False)
+process(root_folder / "gigachad_seq_len_20_raw.json", root_folder / "gigachad_seq_len_20.json", is_supervised=False)
+process(root_folder / "gigachad_seq_len_5_raw.json", root_folder / "gigachad_seq_len_5.json", is_supervised=False)
+process(root_folder / "nsfp_seq_len_2_raw.json", root_folder / "nsfp_seq_len_2.json", is_supervised=False)
 # fmt: on
