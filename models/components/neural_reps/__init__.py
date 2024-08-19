@@ -9,7 +9,7 @@ from .gigachad_raw_mlp import (
     SimpleEncoder,
 )
 from .liu_2024_raw_mlp import Liu2024FusionRawMLP
-from .ntp_raw import NeuralTrajectoryField, DecodedTrajectory
+from .ntp_from_scratch_raw import fNT, DecodedTrajectories
 
 __all__ = [
     "NSFPRawMLP",
@@ -17,5 +17,5 @@ __all__ = [
     "GigaChadFlowMLP",
     "GigaChadOccFlowMLP",
     "Liu2024FusionRawMLP",
-    "NeuralTrajectoryField",
+    "fNT",
 ]

@@ -1,6 +1,6 @@
 from pytorch_lightning.loggers.logger import Logger
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop, MinibatchedSceneFlowInputSequence
-from models.components.neural_reps import NeuralTrajectoryField, DecodedTrajectory
+from models.components.neural_reps import fNT, DecodedTrajectories
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from dataclasses import dataclass
 from models import BaseOptimizationModel
@@ -49,16 +49,32 @@ from bucketed_scene_flow_eval.datastructures import O3DVisualizer, PointCloud
 
 @dataclass
 class NTPTrajectoryConsistencyProblem(BaseCostProblem):
-    t1: DecodedTrajectory
-    t2: DecodedTrajectory
+    t1: DecodedTrajectories
+    t2: DecodedTrajectories
 
     def base_cost(self) -> torch.Tensor:
         """
         All trajectories are in global coordinates, and we are just computing the mean of the L2 squared distance between the positions.
         """
 
-        position_diff = (self.t1.global_positions - self.t2.global_positions) ** 2
+        assert (
+            self.t1.global_positions.shape[1] > self.t2.global_positions.shape[1]
+        ), "Expected t1 to be longer than t2"
 
+        assert (
+            self.t2.global_positions.shape[1] > 0
+        ), f"Expected t2 to be longer than 0; got {self.t2.global_positions.shape[1]}. Full shapes are {self.t1.global_positions.shape}, {self.t2.global_positions.shape}"
+
+        t_diff = self.t2.t - self.t1.t
+
+        t2_positions = self.t2.global_positions
+        t1_positions = self.t1.global_positions[:, t_diff:]
+
+        assert (
+            t1_positions.shape == t2_positions.shape
+        ), f"Expected {t1_positions.shape}, but got {t2_positions.shape}. Times are {self.t1.t}, {self.t2.t} and input shapes are {self.t1.global_positions.shape}, {self.t2.global_positions.shape}"
+
+        position_diff = torch.linalg.vector_norm(t1_positions - t2_positions, dim=-1)
         return position_diff.mean()
 
 
@@ -124,7 +140,7 @@ class NTPModel(BaseOptimizationModel):
     ) -> None:
         super().__init__(full_input_sequence)
         print(f"full_input_sequence: {len(full_input_sequence)}")
-        self.model = NeuralTrajectoryField(
+        self.model = fNT(
             traj_len=len(full_input_sequence),
         )
         self.consistency_loss_weight = consistency_loss_weight
@@ -172,31 +188,24 @@ class NTPModel(BaseOptimizationModel):
 
     def _make_trajectory_consistency_losses(
         self,
-        before_trajectory: DecodedTrajectory,
-        query_trajectory: DecodedTrajectory,
-        after_trajectory: DecodedTrajectory,
+        query_trajectory: DecodedTrajectories,
+        after_trajectory: DecodedTrajectories,
     ) -> BaseCostProblem:
         return AdditiveCosts(
             [
-                NTPTrajectoryConsistencyProblem(before_trajectory, query_trajectory),
                 NTPTrajectoryConsistencyProblem(query_trajectory, after_trajectory),
             ]
         )
 
-    def _make_neighbor_chamfer_losses(
+    def _make_neighbor_chamfer_loss(
         self,
-        query_trajectory: DecodedTrajectory,
-        gt_before_pc: torch.Tensor,
+        query_trajectory: DecodedTrajectories,
         gt_after_pc: torch.Tensor,
     ) -> BaseCostProblem:
-        est_before_pc = query_trajectory.get_previous_position()
         est_after_pc = query_trajectory.get_next_position()
 
         return AdditiveCosts(
             [
-                TruncatedChamferLossProblem(
-                    est_before_pc, gt_before_pc, distance_type=ChamferDistanceType.BOTH_DIRECTION
-                ),
                 TruncatedChamferLossProblem(
                     est_after_pc, gt_after_pc, distance_type=ChamferDistanceType.BOTH_DIRECTION
                 ),
@@ -211,67 +220,35 @@ class NTPModel(BaseOptimizationModel):
 
         cost_problems: list[BaseCostProblem] = []
         for local_query_index in range(1, len(rep) - 1):
-            local_before_idx = local_query_index - 1
             local_after_idx = local_query_index + 1
 
             gt_query_pc = rep.get_global_lidar_pc(local_query_index)
 
             # Base trajectory
-            query_trajectory: DecodedTrajectory = self.model(
+            query_trajectory: DecodedTrajectories = self.model(
                 gt_query_pc,
                 rep.sequence_idxes[local_query_index],
             )
 
-            # Standard Chamfer based scene flow loss for clouds just before and just after.
+            # Standard Chamfer based scene flow loss for clouds.
             cost_problems.append(
-                self._make_neighbor_chamfer_losses(
+                self._make_neighbor_chamfer_loss(
                     query_trajectory,
-                    rep.get_global_lidar_pc(local_before_idx),
                     rep.get_global_lidar_pc(local_after_idx),
                 )
             )
 
-            est_before_pc = query_trajectory.get_previous_position()
             est_after_pc = query_trajectory.get_next_position()
 
-            # Trajectories of the one step look ahead and look behind
-            # The global trajectories should all match
-            before_trajectory: DecodedTrajectory = self.model(
-                est_before_pc,
-                rep.sequence_idxes[local_before_idx],
-            )
-            after_trajectory: DecodedTrajectory = self.model(
+            # Trajectories of the one step look ahead
+            after_trajectory: DecodedTrajectories = self.model(
                 est_after_pc,
                 rep.sequence_idxes[local_after_idx],
             )
 
-            # Trajectories of the points doing a round trip
-            # query -(-1)-> step before -(+1)-> query
-            # query -(+1)-> step after -(-1)-> query
-            query_after_round_trip_trajectory: DecodedTrajectory = self.model(
-                after_trajectory.get_previous_position(),
-                rep.sequence_idxes[local_query_index],
-            )
-
-            query_before_round_trip_trajectory: DecodedTrajectory = self.model(
-                before_trajectory.get_next_position(),
-                rep.sequence_idxes[local_query_index],
-            )
-
             # Neighbors should have the same trajectories
             cost_problems.append(
-                self._make_trajectory_consistency_losses(
-                    before_trajectory, query_trajectory, after_trajectory
-                )
-            )
-
-            # Round trip should have the same trajectory
-            cost_problems.append(
-                self._make_trajectory_consistency_losses(
-                    query_before_round_trip_trajectory,
-                    query_trajectory,
-                    query_after_round_trip_trajectory,
-                )
+                self._make_trajectory_consistency_losses(query_trajectory, after_trajectory)
             )
 
         return AdditiveCosts(cost_problems)
@@ -283,7 +260,7 @@ class NTPModel(BaseOptimizationModel):
     ) -> tuple[torch.Tensor, torch.Tensor]:
 
         query_pc = rep.get_global_lidar_pc(query_idx)
-        query_trajectory: DecodedTrajectory = self.model(
+        query_trajectory: DecodedTrajectories = self.model(
             query_pc,
             rep.sequence_idxes[query_idx],
         )

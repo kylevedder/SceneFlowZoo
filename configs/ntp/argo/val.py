@@ -1,17 +1,17 @@
 is_trainable = False
 has_labels = False
 
-SEQUENCE_LENGTH = 150
+SEQUENCE_LENGTH = 20
 
-test_dataset_root = "/efs/argoverse2/train/"
-save_output_folder = "/efs/argoverse2/train_ntp_cleaned_up_flow_feather/"
+test_dataset_root = "/efs/argoverse2_seq_len_20/val"
+save_output_folder = "/efs/argoverse2_seq_len_20/val_ntp_cleaned_up_flow_feather/"
 
 model = dict(
     name="NTPOptimizationLoop",
     args=dict(
-        minibatch_size=4,
+        minibatch_size=3,
         lr=1e-5,
-        epochs=1001,
+        epochs=1000,
         scheduler=dict(
             name="PassThroughScheduler",
             args=dict(schedule_name="StepLR", schedule_args=dict(step_size=500, gamma=0.5)),
