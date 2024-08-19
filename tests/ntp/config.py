@@ -9,12 +9,12 @@ learning_rate = 0.003
 save_every = 500
 validate_every = 10
 
-SEQUENCE_LENGTH = 4
+SEQUENCE_LENGTH = 3
 
 model = dict(
     name="NTPOptimizationLoop",
     args=dict(
-        minibatch_size=4,
+        minibatch_size=3,
         lr=0.003,
         epochs=1,
         scheduler=dict(
