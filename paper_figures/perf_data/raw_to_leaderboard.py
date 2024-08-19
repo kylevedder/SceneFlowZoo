@@ -47,7 +47,9 @@ def process(raw_file: Path, save_file: Path, is_supervised: bool):
     save_json(raw_data, save_file)
 
 
-root_folder = Path("av2_test_volume_split/bucketed_epe")
+data_folder = Path("paper_figures/perf_data/")
+
+root_folder = data_folder / Path("av2_test_volume_split/bucketed_epe")
 # fmt: off
 process(root_folder / "deflow_raw.json", root_folder / "deflow.json", is_supervised=True)
 process(root_folder / "fastflow3d_raw.json", root_folder / "fastflow3d.json", is_supervised=True)
@@ -61,7 +63,7 @@ process(root_folder / "zeroflow_xl_5x_raw.json", root_folder / "zeroflow_xl_5x.j
 # fmt: on
 
 
-root_folder = Path("av2_val/bucketed_epe")
+root_folder = data_folder / Path("av2_val/bucketed_epe")
 # fmt: off
 process(root_folder / "gigachad_depth6_raw.json", root_folder / "gigachad_depth6.json", is_supervised=False)
 process(root_folder / "gigachad_depth8_raw.json", root_folder / "gigachad_depth8.json", is_supervised=False)
@@ -77,4 +79,9 @@ process(root_folder / "gigachad_seq_len_50_raw.json", root_folder / "gigachad_se
 process(root_folder / "gigachad_seq_len_20_raw.json", root_folder / "gigachad_seq_len_20.json", is_supervised=False)
 process(root_folder / "gigachad_seq_len_5_raw.json", root_folder / "gigachad_seq_len_5.json", is_supervised=False)
 process(root_folder / "nsfp_seq_len_2_raw.json", root_folder / "nsfp_seq_len_2.json", is_supervised=False)
+
+process(root_folder / "gigachad_sinc_raw.json", root_folder / "gigachad_sinc.json", is_supervised=False)
+process(root_folder / "gigachad_gaussian_raw.json", root_folder / "gigachad_gaussian.json", is_supervised=False)
+process(root_folder / "gigachad_fourtier_raw.json", root_folder / "gigachad_fourtier.json", is_supervised=False)
+process(root_folder / "gigachad_no_k_step_raw.json", root_folder / "gigachad_no_k_step.json", is_supervised=False)
 # fmt: on

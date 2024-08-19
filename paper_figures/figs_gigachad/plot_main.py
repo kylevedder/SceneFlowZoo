@@ -3,7 +3,7 @@ from bucketed_scene_flow_eval.utils import *
 from paper_figures.plot_lib import *
 import argparse
 
-from paper_figures.figs_gigachad.fig_gigachad_by_ablation_depth import plot_ablation_barchart
+from paper_figures.figs_gigachad.fig_gigachad_ablation import plot_ablation_barchart
 from paper_figures.figs_gigachad.fig_dynamic_norm_epe_bar import (
     plot_dynamic_norm_epe_bar,
     plot_dynamic_norm_epe_bar_black,
@@ -51,12 +51,26 @@ gigachad_val_depth_ablations = [
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 22", "gigachad_depth22"),
 ]
 
+gigachad_encoding_ablations = [
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD + Time", "gigachad_depth8"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Fouriter", "gigachad_fourtier"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD SinC", "gigachad_sinc"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Gaussian", "gigachad_gaussian"),
+]
+
 gigachad_length_ablations = [
     BucketedEvalStats(av2_class_val_data_root_dir, "NSFP (Len 2)", "nsfp_seq_len_2"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Len 5", "gigachad_seq_len_5"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Len 20", "gigachad_seq_len_20"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Len 50", "gigachad_seq_len_50"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Full", "gigachad_depth8"),
+]
+
+gigachad_loss_ablations = [
+    BucketedEvalStats(av2_class_val_data_root_dir, "NSFP (Len 2)", "nsfp_seq_len_2"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD No $k$ Step", "gigachad_no_k_step"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Full", "gigachad_depth8"),
+    
 ]
 
 class_bucketed_eval_stats = [
@@ -97,6 +111,12 @@ plot_ablation_barchart(gigachad_val_depth_ablations, av2_class_val_save_dir / "d
 
 # Sequence length ablations
 plot_ablation_barchart(gigachad_length_ablations, av2_class_val_save_dir / "lengths")
+
+# Loss ablations
+plot_ablation_barchart(gigachad_loss_ablations, av2_class_val_save_dir / "losses")
+
+# Encoding ablations
+plot_ablation_barchart(gigachad_encoding_ablations, av2_class_val_save_dir / "encodings")
 
 plot_per_metacatagory_bar(gigachad_val_depth_ablations, av2_class_val_save_dir)
 
