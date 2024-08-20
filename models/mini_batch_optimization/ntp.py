@@ -144,6 +144,7 @@ class NTPModel(BaseOptimizationModel):
             traj_len=len(full_input_sequence),
         )
         self.consistency_loss_weight = consistency_loss_weight
+        self.iteration = 0
 
     def _preprocess(self, input_sequence: TorchFullFrameInputSequence) -> NTPPreprocessedInput:
 
@@ -215,6 +216,7 @@ class NTPModel(BaseOptimizationModel):
     def optim_forward_single(
         self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> BaseCostProblem:
+        self.iteration += 1
         rep = self._preprocess(input_sequence)
         # Query index is 1 to n-2 because we need to preserve there being and additional before and after point.
 
@@ -224,10 +226,14 @@ class NTPModel(BaseOptimizationModel):
 
             gt_query_pc = rep.get_global_lidar_pc(local_query_index)
 
+            # visualize = self.iteration % 180 == 179
+            visualize = False
+
             # Base trajectory
             query_trajectory: DecodedTrajectories = self.model(
                 gt_query_pc,
                 rep.sequence_idxes[local_query_index],
+                visualize=visualize,
             )
 
             # Standard Chamfer based scene flow loss for clouds.
@@ -248,7 +254,7 @@ class NTPModel(BaseOptimizationModel):
 
             # Neighbors should have the same trajectories
             cost_problems.append(
-                self._make_trajectory_consistency_losses(query_trajectory, after_trajectory)
+                self._make_trajectory_consistency_losses(query_trajectory, after_trajectory) * 0.01
             )
 
         return AdditiveCosts(cost_problems)

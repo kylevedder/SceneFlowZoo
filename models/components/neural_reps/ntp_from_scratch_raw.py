@@ -294,7 +294,7 @@ class fNT(nn.Module):
 
         vis.run()
 
-    def forward(self, x: torch.Tensor, t: int) -> DecodedTrajectories:
+    def forward(self, x: torch.Tensor, t: int, visualize: bool = False) -> DecodedTrajectories:
         """
         x : N x 3 global position
         t : scalar timestep
@@ -308,5 +308,8 @@ class fNT(nn.Module):
         linear_combination = self.fa_net(bottleneck)
 
         decoded_trajectories = DecodedTrajectories.from_basis(trajectory_basis, linear_combination)
+
+        if visualize:
+            self._visualize(x, decoded_trajectories)
 
         return decoded_trajectories
