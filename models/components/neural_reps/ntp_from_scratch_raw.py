@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 from .nsfp_raw_mlp import NSFPRawMLP, ActivationFn
 
+from bucketed_scene_flow_eval.datastructures import O3DVisualizer, PointCloud
+
 K_NUM_TRAJECTORIES = 256
 
 
@@ -173,6 +175,14 @@ class fa(NSFPRawMLP):
             with_compile,
         )
 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x : N x 4
+        """
+        raw_combination = super().forward(x)
+        normalized_linear_combination = torch.softmax(raw_combination, dim=1)
+        return normalized_linear_combination
+
 
 class ft(nn.Module):
     """
@@ -212,7 +222,21 @@ class ft(nn.Module):
         Returns:
         Trajectory positions N x 3
         """
+        assert isinstance(
+            positions_tensor, torch.Tensor
+        ), f"positions_tensor must be a tensor, but got {positions_tensor} of type {type(positions_tensor)}."
+        assert (
+            positions_tensor.ndim == 2
+        ), f"positions_tensor must have 2 dimensions, but got {positions_tensor.ndim}."
+        assert (
+            positions_tensor.shape[1] == 3
+        ), f"positions_tensor must have 3 channels, but got {positions_tensor.shape[1]}."
+        assert isinstance(
+            times_tensor, torch.Tensor
+        ), f"times_tensor must be a tensor, but got {times_tensor} of type {type(times_tensor)}."
         assert times_tensor.ndim == 1, f"times must have 1 dimension, but got {times_tensor.ndim}."
+
+        assert isinstance(t, int), f"t must be an integer, but got {t} of type {type(t)}."
         embedded_time = self.embedder(times_tensor)
 
         # These deltas are changes from 0 to N - 1
@@ -235,6 +259,7 @@ class ft(nn.Module):
             ],
             2,
         )
+
         # future_relative_positions.shape = torch.Size([N, 256, t:, 3])
         # positions_tensor.shape = torch.Size([N, 3])
         future_global_positions = future_relative_positions + positions_tensor[:, None, None, :]
@@ -253,6 +278,21 @@ class fNT(nn.Module):
         self.fphi_net = fphi()
         self.fa_net = fa()
         self.ft_net = ft()
+
+    def _visualize(self, x: torch.Tensor, decoded_trajectories: DecodedTrajectories):
+        vis = O3DVisualizer(point_size=2)
+        pc_x = PointCloud(x.detach().cpu().numpy())
+        vis.add_pointcloud(pc_x, color=[1, 0, 0])
+        query_trajectory_matrix = decoded_trajectories.global_positions.detach().cpu().numpy()
+        trajectory_pc_list = [
+            PointCloud(query_trajectory_matrix[:, idx])
+            for idx in range(query_trajectory_matrix.shape[1])
+        ]
+        for pc1, pc2 in zip(trajectory_pc_list, trajectory_pc_list[1:]):
+            vis.add_lineset(pc1, pc2)
+            vis.add_pointcloud(pc1, color=[0, 0, 1])
+
+        vis.run()
 
     def forward(self, x: torch.Tensor, t: int) -> DecodedTrajectories:
         """

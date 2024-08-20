@@ -219,7 +219,7 @@ class NTPModel(BaseOptimizationModel):
         # Query index is 1 to n-2 because we need to preserve there being and additional before and after point.
 
         cost_problems: list[BaseCostProblem] = []
-        for local_query_index in range(1, len(rep) - 1):
+        for local_query_index in range(len(rep) - 1):
             local_after_idx = local_query_index + 1
 
             gt_query_pc = rep.get_global_lidar_pc(local_query_index)

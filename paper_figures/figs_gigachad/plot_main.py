@@ -69,6 +69,7 @@ gigachad_length_ablations = [
 gigachad_loss_ablations = [
     BucketedEvalStats(av2_class_val_data_root_dir, "NSFP (Len 2)", "nsfp_seq_len_2"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD No $k$ Step", "gigachad_no_k_step"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD No Cycle", "gigachad_no_cycle"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Full", "gigachad_depth8"),
     
 ]

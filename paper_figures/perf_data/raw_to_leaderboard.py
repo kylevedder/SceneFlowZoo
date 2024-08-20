@@ -84,4 +84,5 @@ process(root_folder / "gigachad_sinc_raw.json", root_folder / "gigachad_sinc.jso
 process(root_folder / "gigachad_gaussian_raw.json", root_folder / "gigachad_gaussian.json", is_supervised=False)
 process(root_folder / "gigachad_fourtier_raw.json", root_folder / "gigachad_fourtier.json", is_supervised=False)
 process(root_folder / "gigachad_no_k_step_raw.json", root_folder / "gigachad_no_k_step.json", is_supervised=False)
+process(root_folder / "gigachad_no_cycle_raw.json", root_folder / "gigachad_no_cycle.json", is_supervised=False)
 # fmt: on
