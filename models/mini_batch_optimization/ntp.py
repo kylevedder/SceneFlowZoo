@@ -1,6 +1,6 @@
 from pytorch_lightning.loggers.logger import Logger
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop, MinibatchedSceneFlowInputSequence
-from models.components.neural_reps import fNT, DecodedTrajectories
+from models.components.neural_reps import fNT, DecodedTrajectories, TrajectoryBasis, fNTResult
 from dataloaders import TorchFullFrameInputSequence, TorchFullFrameOutputSequence
 from dataclasses import dataclass
 from models import BaseOptimizationModel
@@ -45,37 +45,6 @@ from bucketed_scene_flow_eval.datastructures import O3DVisualizer, PointCloud
 #         ) ** 2
 
 #         return before_query_diff.mean() + after_query_diff.mean()
-
-
-@dataclass
-class NTPTrajectoryConsistencyProblem(BaseCostProblem):
-    t1: DecodedTrajectories
-    t2: DecodedTrajectories
-
-    def base_cost(self) -> torch.Tensor:
-        """
-        All trajectories are in global coordinates, and we are just computing the mean of the L2 squared distance between the positions.
-        """
-
-        assert (
-            self.t1.global_positions.shape[1] > self.t2.global_positions.shape[1]
-        ), "Expected t1 to be longer than t2"
-
-        assert (
-            self.t2.global_positions.shape[1] > 0
-        ), f"Expected t2 to be longer than 0; got {self.t2.global_positions.shape[1]}. Full shapes are {self.t1.global_positions.shape}, {self.t2.global_positions.shape}"
-
-        t_diff = self.t2.t - self.t1.t
-
-        t2_positions = self.t2.global_positions
-        t1_positions = self.t1.global_positions[:, t_diff:]
-
-        assert (
-            t1_positions.shape == t2_positions.shape
-        ), f"Expected {t1_positions.shape}, but got {t2_positions.shape}. Times are {self.t1.t}, {self.t2.t} and input shapes are {self.t1.global_positions.shape}, {self.t2.global_positions.shape}"
-
-        position_diff = torch.linalg.vector_norm(t1_positions - t2_positions, dim=-1)
-        return position_diff.mean()
 
 
 @dataclass
@@ -189,13 +158,16 @@ class NTPModel(BaseOptimizationModel):
 
     def _make_trajectory_consistency_losses(
         self,
-        query_trajectory: DecodedTrajectories,
-        after_trajectory: DecodedTrajectories,
+        query_trajectory: fNTResult,
+        after_trajectory: fNTResult,
     ) -> BaseCostProblem:
-        return AdditiveCosts(
-            [
-                NTPTrajectoryConsistencyProblem(query_trajectory, after_trajectory),
-            ]
+
+        return PassthroughCostProblem(
+            torch.linalg.vector_norm(
+                query_trajectory.trajectory_basis.full_trajectory_velocity_space_relative_deltas
+                - after_trajectory.trajectory_basis.full_trajectory_velocity_space_relative_deltas,
+                dim=-1,
+            ).mean()
         )
 
     def _make_neighbor_chamfer_loss(
@@ -225,36 +197,49 @@ class NTPModel(BaseOptimizationModel):
             local_after_idx = local_query_index + 1
 
             gt_query_pc = rep.get_global_lidar_pc(local_query_index)
+            gt_after_pc = rep.get_global_lidar_pc(local_after_idx)
 
-            # visualize = self.iteration % 180 == 179
-            visualize = False
+            visualize = self.iteration % 720 == 719
+            # visualize = False
 
             # Base trajectory
-            query_trajectory: DecodedTrajectories = self.model(
+            fnt_result: fNTResult = self.model(
                 gt_query_pc,
                 rep.sequence_idxes[local_query_index],
                 visualize=visualize,
             )
 
-            # Standard Chamfer based scene flow loss for clouds.
-            cost_problems.append(
-                self._make_neighbor_chamfer_loss(
-                    query_trajectory,
-                    rep.get_global_lidar_pc(local_after_idx),
-                )
-            )
-
-            est_after_pc = query_trajectory.get_next_position()
+            est_after_pc = fnt_result.decoded_trajectories.get_next_position()
 
             # Trajectories of the one step look ahead
-            after_trajectory: DecodedTrajectories = self.model(
+            after_fnt_result: fNTResult = self.model(
                 est_after_pc,
                 rep.sequence_idxes[local_after_idx],
             )
 
+            assert torch.allclose(
+                fnt_result.decoded_trajectories.get_current_position(), gt_query_pc
+            ), "Expected the current position to be the same as the input point cloud"
+
+            # Standard Chamfer based scene flow loss for clouds.
+            cost_problems.append(
+                TruncatedChamferLossProblem(
+                    est_after_pc, gt_after_pc, distance_type=ChamferDistanceType.FORWARD_ONLY
+                )
+            )
+            # Regularizer the bottleneck
+            cost_problems.append(PassthroughCostProblem((fnt_result.bottleneck**2).mean()) * 0.01)
+
             # Neighbors should have the same trajectories
             cost_problems.append(
-                self._make_trajectory_consistency_losses(query_trajectory, after_trajectory) * 0.01
+                PassthroughCostProblem(
+                    torch.linalg.vector_norm(
+                        fnt_result.trajectory_basis.full_trajectory_velocity_space_relative_deltas
+                        - after_fnt_result.trajectory_basis.full_trajectory_velocity_space_relative_deltas,
+                        dim=-1,
+                    ).mean()
+                    * 0.1
+                )
             )
 
         return AdditiveCosts(cost_problems)
@@ -262,23 +247,23 @@ class NTPModel(BaseOptimizationModel):
     def _compute_ego_flow(
         self,
         rep: NTPPreprocessedInput,
-        query_idx: int,
+        local_query_idx: int,
     ) -> tuple[torch.Tensor, torch.Tensor]:
 
-        query_pc = rep.get_global_lidar_pc(query_idx)
-        query_trajectory: DecodedTrajectories = self.model(
+        query_pc = rep.get_global_lidar_pc(local_query_idx)
+        fnt_result: fNTResult = self.model(
             query_pc,
-            rep.sequence_idxes[query_idx],
+            rep.sequence_idxes[local_query_idx],
         )
 
         # We need to construct the full global pc, by using the query trajectory to get the next position
-        full_global_pc = rep.get_full_global_pc(query_idx)
+        full_global_pc = rep.get_full_global_pc(local_query_idx)
         full_global_flow_pc = full_global_pc.clone()
-        full_pc_mask = rep.get_full_pc_mask(query_idx)
-        full_global_flow_pc[full_pc_mask] = query_trajectory.get_next_position()
+        full_pc_mask = rep.get_full_pc_mask(local_query_idx)
+        full_global_flow_pc[full_pc_mask] = fnt_result.decoded_trajectories.get_next_position()
 
         ego_flow = self.global_to_ego_flow(
-            full_global_pc, full_global_flow_pc, rep.ego_to_globals[query_idx]
+            full_global_pc, full_global_flow_pc, rep.ego_to_globals[local_query_idx]
         )
 
         return ego_flow, full_pc_mask

@@ -56,6 +56,7 @@ class FourierSpatialTemporalEmbedding(nn.Module):
 
 @dataclass
 class TrajectoryBasis:
+    full_trajectory_velocity_space_relative_deltas: torch.Tensor
     global_positions: torch.Tensor
     t: int
 
@@ -127,29 +128,53 @@ class DecodedTrajectories:
     def get_next_position(self) -> torch.Tensor:
         return self.global_positions[:, 1, :]
 
+    def get_current_position(self) -> torch.Tensor:
+        return self.global_positions[:, 0, :]
 
-class fphi(NSFPRawMLP):
+
+class fphi(nn.Module):
     """
     Maps global position and time to a low dimensional bottleneck.
     """
 
     def __init__(
         self,
-        positition_time_dim: int = 4,
+        traj_len: int,
+        positition_dim: int = 3,
         low_dimensional_bottleneck: int = 4,
         latent_dim: int = 128,
         act_fn: ActivationFn = ActivationFn.RELU,
-        num_layers: int = 4,
+        num_layers: int = 7,  # Taken from the supplemental
         with_compile: bool = True,
     ):
-        super().__init__(
-            positition_time_dim,
+        super().__init__()
+        self.traj_len = traj_len
+        self.time_encoder = torch.compile(
+            FourierSpatialTemporalEmbedding(
+                traj_len=traj_len, n_freq=int(1 + np.ceil(np.log2(traj_len)))
+            ),
+            dynamic=True,
+        )
+
+        self.mlp = NSFPRawMLP(
+            positition_dim + self.time_encoder.embedding_dim,
             low_dimensional_bottleneck,
             latent_dim,
             act_fn,
             num_layers,
             with_compile,
         )
+
+    def forward(self, x: torch.Tensor, t: int) -> torch.Tensor:
+        assert isinstance(x, torch.Tensor), f"x must be a tensor, but got {x} of type {type(x)}."
+        assert x.shape[1] == 3, f"x must have 3 channels, but got {x.shape[1]}."
+        assert isinstance(t, int), f"t must be an integer, but got {t} of type {type(t)}."
+
+        embedded_time = self.time_encoder(
+            torch.full((x.shape[0],), t, device=x.device, dtype=x.dtype)
+        )
+        embedded_x = torch.cat([x, embedded_time], -1)
+        return self.mlp(embedded_x)
 
 
 class fa(NSFPRawMLP):
@@ -201,8 +226,11 @@ class ft(nn.Module):
         super().__init__()
         self.num_trajectories_k = num_trajectories_k
         self.traj_len = traj_len
-        self.embedder = FourierSpatialTemporalEmbedding(
-            traj_len=self.traj_len, n_freq=int(1 + np.ceil(np.log2(self.traj_len)))
+        self.embedder = torch.compile(
+            FourierSpatialTemporalEmbedding(
+                traj_len=self.traj_len, n_freq=int(1 + np.ceil(np.log2(self.traj_len)))
+            ),
+            dynamic=True,
         )
         self.mlp = NSFPRawMLP(
             self.embedder.embedding_dim,
@@ -267,7 +295,16 @@ class ft(nn.Module):
             f"traj_len must be greater than 0, but got {future_global_positions.shape[2]}. "
             f"Overall shape is {future_global_positions.shape}."
         )
-        return TrajectoryBasis(future_global_positions, t)
+        return TrajectoryBasis(
+            full_trajectory_velocity_space_relative_deltas, future_global_positions, t
+        )
+
+
+@dataclass
+class fNTResult:
+    decoded_trajectories: DecodedTrajectories
+    trajectory_basis: TrajectoryBasis
+    bottleneck: torch.Tensor
 
 
 class fNT(nn.Module):
@@ -275,7 +312,7 @@ class fNT(nn.Module):
     def __init__(self, traj_len: int = 20):
         super().__init__()
         self.trajectory_length = traj_len
-        self.fphi_net = fphi()
+        self.fphi_net = fphi(traj_len=traj_len)
         self.fa_net = fa()
         self.ft_net = ft()
 
@@ -294,17 +331,15 @@ class fNT(nn.Module):
 
         vis.run()
 
-    def forward(self, x: torch.Tensor, t: int, visualize: bool = False) -> DecodedTrajectories:
+    def forward(self, x: torch.Tensor, t: int, visualize: bool = False) -> fNTResult:
         """
         x : N x 3 global position
         t : scalar timestep
         """
         assert x.shape[1] == 3, f"p must have 3 channels, but got {x.shape[1]}."
         t_tensor = torch.full((x.shape[0],), t, device=x.device, dtype=x.dtype)
-        p = torch.cat([x, t_tensor.unsqueeze(-1)], -1)
-
         trajectory_basis = self.ft_net(x, t, t_tensor)
-        bottleneck = self.fphi_net(p)
+        bottleneck = self.fphi_net(x, t)
         linear_combination = self.fa_net(bottleneck)
 
         decoded_trajectories = DecodedTrajectories.from_basis(trajectory_basis, linear_combination)
@@ -312,4 +347,4 @@ class fNT(nn.Module):
         if visualize:
             self._visualize(x, decoded_trajectories)
 
-        return decoded_trajectories
+        return fNTResult(decoded_trajectories, trajectory_basis, bottleneck)

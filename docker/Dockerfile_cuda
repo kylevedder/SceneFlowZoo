@@ -73,7 +73,7 @@ RUN conda install -c conda-forge openh264
 RUN pip install pytorch_memlab
 RUN apt install -y nano
 
-RUN pip install bucketed-scene-flow-eval==2.0.22
+RUN pip install bucketed-scene-flow-eval==2.0.23
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 
 # Setup environment to support running as non-root user

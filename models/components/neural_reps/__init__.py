@@ -9,7 +9,7 @@ from .gigachad_raw_mlp import (
     SimpleEncoder,
 )
 from .liu_2024_raw_mlp import Liu2024FusionRawMLP
-from .ntp_from_scratch_raw import fNT, DecodedTrajectories
+from .ntp_from_scratch_raw import fNT, DecodedTrajectories, TrajectoryBasis, fNTResult
 
 __all__ = [
     "NSFPRawMLP",

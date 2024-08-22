@@ -182,10 +182,11 @@ class FastFlow3D(BaseTorchModel):
 
     def _indices_to_mask(self, points, mask_indices):
         mask = torch.zeros((points.shape[0],), dtype=torch.bool, device=points.device)
-        assert mask_indices.max() < len(
-            mask
-        ), f"Mask indices go outside of the tensor range. {mask_indices.max()} >= {len(mask)}"
-        mask[mask_indices] = True
+        if len(mask_indices) > 0:
+            assert mask_indices.max() < len(
+                mask
+            ), f"Mask indices go outside of the tensor range. {mask_indices.max()} >= {len(mask)}"
+            mask[mask_indices] = True
         return mask
 
     def _transform_pc(self, pc: torch.Tensor, transform: torch.Tensor) -> torch.Tensor:

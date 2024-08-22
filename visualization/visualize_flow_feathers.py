@@ -63,6 +63,9 @@ def load_sequences(
                 flow_data_path=flow_folder,
             ),
         )
+        assert (
+            len(dataset) > 0
+        ), f"No sequences found in {sequence_data_folder} with ID {sequence_id}."
         sequence = dataset[0]
         return sequence
 

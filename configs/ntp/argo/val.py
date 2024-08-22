@@ -9,9 +9,9 @@ save_output_folder = "/efs/argoverse2_seq_len_20/val_ntp_cleaned_up_flow_feather
 model = dict(
     name="NTPOptimizationLoop",
     args=dict(
-        minibatch_size=3,
+        minibatch_size=2,
         lr=1e-5,
-        epochs=1000,
+        epochs=100,
         scheduler=dict(
             name="PassThroughScheduler",
             args=dict(schedule_name="StepLR", schedule_args=dict(step_size=500, gamma=0.5)),

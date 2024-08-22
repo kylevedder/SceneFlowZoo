@@ -24,6 +24,7 @@ train_dataset = dict(
     args=dict(
         dataset_name="WaymoOpenNonCausalSceneFlow",
         root_dir=test_dataset_root,
+        flow_dir=None,
         with_rgb=False,
         max_pc_points=150000,
         allow_pc_slicing=True,
