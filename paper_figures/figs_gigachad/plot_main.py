@@ -27,6 +27,8 @@ av2_class_test_data_root_dir = Path("./paper_figures/perf_data/av2_test/bucketed
 
 av2_class_val_data_root_dir = Path("./paper_figures/perf_data/av2_val/bucketed_epe/")
 
+waymo_class_val_data_root_dir = Path("./paper_figures/perf_data/waymo_val/bucketed_epe/")
+
 # fmt: off
 gigachad_test_depth_ablations = [
     BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 4", "gigachad_4"),
@@ -94,10 +96,16 @@ class_bucketed_eval_stats = [
     BucketedEvalStats(av2_class_test_data_root_dir, "ZeroFlow XL 5x", "zeroflow_xl_5x"),
 ]
 
+waymo_class_bucketed_eval_stats = [
+    BucketedEvalStats(waymo_class_val_data_root_dir, "FastFlow3D", "fastflow3d"),
+    BucketedEvalStats(waymo_class_val_data_root_dir, "GIGACHAD", "gigachad"),
+]
+
 # fmt: on
 
 # gigachad_ablations.sort(reverse=True)
 class_bucketed_eval_stats.sort(reverse=True)
+waymo_class_bucketed_eval_stats.sort(reverse=True)
 
 set_font(6)
 
@@ -107,6 +115,8 @@ av2_class_test_save_dir.mkdir(exist_ok=True, parents=True)
 av2_class_val_save_dir = save_folder / "av2_val"
 av2_class_val_save_dir.mkdir(exist_ok=True, parents=True)
 
+waymo_class_val_save_dir = save_folder / "waymo_val"
+waymo_class_val_save_dir.mkdir(exist_ok=True, parents=True)
 
 plot_ablation_barchart(gigachad_test_depth_ablations, av2_class_test_save_dir / "depths")
 plot_ablation_barchart(gigachad_val_depth_ablations, av2_class_val_save_dir / "depths")
@@ -124,3 +134,6 @@ plot_per_metacatagory_bar(gigachad_val_depth_ablations, av2_class_val_save_dir)
 
 plot_dynamic_norm_epe_bar(class_bucketed_eval_stats, av2_class_test_save_dir)
 plot_dynamic_norm_epe_bar_black(class_bucketed_eval_stats, av2_class_test_save_dir)
+
+plot_dynamic_norm_epe_bar(waymo_class_bucketed_eval_stats, waymo_class_val_save_dir)
+plot_dynamic_norm_epe_bar_black(waymo_class_bucketed_eval_stats, waymo_class_val_save_dir)
