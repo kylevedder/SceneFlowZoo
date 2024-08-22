@@ -35,11 +35,21 @@ def run_jlaunch_commands(jlaunch_commands: Path) -> Path:
 
 
 def build_config(
-    sequence_name : str, base_config: Path, config_file_save_path: Path, sequence_length : int | None
+    sequence_name : str, base_config: Path, config_file_save_path: Path, sequence_length : int | None, no_sequence_length: bool,
 ) -> None:
     assert base_config.is_file(), f"Config file {base_config} does not exist"
-    custom_config_content = f"""_base_ = "{base_config}"
-test_dataset = dict(args=dict(log_subset=["{sequence_name}"], subsequence_length={sequence_length}))
+    if not no_sequence_length:
+        custom_config_content = f"""_base_ = "{base_config}"
+test_dataset = dict(args=dict(
+log_subset=["{sequence_name}"], 
+subsequence_length={sequence_length},
+))
+"""
+    else:
+        custom_config_content = f"""_base_ = "{base_config}"
+test_dataset = dict(args=dict(
+log_subset=["{sequence_name}"],
+))
 """
     with open(config_file_save_path, "w") as f:
         f.write(custom_config_content)
@@ -72,6 +82,7 @@ def build_split(
     backend: str,
     job_name: str,
     sequence_length : int,
+    no_sequence_length: bool,
     jlaunch_args: list[str],
 ) -> Path:
     """
@@ -87,7 +98,7 @@ def build_split(
     job_dir.mkdir(exist_ok=True, parents=True)
 
     job_config = job_dir / f"config.py"
-    build_config(sequence_name, base_config, job_config, sequence_length)
+    build_config(sequence_name, base_config, job_config, sequence_length, no_sequence_length)
     jlaunch_config = job_dir / "jlaunch.sh"
     build_jlaunch(job_config, jlaunch_config, backend, job_name, jlaunch_args)
 
@@ -122,6 +133,7 @@ def build_splits(
     launch_files_dir: Path,
     backend: str,
     base_name: str,
+    no_sequence_length: bool,
     jlaunch_args: list[str],
 ):
     assert base_config.is_file(), f"Config file {base_config} does not exist"
@@ -148,6 +160,7 @@ def build_splits(
             backend,
             f"{base_name}_{sequence_name}",
             sequence_length,
+            no_sequence_length,
             jlaunch_args,
         )
         for sequence_name, sequence_length in sequence_lengths.items()
@@ -176,6 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("launch_files_dir", type=Path)
     parser.add_argument("backend", type=str, choices=["slurm", "ngc"])
     parser.add_argument("base_name", type=str)
+    parser.add_argument("--no_sequence_length", action="store_true")
     parser.add_argument("jlaunch_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     base_config = args.base_config
@@ -183,6 +197,7 @@ if __name__ == "__main__":
     launch_files_dir = args.launch_files_dir
     backend = args.backend
     base_name = args.base_name
+    no_sequence_length = args.no_sequence_length
     jlaunch_args = list(args.jlaunch_args)
 
     # Print arguments
@@ -202,5 +217,6 @@ if __name__ == "__main__":
         launch_files_dir,
         backend,
         base_name,
+        no_sequence_length,
         jlaunch_args,
     )

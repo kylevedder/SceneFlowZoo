@@ -1,0 +1,14 @@
+[
+    {
+        "mean Dynamic": 0.7386323333333333,
+        "mean Static": 0.01758975,
+        "Is Supervised?": 0,
+        "BACKGROUND Static": 0.035646,
+        "CYCLIST Static": 0.009575,
+        "CYCLIST Dynamic": 0.886395,
+        "PEDESTRIAN Static": 0.010757,
+        "PEDESTRIAN Dynamic": 0.980078,
+        "VEHICLE Static": 0.014381,
+        "VEHICLE Dynamic": 0.349424
+    }
+]

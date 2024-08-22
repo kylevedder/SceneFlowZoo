@@ -90,5 +90,6 @@ process(root_folder / "ntp_seq_len_20_raw.json", root_folder / "ntp_seq_len_20.j
 root_folder = data_folder / Path("waymo_val/bucketed_epe")
 process(root_folder / "fastflow3d_raw.json", root_folder / "fastflow3d.json", is_supervised=True)
 process(root_folder / "gigachad_raw.json", root_folder / "gigachad.json", is_supervised=False)
+process(root_folder / "zeroflow_raw.json", root_folder / "zeroflow.json", is_supervised=False)
 
 # fmt: on

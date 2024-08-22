@@ -97,6 +97,7 @@ class_bucketed_eval_stats = [
 ]
 
 waymo_class_bucketed_eval_stats = [
+    BucketedEvalStats(waymo_class_val_data_root_dir, "ZeroFlow 1x", "zeroflow"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "FastFlow3D", "fastflow3d"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "GIGACHAD", "gigachad"),
 ]
