@@ -8,8 +8,8 @@ save_output_folder = "/efs/argoverse2_small/val_nsfp_rewritten_flow_debug/"
 SEQUENCE_LENGTH = 2
 
 model = dict(
-    name="WholeBatchOptimizationLoop",
-    args=dict(model_class="WholeBatchNSFPCycleConsistency", save_flow_every=10),
+    name="NSFPCycleConsistencyOptimizationLoop",
+    args=dict(),
 )
 
 test_dataset = dict(

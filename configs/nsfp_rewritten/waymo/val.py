@@ -8,8 +8,8 @@ save_output_folder = "/efs/waymo_open_processed_flow/val_nsfp/"
 SEQUENCE_LENGTH = 2
 
 model = dict(
-    name="WholeBatchOptimizationLoop",
-    args=dict(model_class="WholeBatchNSFPCycleConsistency"),
+    name="NSFPCycleConsistencyOptimizationLoop",
+    args=dict(),
 )
 
 
