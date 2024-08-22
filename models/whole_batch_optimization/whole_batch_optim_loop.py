@@ -325,6 +325,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         leave: bool = False,
         profile: bool = False,
     ) -> TorchFullFrameOutputSequence:
+        should_exit = False
         model = model.train()
         if self.compile_model:
             model = torch.compile(model)
