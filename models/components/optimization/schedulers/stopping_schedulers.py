@@ -11,14 +11,15 @@ class StoppingScheduler(LRScheduler):
     def __init__(
         self,
         optimizer: Optimizer,
-        early_stopping: EarlyStopping | dict[str, object] = EarlyStopping(),
+        early_stopping: EarlyStopping | dict[str, object] | None = None,
     ):
         super().__init__(optimizer)
         assert isinstance(
             optimizer, Optimizer
         ), f"optimizer must be an Optimizer object, but got {optimizer}"
-
-        if isinstance(early_stopping, dict):
+        if early_stopping is None:
+            early_stopping = EarlyStopping()
+        elif isinstance(early_stopping, dict):
             early_stopping = EarlyStopping(**early_stopping)
         assert isinstance(
             early_stopping, EarlyStopping
@@ -51,9 +52,11 @@ class PassThroughScheduler(StoppingScheduler):
         optimizer: Optimizer,
         schedule_name: str,
         schedule_args: dict[str, object],
-        early_stopping: EarlyStopping | dict[str, object] = EarlyStopping.no_stopping(),
+        early_stopping: EarlyStopping | dict[str, object] | None = None,
     ):
         super().__init__(optimizer, early_stopping)
+        if early_stopping is None:
+            early_stopping = EarlyStopping.no_stopping()
         self.scheduler: LRScheduler = getattr(lr_scheduler, schedule_name)(
             optimizer, **schedule_args
         )
@@ -71,7 +74,7 @@ class ReduceLROnPlateauWithFloorRestart(StoppingScheduler):
     def __init__(
         self,
         optimizer: Optimizer,
-        early_stopping: EarlyStopping | dict[str, object] = EarlyStopping(),
+        early_stopping: EarlyStopping | dict[str, object] | None = None,
         reduction_factor: float = 0.2,
         reduction_patience: int = 200,
         reduction_eps: float = 1e-4,
@@ -80,6 +83,8 @@ class ReduceLROnPlateauWithFloorRestart(StoppingScheduler):
         restart_min_lr: float = 1e-7,
     ):
         super().__init__(optimizer, early_stopping)
+        if early_stopping is None:
+            early_stopping = EarlyStopping()
         # Ensure that the optimizer has consistent lr across all param groups, and it's the given max lr
         assert all(
             param_group["lr"] == restart_max_lr for param_group in optimizer.param_groups

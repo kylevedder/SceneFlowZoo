@@ -67,6 +67,9 @@ class EarlyStopping:
             self.num_bad_epochs += 1
 
         if self.num_bad_epochs >= self.patience:
+            print(
+                f"Early stopping after {self.total_steps} steps with {self.num_bad_epochs} bad epochs (patience: {self.patience})."
+            )
             return True
 
         return False

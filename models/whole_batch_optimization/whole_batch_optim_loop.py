@@ -63,7 +63,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         self,
         model_class: type[BaseOptimizationModel],
         scheduler: SchedulerBuilder | dict[str, object] = SchedulerBuilder(
-            "StoppingScheduler", {"early_stopping": EarlyStopping()}
+            "StoppingScheduler", {"early_stopping": dict()}
         ),
         epochs: int = 5000,
         optimizer_type: OptimizerType | str = OptimizerType.ADAM,
@@ -320,15 +320,18 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
         logger: Logger,
         model: BaseOptimizationModel,
         full_batch: TorchFullFrameInputSequence,
-        model_state_dicts: OptimCheckpointStateDicts = OptimCheckpointStateDicts.default(),
+        model_state_dicts: OptimCheckpointStateDicts | None = None,
         title: str | None = "Optimizing Neur Rep",
         leave: bool = False,
         profile: bool = False,
     ) -> TorchFullFrameOutputSequence:
-        should_exit = False
+        if model_state_dicts is None:
+            model_state_dicts = OptimCheckpointStateDicts.default()
         model = model.train()
         if self.compile_model:
             model = torch.compile(model)
+
+        print(f"Model State Dicts: {model_state_dicts}")
 
         full_batch = full_batch.clone().detach().requires_grad_(True)
 
@@ -389,6 +392,7 @@ class WholeBatchOptimizationLoop(BaseTorchModel):
                     batch_cost,
                 )
                 if should_exit:
+                    print(f"Early stopping after {epoch_idx} epochs")
                     break
 
         # Save the profiling results to a text file
