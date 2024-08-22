@@ -34,7 +34,7 @@ test_dataset = dict(
         eval_type="bucketed_epe",
         max_pc_points=180000,
         allow_pc_slicing=True,
-        eval_args=dict(output_path="eval_results/bucketed_epe/nsfp_distillation_1x/"),
+        eval_args=dict(output_path="eval_results/bucketed_epe/waymo/fastflow3d_supervised/"),
     ),
 )
 
