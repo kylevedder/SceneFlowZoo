@@ -18,30 +18,49 @@ def _clean_name(name: str):
 
 
 def _get_value(eval_stat: BucketedEvalStats, category_name: str) -> float:
-    return eval_stat.get_dynamic_metacatagory_performance()[category_name]
+    dynamic_performances = eval_stat.get_dynamic_metacatagory_performance()
+    assert (
+        category_name in dynamic_performances
+    ), f"Category {category_name} not found in {eval_stat.name}'s keys: {dynamic_performances.keys()}"
+    return dynamic_performances[category_name]
+
+
+def _get_dynamic_keys(eval_stats: List[BucketedEvalStats]) -> list[str]:
+    intersected_name_set = set(eval_stats[0].get_dynamic_metacatagory_performance().keys())
+    for eval_stat in eval_stats:
+        # Intersect with the set of keys of the current eval_stat
+        current_set = set(eval_stat.get_dynamic_metacatagory_performance().keys())
+        intersected_name_set = intersected_name_set.intersection(current_set)
+
+    return sorted(intersected_name_set)
 
 
 def plot_per_metacatagory_bar(eval_stats: List[BucketedEvalStats], save_folder: Path):
-    fig_size = 5
+    fig_size = 5.5
     eval_stats = sorted(eval_stats)
 
-    category_names = sorted(eval_stats[0].get_dynamic_metacatagory_performance().keys())
+    category_names = _get_dynamic_keys(eval_stats)
 
     for category_idx, category_name in enumerate(category_names):
         plt.gcf().set_size_inches(fig_size / 2, fig_size / 1.6 / 2)
 
-        bar_width = 0.1  # Define the width of each bar
-
+        bar_width = 1  # Define the width of each bar
+        bar_gap = 0.3  # Define the gap between each bar
         for idx, eval_stat in enumerate(eval_stats):
             value = _get_value(eval_stat, category_name)
-            y_position = centered_barchart_offset(idx, len(eval_stats), bar_width)
+            y_position = centered_barchart_offset(idx, len(eval_stats), bar_width, bar_gap)
+
+            bar_color = (
+                color(len(eval_stats) - idx - 1, len(eval_stats))
+                if not eval_stat.is_supervised()
+                else "black"
+            )
 
             plt.bar(
                 y_position,
                 value,
                 width=bar_width,
-                color=color(len(eval_stats) - idx - 1, len(eval_stats)),
-                hatch=_get_hatching(eval_stat),
+                color=bar_color,
                 edgecolor="black",
                 label=eval_stat.name,
             )
@@ -49,13 +68,31 @@ def plot_per_metacatagory_bar(eval_stats: List[BucketedEvalStats], save_folder: 
         # Add axis labels for each bar based on metacatagory
         plt.xticks([], [])
         plt.ylim(0, 1)
-        print
+
+        # Add the numerical value to the plot at the bottom of the bar
+        for idx, eval_stat in enumerate(eval_stats):
+            y_position = centered_barchart_offset(idx, len(eval_stats), bar_width, bar_gap)
+            value = _get_value(eval_stat, category_name)
+            plt.text(
+                y_position,
+                value - 0.07,
+                f"{value:.4f}",
+                ha="center",
+                va="baseline",
+                rotation=90,
+                color="black" if not eval_stat.is_supervised() else "white",
+                # set the font size to 2
+                fontsize=2,
+            )
+
+        # Add the category name to the plot
         if "CAR" in category_name or "OTHER_VEHICLES" in category_name:
             # Plot the name of the method vertically above the bar, rotated 90 degrees
             for idx, eval_stat in enumerate(eval_stats):
+                y_position = centered_barchart_offset(idx, len(eval_stats), bar_width, bar_gap)
                 value = _get_value(eval_stat, category_name)
                 plt.text(
-                    centered_barchart_offset(idx, len(eval_stats), bar_width),
+                    y_position,
                     value + 0.03,
                     eval_stat.name,
                     ha="center",
@@ -70,4 +107,4 @@ def plot_per_metacatagory_bar(eval_stats: List[BucketedEvalStats], save_folder: 
         if not ("WHEELED_VRU" in category_name or "OTHER_VEHICLES" in category_name):
             plt.ylabel("Dynamic Normalized EPE")
 
-        savefig(save_folder, f"per_metacatagory_bar_{_clean_name(category_name)}")
+        savefig(save_folder, f"per_metacatagory_bar_{_clean_name(category_name).replace(' ', '_')}")

@@ -7,6 +7,7 @@ from paper_figures.figs_gigachad.fig_gigachad_ablation import plot_ablation_barc
 from paper_figures.figs_gigachad.fig_dynamic_norm_epe_bar import (
     plot_dynamic_norm_epe_bar,
     plot_dynamic_norm_epe_bar_black,
+    plot_dynamic_norm_epe_bar_black_fixed_width_bar,
 )
 from paper_figures.figs_gigachad.fig_per_metacatagory_bar import plot_per_metacatagory_bar
 
@@ -54,8 +55,8 @@ gigachad_val_depth_ablations = [
 ]
 
 gigachad_encoding_ablations = [
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD + Time", "gigachad_depth8"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Fouriter", "gigachad_fourtier"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD", "gigachad_depth8"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Fouriter Time", "gigachad_fourtier"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD SinC", "gigachad_sinc"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Gaussian", "gigachad_gaussian"),
 ]
@@ -71,13 +72,14 @@ gigachad_length_ablations = [
 
 gigachad_loss_ablations = [
     BucketedEvalStats(av2_class_val_data_root_dir, "NSFP (Len 2)", "nsfp_seq_len_2"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "NTP (Len 20)", "ntp_seq_len_20"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD No $k$ Step", "gigachad_no_k_step"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD No Cycle", "gigachad_no_cycle"),
     BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Full", "gigachad_depth8"),
     
 ]
 
-class_bucketed_eval_stats = [
+av2_class_bucketed_eval_stats = [
     BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD (Ours)", "gigachad_16"),
     BucketedEvalStats(av2_class_test_data_root_dir, "Flow4D", "flow4d"),
     BucketedEvalStats(av2_class_test_data_root_dir, "TrackFlow", "trackflow"),
@@ -99,13 +101,14 @@ class_bucketed_eval_stats = [
 waymo_class_bucketed_eval_stats = [
     BucketedEvalStats(waymo_class_val_data_root_dir, "ZeroFlow 1x", "zeroflow"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "FastFlow3D", "fastflow3d"),
+    BucketedEvalStats(waymo_class_val_data_root_dir, "NSFP", "nsfp"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "GIGACHAD", "gigachad"),
 ]
 
 # fmt: on
 
 # gigachad_ablations.sort(reverse=True)
-class_bucketed_eval_stats.sort(reverse=True)
+av2_class_bucketed_eval_stats.sort(reverse=True)
 waymo_class_bucketed_eval_stats.sort(reverse=True)
 
 set_font(6)
@@ -131,10 +134,18 @@ plot_ablation_barchart(gigachad_loss_ablations, av2_class_val_save_dir / "losses
 # Encoding ablations
 plot_ablation_barchart(gigachad_encoding_ablations, av2_class_val_save_dir / "encodings")
 
+plot_per_metacatagory_bar(av2_class_bucketed_eval_stats, av2_class_test_save_dir)
 plot_per_metacatagory_bar(gigachad_val_depth_ablations, av2_class_val_save_dir)
 
-plot_dynamic_norm_epe_bar(class_bucketed_eval_stats, av2_class_test_save_dir)
-plot_dynamic_norm_epe_bar_black(class_bucketed_eval_stats, av2_class_test_save_dir)
+
+plot_dynamic_norm_epe_bar(av2_class_bucketed_eval_stats, av2_class_test_save_dir)
+# plot_dynamic_norm_epe_bar_black(av2_class_bucketed_eval_stats, av2_class_test_save_dir)
+plot_dynamic_norm_epe_bar_black_fixed_width_bar(
+    av2_class_bucketed_eval_stats, av2_class_test_save_dir
+)
 
 plot_dynamic_norm_epe_bar(waymo_class_bucketed_eval_stats, waymo_class_val_save_dir)
-plot_dynamic_norm_epe_bar_black(waymo_class_bucketed_eval_stats, waymo_class_val_save_dir)
+# plot_dynamic_norm_epe_bar_black(waymo_class_bucketed_eval_stats, waymo_class_val_save_dir)
+plot_dynamic_norm_epe_bar_black_fixed_width_bar(
+    waymo_class_bucketed_eval_stats, waymo_class_val_save_dir
+)
