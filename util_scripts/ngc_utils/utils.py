@@ -80,7 +80,18 @@ class NCGJobCategories:
 
 
 def _run_remote_command(client: paramiko.SSHClient, command: str) -> tuple[str, str, int]:
-    stdin, stdout, stderr = client.exec_command(command)
+    while True:
+        try:
+            _, stdout, stderr = client.exec_command(command)
+            break
+        except paramiko.SSHException as ssh_exception:
+            # Reconnect and try again
+            logging.error(f"SSH exception occurred: {str(ssh_exception)}")
+            logging.info("Sleeping for 30 seconds before reconnecting...")
+            time.sleep(30)
+            logging.info("Reconnecting to SSH client...")
+            client.connect(**client.get_transport().getpeername())
+
     exit_status = stdout.channel.recv_exit_status()
     return stdout.read().decode(), stderr.read().decode(), exit_status
 
@@ -198,9 +209,14 @@ def get_launch_commands(
 
 def get_job_states(client: paramiko.SSHClient) -> dict[str, NGCJobState]:
     command = "ngc batch list --duration=7D --column=name --column=status --column=duration --format_type csv"
-    stdout, stderr, exit_status = _run_remote_command(client, command)
-    if exit_status != 0:
-        raise RuntimeError(f"Failed to get job status. Error: {stderr}")
+
+    exit_status = 1
+    while exit_status != 0:
+        stdout, stderr, exit_status = _run_remote_command(client, command)
+        if exit_status != 0:
+            print(f"Failed to get job states. Error: {stderr}")
+            print("Retrying in 30 seconds...")
+            time.sleep(30)
     df = pd.read_csv(io.StringIO(stdout), header=0)
     # Convert the names of the columns to lowercase
     df = df.rename(columns={col: col.lower() for col in df.columns})
