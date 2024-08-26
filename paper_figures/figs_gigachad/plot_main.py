@@ -42,7 +42,8 @@ gigachad_test_depth_ablations = [
     BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 10", "gigachad_10"),
     BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 12", "gigachad_12"),
     BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 14", "gigachad_14"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 16", "gigachad_16"),    
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 16", "gigachad_16"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 18", "gigachad_18"),
 ]
 
 gigachad_val_depth_ablations = [
@@ -83,7 +84,7 @@ gigachad_loss_ablations = [
 ]
 
 av2_class_bucketed_eval_stats = [
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD (Ours)", "gigachad_16"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD (Ours)", "gigachad_18"),
     BucketedEvalStats(av2_class_test_data_root_dir, "Flow4D", "flow4d"),
     BucketedEvalStats(av2_class_test_data_root_dir, "TrackFlow", "trackflow"),
     BucketedEvalStats(av2_class_test_data_root_dir, "DeFlow++", "deflowpp"),

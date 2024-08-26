@@ -100,6 +100,10 @@ class BaseCallbackVisualizer(O3DVisualizer):
         vis.get_view_control().convert_from_pinhole_camera_parameters(camera, allow_arbitrary=True)
         print(f"Loaded camera pose from {camera_path}")
 
+    def _setup_point_size(self, vis):
+        print("Setting point size to", self.point_size)
+        vis.get_render_option().point_size = self.point_size
+
     def run(
         self,
         vis=o3d.visualization.VisualizerWithKeyCallback(),
@@ -107,6 +111,7 @@ class BaseCallbackVisualizer(O3DVisualizer):
     ):
         self._print_instructions()
         vis.create_window()
+        self._setup_point_size(vis)
         vis.get_render_option().background_color = (1, 1, 1)
         vis.get_view_control().set_up([0, 0, 1])
         self._register_callbacks(vis)

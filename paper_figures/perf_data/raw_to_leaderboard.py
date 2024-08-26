@@ -75,6 +75,9 @@ process(root_folder / "gigachad_depth18_raw.json", root_folder / "gigachad_depth
 process(root_folder / "gigachad_depth20_raw.json", root_folder / "gigachad_depth20.json", is_supervised=False)
 process(root_folder / "gigachad_depth22_raw.json", root_folder / "gigachad_depth22.json", is_supervised=False)
 
+process(root_folder / "gigachad_depth18_run2_raw.json", root_folder / "gigachad_depth18_run2.json", is_supervised=False)
+process(root_folder / "gigachad_depth18_run3_raw.json", root_folder / "gigachad_depth18_run3.json", is_supervised=False)
+
 process(root_folder / "gigachad_seq_len_50_raw.json", root_folder / "gigachad_seq_len_50.json", is_supervised=False)
 process(root_folder / "gigachad_seq_len_20_raw.json", root_folder / "gigachad_seq_len_20.json", is_supervised=False)
 process(root_folder / "gigachad_seq_len_5_raw.json", root_folder / "gigachad_seq_len_5.json", is_supervised=False)
