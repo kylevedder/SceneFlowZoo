@@ -6,7 +6,7 @@ save_output_folder = "/efs/argoverse2/train_liu_20204_flow_feather/"
 
 SEQUENCE_LENGTH = 3
 
-model = dict(name="Liu2024Model", args=dict())
+model = dict(name="Liu2024OptimizationLoop", args=dict())
 
 epochs = 20
 learning_rate = 2e-6

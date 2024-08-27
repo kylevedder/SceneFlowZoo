@@ -106,7 +106,8 @@ waymo_class_bucketed_eval_stats = [
     BucketedEvalStats(waymo_class_val_data_root_dir, "ZeroFlow 1x", "zeroflow"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "FastFlow3D", "fastflow3d"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "NSFP", "nsfp"),
-    BucketedEvalStats(waymo_class_val_data_root_dir, "GIGACHAD (Ours)", "gigachad"),
+    BucketedEvalStats(waymo_class_val_data_root_dir, "FastNSF", "fast_nsf"),
+    BucketedEvalStats(waymo_class_val_data_root_dir, "GIGACHAD (Ours, Depth 8)", "gigachad"),
 ]
 
 # fmt: on

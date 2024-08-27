@@ -95,5 +95,6 @@ process(root_folder / "fastflow3d_raw.json", root_folder / "fastflow3d.json", is
 process(root_folder / "gigachad_raw.json", root_folder / "gigachad.json", is_supervised=False)
 process(root_folder / "zeroflow_raw.json", root_folder / "zeroflow.json", is_supervised=False)
 process(root_folder / "nsfp_raw.json", root_folder / "nsfp.json", is_supervised=False)
+process(root_folder / "fast_nsf_raw.json", root_folder / "fast_nsf.json", is_supervised=False)
 
 # fmt: on
