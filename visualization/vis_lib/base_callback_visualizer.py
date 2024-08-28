@@ -7,9 +7,15 @@ import matplotlib
 
 class BaseCallbackVisualizer(O3DVisualizer):
 
-    def __init__(self, screenshot_path: Path = Path() / "screenshots", point_size: float = 0.1):
-        super().__init__(point_size=point_size)
+    def __init__(
+        self,
+        screenshot_path: Path = Path() / "screenshots",
+        point_size: float = 0.1,
+        add_world_frame: bool = True,
+    ):
+        super().__init__(point_size=point_size, add_world_frame=add_world_frame)
         self.screenshot_path = screenshot_path
+        self.initial_geometry_list = []
 
     def _get_screenshot_path(self) -> Path:
         return self.screenshot_path / f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.png"
@@ -115,6 +121,7 @@ class BaseCallbackVisualizer(O3DVisualizer):
         vis.get_render_option().background_color = (1, 1, 1)
         vis.get_view_control().set_up([0, 0, 1])
         self._register_callbacks(vis)
+        self.initial_geometry_list = self.geometry_list.copy()
         self.draw_everything(vis, reset_view=True)
         if camera_pose_path is not None:
             self.load_camera_pose(vis, camera_pose_path)

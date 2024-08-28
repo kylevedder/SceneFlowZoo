@@ -69,8 +69,9 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         point_size: float = 0.1,
         step_size: int = 1,
         color_map_name: str = "default",
+        add_world_frame: bool = False,
     ):
-        super().__init__(point_size=point_size)
+        super().__init__(point_size=point_size, add_world_frame=add_world_frame)
         self.sequence_id = sequence_id
         self.name_lst = [name for name, _ in name_sequence_list]
         self.sequence_lst = [sequence for _, sequence in name_sequence_list]
@@ -160,6 +161,7 @@ class SequenceVisualizer(BaseCallbackVisualizer):
 
     def draw_everything(self, vis, reset_view=False):
         self.geometry_list.clear()
+        self.geometry_list.extend(self.initial_geometry_list)
         print(
             f"Vis State: {self.get_current_method_name()}, frame {self.vis_state.frame_idx} - {self.vis_state.frame_idx + self.get_current_subsequence_length() - 1}"
         )
