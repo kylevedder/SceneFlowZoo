@@ -1,0 +1,354 @@
+#1725045947
+ls
+#1725045948
+pwd
+#1725046070
+ls /efs/orbbec_pointclouds/
+#1725046168
+python paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py 
+#1725046171
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py 
+#1725046177
+python2 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py 
+#1725046187
+which python3
+#1725046193
+python3
+#1725046220
+source /opt/ros/noetic/setup.bash
+#1725046221
+python3
+#1725046270
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py 
+#1725046296
+python3 --version
+#1725046335
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py 
+#1725046356
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag 
+#1725048208
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725050228
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-nonspinning.bag /efs/orbbec_pointclouds/pointclouds-nonspinning-colored/
+#1725051936
+source /opt/ros/noetic/setup.bash
+#1725051950
+roslaunch paper_figures/figs_gigachad/rosbag_processing start_nodelet_manager.launch
+#1725051957
+roslaunch paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725051974
+screen
+#1725052048
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-nonspinning.bag /efs/orbbec_pointclouds/pointclouds-nonspinning-colored/
+#1725052062
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725052816
+screen -r
+#1725052823
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725053825
+ls /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725053857
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725052006
+roslaunch paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725053886
+screen -r
+#1725053892
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725053939
+rostopic list
+#1725053965
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725053988
+rostopic list -v
+#1725054044
+nano paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725053995
+screen -r
+#1725054065
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725054094
+screen -r
+#1725054105
+rostopic list -v
+#1725054061
+roslaunch paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725054127
+screen -r
+#1725054153
+rostopic list -v
+#1725054159
+screen -r
+#1725054197
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725054591
+screen -r
+#1725054860
+screen
+#1725054874
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725054868
+roslaunch paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725054905
+screen -r
+#1725054928
+rosbag info /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055006
+screen -r
+#1725055099
+rosbag info /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055427
+screen -r
+#1725055435
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055442
+screen -r
+#1725055497
+rostopic list -v
+#1725055510
+source /opt/ros/noetic/setup.bash
+#1725055512
+rostopic list -v
+#1725055520
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055560
+screen -r
+#1725055618
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055615
+rostopic echo /depth_registered/points
+#1725055637
+rostopic echo 
+#1725055640
+rostopic echo -a
+#1725055659
+rostopic echo -a /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055722
+rosbag info /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055770
+rostopic echo /camera/depth/camera_info
+#1725055772
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055803
+screen -r
+#1725055808
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055798
+rostopic echo depth_registered/camera_info 
+#1725055829
+rostopic list -v
+#1725055815
+screen -r
+#1725055843
+rosbag info /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055924
+screen -r
+#1725055937
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725055934
+rostopic echo depth_registered/camera_info 
+#1725055952
+rostopic list -v
+#1725055966
+rosmaster 
+#1725055962
+screen -r
+#1725055979
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725056005
+screen
+#1725056024
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725056045
+screen -r
+#1725056014
+roslaunch paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725056047
+screen -r 1599.pts-0.shaperotator
+#1725055971
+roscore
+#1725056054
+screen -r 
+#1725056136
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725056117
+rqt_graph
+#1725056110
+roslaunch paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725056191
+rostopic list -v
+#1725056268
+rosrun nodelet nodelet list
+#1725056286
+ls /home/
+#1725056288
+ls /home/user/
+#1725056297
+mkdir -p /home/k/.ros
+#1725056320
+rostopic list -v
+#1725056176
+screen -r 
+#1725056339
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725056375
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725056380
+screen -r
+#1725056395
+rostopic echo /depth_registered/camera_info
+#1725056403
+rostopic echo /depth_registered/camera_info /camera/depth/image_raw
+#1725056406
+rostopic echo /camera/depth/image_raw
+#1725056410
+rostopic list -v
+#1725056386
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725056422
+screen -r
+#1725056467
+rostopic hz /depth_registered/points
+#1725056476
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725056495
+rostopic hz /depth_registered/camera_info
+#1725056533
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725056537
+screen
+#1725056569
+source /opt/ros/noetic/setup.bash
+#1725056572
+rostopic hz /depth_registered/camera_info
+#1725056548
+rosbag play /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725056544
+roslaunch paper_figures/figs_gigachad/rosbag_processing/start_nodelet_manager.launch
+#1725056701
+screen -r
+#1725056714
+rosparam set /use_sim_time true
+#1725056726
+roslaunch openni_launch openni.launch load_driver:=false
+#1725056875
+bash paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725056916
+screen -r
+#1725056921
+killall screen
+#1725057001
+bash paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725057005
+screen -r
+#1725057008
+screen -r 71.openni_launch
+#1725057034
+source /opt/ros/noetic/setup.bash
+#1725057038
+rostopic -list
+#1725057042
+rostopic list -v
+#1725057074
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725057101
+rostopic hz /camera/depth_registered/points
+#1725057162
+killall screen
+#1725057165
+bash paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725057171
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725057251
+screen -r
+#1725057254
+screen -r 510.roscore
+#1725057256
+screen -r 
+#1725057260
+screen -r 541.openni_launch
+#1725057332
+killall screen
+#1725057335
+bash paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725057348
+rostopic list -v
+#1725057370
+rostopic hz /camera/depth_registered/disparity
+#1725057342
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725057396
+rosbag info /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725057378
+rostopic hz /camera/depth/image_raw
+#1725057479
+bash paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725057500
+rostopic hz /camera/depth/image_raw
+#1725057503
+source /opt/ros/noetic/setup.bash
+#1725057504
+rostopic hz /camera/depth/image_raw
+#1725057517
+ostopic hz /camera/depth_registered/points
+#1725057496
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725057543
+echo $ROS_IP
+#1725057555
+killall screen
+#1725057564
+source paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725057518
+rostopic hz /camera/depth_registered/points
+#1725057582
+rostopic hz /camera/depth/image_raw
+#1725057599
+rostopic list -v
+#1725057570
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725057621
+rostopic hz /clock
+#1725057639
+rostopic hz /camera/depth/points
+#1725058001
+killall screen
+#1725058004
+source paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725058013
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725058028
+rostopic hz /camera/depth_registered/points
+#1725058075
+killall screen
+#1725058093
+source paper_figures/figs_gigachad/rosbag_processing/startup.sh 
+#1725058103
+rostopic list -v
+#1725058117
+rostopic list /camera/depth/camera_info
+#1725058123
+rsotpic echo /camera/depth/camera_info
+#1725058128
+rostpic echo /camera/depth/camera_info
+#1725058105
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725058362
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process_wrong.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725058132
+rostopic echo /camera/depth/camera_info
+#1725059010
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag -r 0.1
+#1725059007
+rostopic echo /camera/rgb/camera_info
+#1725059021
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag 
+#1725059031
+rosbag info /efs/orbbec_pointclouds/pointclouds-spinning.bag
+#1725059041
+rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag 
+#1725059038
+rostopic echo /camera/color/camera_info
+#1725059211
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process_wrong.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/

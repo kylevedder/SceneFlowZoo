@@ -3,6 +3,7 @@ from .model_state_dicts import OptimCheckpointStateDicts
 from pathlib import Path
 from mmengine import Config
 from bucketed_scene_flow_eval.utils import load_json
+from bucketed_scene_flow_eval.interfaces import AbstractDataset
 from dataloaders import TorchFullFrameInputSequence, BaseDataset
 import tempfile
 import dataloaders
@@ -10,17 +11,25 @@ from core_utils.checkpointing import setup_model
 import torch
 from models import BaseOptimizationModel
 from models.whole_batch_optimization import WholeBatchOptimizationLoop
+from dataclasses import dataclass
 
 
+@dataclass
+class SequenceInfo:
+    sequence_id: str
+    sequence_length: int
+
+
+@dataclass
 class OptimCheckpointModelLoader:
 
-    def __init__(
-        self, root_config: Path, checkpoint: Path, sequence_id: str, sequence_length: int
-    ) -> None:
-        self.root_config = root_config
-        self.checkpoint = checkpoint
-        self.sequence_id = sequence_id
-        self.sequence_length = sequence_length
+    root_config: Path
+    checkpoint: Path
+    sequence_info: SequenceInfo | None
+
+    def __post_init__(self):
+        assert self.root_config.exists(), f"Root config {self.root_config} does not exist"
+        assert self.checkpoint.exists(), f"Checkpoint {self.checkpoint} does not exist"
 
     @staticmethod
     def from_checkpoint_dirs(
@@ -61,9 +70,15 @@ class OptimCheckpointModelLoader:
         return OptimCheckpointModelLoader(
             root_config,
             full_checkpoint,
-            sequence_id,
-            sequence_id_to_length[sequence_id],
+            SequenceInfo(
+                sequence_id,
+                sequence_id_to_length[sequence_id],
+            ),
         )
+
+    @staticmethod
+    def from_checkpoint(root_config: Path, checkpoint: Path) -> "OptimCheckpointModelLoader":
+        return OptimCheckpointModelLoader(root_config, checkpoint, None)
 
     def monkey_patch_model_weights(
         self,
@@ -87,12 +102,15 @@ class OptimCheckpointModelLoader:
             if not key.startswith("model.encoder_plus_nn_layers")
         }
 
-    def load_model(self) -> tuple[BaseOptimizationModel, TorchFullFrameInputSequence]:
+    def load_model(
+        self,
+    ) -> tuple[BaseOptimizationModel, TorchFullFrameInputSequence, AbstractDataset]:
         # Load the checkpoint
         model_state_dicts = OptimCheckpointStateDicts.from_checkpoint(self.checkpoint)
 
         config = self._make_custom_config()
         dataset_sequence, base_dataset = self._load_dataset_info(config)
+        abstract_dataset: AbstractDataset = base_dataset.dataset
 
         model_wrapper = setup_model(config, base_dataset.evaluator(), None)
         model_loop: WholeBatchOptimizationLoop = model_wrapper.model
@@ -108,7 +126,7 @@ class OptimCheckpointModelLoader:
                 model.state_dict(), model_state_dicts.model
             )
             model.load_state_dict(monkey_patched_weights)
-        return model, dataset_sequence
+        return model, dataset_sequence, abstract_dataset
 
     def _load_dataset_info(self, cfg: Config) -> tuple[TorchFullFrameInputSequence, BaseDataset]:
         dataset = dataloaders.construct_dataset(cfg.test_dataset.name, cfg.test_dataset.args)
@@ -118,18 +136,21 @@ class OptimCheckpointModelLoader:
     def _make_custom_config(
         self,
     ) -> Config:
+        if self.sequence_info is None:
+            return Config.fromfile(self.root_config)
+
         custom_cfg_content = f"""
 _base_="{self.root_config.absolute()}"
 test_dataset=dict(
     args=dict(
-        log_subset=["{self.sequence_id}"],
-        subsequence_length={self.sequence_length},
+        log_subset=["{self.sequence_info.sequence_id}"],
+        subsequence_length={self.sequence_info.sequence_length},
         use_cache=False,
     )
 )
 """
         with tempfile.TemporaryDirectory() as tempdir:
             path = Path(tempdir)
-            custom_cfg = path / f"{self.root_config.stem}_{self.sequence_id}.py"
+            custom_cfg = path / f"{self.root_config.stem}_{self.sequence_info.sequence_id}.py"
             custom_cfg.write_text(custom_cfg_content)
             return Config.fromfile(custom_cfg)

@@ -7,4 +7,8 @@ mkdir -p /home/user/.cache/torch/hub/;
 ln -s /payload_files/cache/torch/hub/checkpoints /home/user/.cache/torch/hub/;
 ln -s /payload_files/cache/torch/hub/main.zip /home/user/.cache/torch/hub/main.zip;
 touch /home/user/hello_world.txt;
+# If  /opt/ros/noetic/setup.bash exists, source it
+if [ -f "/opt/ros/noetic/setup.bash" ]; then
+  source /opt/ros/noetic/setup.bash;
+fi
 bash

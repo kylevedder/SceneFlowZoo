@@ -3,6 +3,7 @@ from bucketed_scene_flow_eval.datasets import construct_dataset
 
 from pathlib import Path
 import argparse
+import numpy as np
 
 from visualization.vis_lib import SequenceVisualizer
 
@@ -57,6 +58,12 @@ def load_sequences(
         )
         assert len(dataset) > 0, f"No sequences found in {sequence_data_folder}"
         sequence = dataset[0]
+
+        visible_pcs = [frame.pc.global_pc.points for frame in sequence]
+        visible_pcs_array = np.concatenate(visible_pcs, axis=0)
+        # Print mean of the visible point cloud
+        print("Mean of the visible point cloud: ", np.mean(visible_pcs_array, axis=0))
+
         return sequence
 
     sequences = [load_sequence(flow_folder) for flow_folder in flow_folders]

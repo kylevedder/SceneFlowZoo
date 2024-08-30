@@ -11,9 +11,12 @@ class BaseCallbackVisualizer(O3DVisualizer):
         self,
         screenshot_path: Path = Path() / "screenshots",
         point_size: float = 0.1,
+        line_width: float = 1.0,
         add_world_frame: bool = True,
     ):
-        super().__init__(point_size=point_size, add_world_frame=add_world_frame)
+        super().__init__(
+            point_size=point_size, line_width=line_width, add_world_frame=add_world_frame
+        )
         self.screenshot_path = screenshot_path
         self.initial_geometry_list = []
 

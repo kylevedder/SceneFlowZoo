@@ -2,7 +2,7 @@ has_labels = False
 
 SEQUENCE_LENGTH = 69
 
-test_dataset_root = "/efs/orbbec_pointclouds/pointclouds-spinning/"
+test_dataset_root = "/efs/orbbec_pointclouds/pointclouds-spinning-colored/"
 save_output_folder = "/efs/orbbec_pointclouds/pointclouds-spinning_flow/"
 
 
@@ -25,8 +25,8 @@ train_dataset = dict(
         dataset_name="OrbbecAstra",
         root_dir=test_dataset_root,
         flow_dir=None,
-        max_pc_points=150000,
-        allow_pc_slicing=True,
+        max_pc_points=307200,
+        allow_pc_slicing=False,
         subsequence_length=SEQUENCE_LENGTH,
     ),
 )

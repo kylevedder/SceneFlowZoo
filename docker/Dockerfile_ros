@@ -1,0 +1,28 @@
+FROM osrf/ros:noetic-desktop-focal
+
+# install ros packages
+RUN apt-get update && apt-get install -y ros-noetic-desktop-full=1.5.0-1* ros-noetic-rosbag
+# install pip
+RUN apt-get install -y python3-pip
+RUN python3 -m pip install tqdm
+
+RUN apt install -y screen
+RUN apt install -y ros-noetic-openni-launch
+RUN apt install -y psmisc
+
+
+# Setup environment to support running as non-root user
+ENV HOME=/home/user
+RUN mkdir /payload_files
+RUN chmod 777 /payload_files
+COPY bashrc /payload_files/bashrc
+
+
+WORKDIR /project
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 777 /entrypoint.sh
+RUN chmod 777 /home
+
+
+WORKDIR /project
+ENTRYPOINT ["/entrypoint.sh"]
