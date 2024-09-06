@@ -70,9 +70,13 @@ def main():
 
         with zipfile.ZipFile(args.output_zip, "w") as zipf:
             for job_dir in job_dirs:
-                latest_checkpoint, best_checkpoint, all_checkpoints = (
-                    get_latest_and_best_checkpoint(job_dir)
-                )
+                try:
+                    latest_checkpoint, best_checkpoint, all_checkpoints = (
+                        get_latest_and_best_checkpoint(job_dir)
+                    )
+                except Exception as e:
+                    print(f"Error processing {job_dir}: {e}")
+                    continue
 
                 def add_checkpoint_if_exists(checkpoint: Path | None):
                     if not checkpoint:
