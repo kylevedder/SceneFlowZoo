@@ -60,7 +60,7 @@ def visualize(
     camera_pose: Path,
 ):
     base_dataset_full_sequence = base_dataset[full_sequence.sequence_idx]
-    vis = TrajectoryVisualizer(sequence_id="", point_size=3.0)
+    vis = TrajectoryVisualizer(sequence_id="", point_size=3.0, line_width=1.0)
     vis.geometry_list.clear()
     color_list = vis._frame_list_to_color_list(len(full_sequence), "zebra")
 

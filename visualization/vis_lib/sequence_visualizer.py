@@ -67,11 +67,14 @@ class SequenceVisualizer(BaseCallbackVisualizer):
         frame_idx: int = 0,
         subsequence_lengths: list[int] = [2],
         point_size: float = 0.1,
+        line_width: float = 1.0,
         step_size: int = 1,
         color_map_name: str = "default",
         add_world_frame: bool = False,
     ):
-        super().__init__(point_size=point_size, add_world_frame=add_world_frame)
+        super().__init__(
+            point_size=point_size, line_width=line_width, add_world_frame=add_world_frame
+        )
         self.sequence_id = sequence_id
         self.name_lst = [name for name, _ in name_sequence_list]
         self.sequence_lst = [sequence for _, sequence in name_sequence_list]

@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 
-def get_latest_and_best_checkpoint(job_dir: Path) -> tuple[Path | None, Path | None]:
+def get_latest_and_best_checkpoint(job_dir: Path) -> tuple[Path | None, Path | None, list[Path]]:
 
     def has_valid_dataset_idx_dir(timestamp_dir: Path) -> bool:
         has_dataset_dir = any(
@@ -34,13 +34,14 @@ def get_latest_and_best_checkpoint(job_dir: Path) -> tuple[Path | None, Path | N
 
     latest_checkpoint = max(pth_files, key=get_epoch_number)
     best_checkpoint = latest_timestamp_dir / "dataset_idx_0000000000" / "best_weights.pth"
+    all_checkpoints = sorted(pth_files, key=get_epoch_number)
 
     if not latest_checkpoint.exists():
         latest_checkpoint = None
     if not best_checkpoint.exists():
         best_checkpoint = None
 
-    return latest_checkpoint, best_checkpoint
+    return latest_checkpoint, best_checkpoint, all_checkpoints
 
 
 def main():
@@ -49,6 +50,9 @@ def main():
     )
     parser.add_argument("input_path", type=Path, help="Input directory path")
     parser.add_argument("-o", "--output_zip", type=Path, help="Output zip file name (optional)")
+    parser.add_argument(
+        "--all", action="store_true", help="Include all checkpoints, not just the latest"
+    )
     args = parser.parse_args()
 
     if args.output_zip is None:
@@ -66,7 +70,9 @@ def main():
 
         with zipfile.ZipFile(args.output_zip, "w") as zipf:
             for job_dir in job_dirs:
-                latest_checkpoint, best_checkpoint = get_latest_and_best_checkpoint(job_dir)
+                latest_checkpoint, best_checkpoint, all_checkpoints = (
+                    get_latest_and_best_checkpoint(job_dir)
+                )
 
                 def add_checkpoint_if_exists(checkpoint: Path | None):
                     if not checkpoint:
@@ -76,7 +82,11 @@ def main():
                     zipf.write(checkpoint, zip_path)
                     print(f"Added {zip_path} to {args.output_zip}")
 
-                add_checkpoint_if_exists(latest_checkpoint)
+                if args.all:
+                    for checkpoint in all_checkpoints:
+                        add_checkpoint_if_exists(checkpoint)
+                else:
+                    add_checkpoint_if_exists(latest_checkpoint)
                 add_checkpoint_if_exists(best_checkpoint)
 
         print(f"Successfully created {args.output_zip}")

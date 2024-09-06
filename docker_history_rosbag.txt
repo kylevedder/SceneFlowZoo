@@ -352,3 +352,5 @@ rosbag play --clock /efs/orbbec_pointclouds/pointclouds-spinning.bag
 rostopic echo /camera/color/camera_info
 #1725059211
 python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process_wrong.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1725062877
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
