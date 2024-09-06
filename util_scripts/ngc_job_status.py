@@ -62,7 +62,8 @@ def main() -> None:
         print(f"An unexpected error occurred: {e}")
     finally:
         if "client" in locals():
-            client.close()
+            if client is not None:
+                client.close()
         sys.exit(1)
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import time
 import io
 import pandas as pd
-
+import subprocess
 
 @dataclass
 class LauchCommand:
@@ -50,7 +50,7 @@ class NGCJobState:
                 return state
         return f"UNKNOWN ({self.jobs[0].status})"
 
-    def kill_duplicate_jobs(self, client: paramiko.SSHClient) -> None:
+    def kill_duplicate_jobs(self, client: paramiko.SSHClient | None) -> None:
         # Ensure that there are not multiple jobs running or queued
         running_states = ["FINISHED_SUCCESS", "RUNNING", "QUEUED", "STARTING"]
         running_jobs = [job for job in self.jobs if job.status in running_states]
@@ -79,25 +79,42 @@ class NCGJobCategories:
     failed_jobs: list[LauchCommand]
 
 
-def _run_remote_command(client: paramiko.SSHClient, command: str) -> tuple[str, str, int]:
+def _run_remote_command(client: paramiko.SSHClient | None, command: str) -> tuple[str, str, int]:
     while True:
-        try:
-            _, stdout, stderr = client.exec_command(command)
-            break
-        except paramiko.SSHException as ssh_exception:
-            # Reconnect and try again
-            logging.error(f"SSH exception occurred: {str(ssh_exception)}")
-            logging.info("Sleeping for 30 seconds before reconnecting...")
-            time.sleep(30)
-            logging.info("Reconnecting to SSH client...")
-            client.connect(**client.get_transport().getpeername())
+        if client is not None:
+            try:
+                _, stdout, stderr = client.exec_command(command)
+                stdout = stdout.read().decode()
+                stderr = stderr.read().decode()
+                exit_status = stdout.channel.recv_exit_status()
+                break
+            except paramiko.SSHException as ssh_exception:
+                # Reconnect and try again
+                logging.error(f"SSH exception occurred: {str(ssh_exception)}")
+                logging.info("Sleeping for 30 seconds before reconnecting...")
+                time.sleep(30)
+                logging.info("Reconnecting to SSH client...")
+                client.connect(**client.get_transport().getpeername())
 
-    exit_status = stdout.channel.recv_exit_status()
-    return stdout.read().decode(), stderr.read().decode(), exit_status
+        else:
+            # Run with subprocess
+            try:
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                stdout = result.stdout
+                stderr = result.stderr
+                exit_status = 0
+                break
+            except Exception as e:
+                logging.info("Sleeping for 30 seconds before retrying...")
+                time.sleep(30)
+                pass
+
+    
+    return stdout, stderr, exit_status
 
 
 def launch_job(
-    client: paramiko.SSHClient,
+    client: paramiko.SSHClient | None,
     launch_command: str,
     max_retries: int,
     retry_delay: int,
@@ -122,7 +139,10 @@ def launch_job(
             time.sleep(retry_delay)
 
 
-def get_ssh_client(hostname: str) -> paramiko.SSHClient:
+def get_ssh_client(hostname: str) -> paramiko.SSHClient | None:
+    if hostname == "localhost":
+        return None
+
     client = paramiko.SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -171,7 +191,7 @@ def setup_logging() -> None:
 
 
 def get_launch_commands(
-    client: paramiko.SSHClient, launch_script: Path
+    client: paramiko.SSHClient | None, launch_script: Path
 ) -> tuple[str, dict[str, LauchCommand]]:
     tmp_file = Path("/tmp") / "launch_scripts" / launch_script.parent.name / launch_script.name
     # if tmp_file exists, delete it
@@ -185,13 +205,20 @@ def get_launch_commands(
 
     # SFTP the launch script to the tmp file from the remote machine
     print(f"Copying {expanded_launch_script} to {tmp_file}")
-    sftp = client.open_sftp()
-    try:
-        sftp.get(str(expanded_launch_script), str(tmp_file))
-        print(f"File successfully copied to {tmp_file}")
-    finally:
-        sftp.close()
+    if client is not None:
+        sftp = client.open_sftp()
+        try:
+            sftp.get(str(expanded_launch_script), str(tmp_file))
+            print(f"File successfully copied to {tmp_file}")
+        finally:
+            sftp.close()
+    else:
+        expanded_launch_script = Path(expanded_launch_script)
+        assert expanded_launch_script.exists()
+        # Copy the file locally
+        tmp_file.write_bytes(expanded_launch_script.read_bytes())
 
+    assert tmp_file.exists()
     # Load the file contents to memory
     with open(tmp_file, "r") as f:
         raw_commands = f.readlines()
@@ -207,7 +234,7 @@ def get_launch_commands(
     return job_prefix, job_name_to_command
 
 
-def get_job_states(client: paramiko.SSHClient) -> dict[str, NGCJobState]:
+def get_job_states(client: paramiko.SSHClient | None) -> dict[str, NGCJobState]:
     command = "ngc batch list --duration=7D --column=name --column=status --column=duration --format_type csv"
 
     exit_status = 1
