@@ -11,16 +11,16 @@ RUN apt install -y software-properties-common wget curl gpg gcc git make g++ unz
 # Install miniconda to /miniconda
 RUN curl -LO http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
 RUN bash Miniconda3-latest-Linux-x86_64.sh -p /miniconda -b
-RUN rm Miniconda3-latest-Linux-x86_64.sh
 ENV PATH=/miniconda/bin:${PATH}
 RUN conda update -y conda
-
+# Make sure conda-forge is the only channel. This is required because of a bug with libarchive and the mamba solver: https://github.com/conda/conda-libmamba-solver/issues/283#issuecomment-1949560105
+# Update all packages to make sure they're from conda-forge, not defaults
+RUN conda config --remove channels defaults && conda config --add channels conda-forge && conda update --all
 
 ENV FORCE_CUDA="1"
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0"
-RUN conda install -y numpy=1.26 python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
-# Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
-RUN conda install -y matplotlib=3.8
+
+RUN conda install -y numpy=1.26 python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath matplotlib=3.8 -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
 
 # Install PyTorch3d from source
 RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
@@ -36,7 +36,7 @@ RUN pip install yapf==0.40.1
 RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.5 imageio black isort nntime
 RUN pip install mmcv==2.2.0
 
-
+# Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
 RUN git clone https://github.com/kylevedder/nuscenes-devkit.git /nuscenes-devkit
 WORKDIR /nuscenes-devkit
 RUN pip install -e setup
