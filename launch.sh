@@ -12,7 +12,6 @@ docker run --gpus=all --rm -it \
  -v /tmp:/tmp \
  -v /sshfs_mounts/:/sshfs_mounts \
  -v `pwd`/docker_history.txt:/payload_files/bash_history \
- -u $(id -u):$(id -g) \
  -v /etc/passwd:/etc/passwd:ro \
  -v /etc/group:/etc/group:ro \
  -e DISPLAY=$DISPLAY \

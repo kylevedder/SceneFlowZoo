@@ -2,6 +2,7 @@ FROM kylevedder/cudagl:11.8.0-devel-ubuntu22.04
 SHELL ["/bin/bash", "-c"]
 # Set the timezone info because otherwise tzinfo blocks install
 # flow and ignores the non-interactive frontend command 🤬🤬🤬
+
 RUN ln -snf /usr/share/zoneinfo/America/New_York /etc/localtime && echo "/usr/share/zoneinfo/America/New_York" > /etc/timezone
 
 # Core system packages
@@ -15,7 +16,6 @@ RUN rm Miniconda3-latest-Linux-x86_64.sh
 ENV PATH=/miniconda/bin:${PATH}
 RUN conda update -y conda
 
-
 ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
 ENV FORCE_CUDA="1"
 RUN conda install -y numpy python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
@@ -25,7 +25,10 @@ RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
 WORKDIR /pytorch3d
 # Checkout 0.7.6
 RUN git checkout f34104cf6ebefacd7b7e07955ee7aaa823e616ac
-RUN conda install -y ninja -c conda-forge
+#RUN conda install -y ninja -c conda-forge
+#RUN conda install --solver=classic conda-forge::conda-libmamba-solver conda-forge::libmamba conda-forge::libmambapy conda-forge::libarchive
+RUN conda config --set solver classic && conda install -y ninja -c conda-forge
+
 ENV MAX_JOBS=48
 RUN pip install -v .
 
@@ -43,6 +46,14 @@ RUN pip install FastGeodis==1.0.5 --no-build-isolation
 
 RUN pip install bucketed-scene-flow-eval==2.0.10
 
+RUN pip install omegaconf
+RUN pip install hydra-core
+RUN pip install h5py
+RUN pip install av2==0.2.1
+RUN pip install dztimer
+RUN pip install spconv-cu117
+RUN pip install wandb
+RUN pip install lightning==2.0.1
 
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}
 

@@ -19,6 +19,7 @@ def construct_model(name: str, args: dict[str, Any]) -> BaseModel:
 
 from .constant_vector_baseline import ConstantVectorBaseline
 from .feed_forward.deflow import DeFlow
+from .feed_forward.flow4d import Flow4D
 from .feed_forward.fast_flow_3d import (
     FastFlow3D,
     FastFlow3DBucketedLoaderLoss,
@@ -35,6 +36,7 @@ from .mini_batch_optimization import GigachadNSFOptimizationLoop
 
 importable_models = [
     DeFlow,
+    Flow4D,
     FastFlow3D,
     ConstantVectorBaseline,
     NSFPForwardOnlyOptimizationLoop,
@@ -53,6 +55,7 @@ name_to_class_lookup = {cls.__name__.lower(): cls for cls in importable_models}
 
 __all__ = [
     "DeFlow",
+    "Flow4D", 
     "FastFlow3D",
     "FastFlow3DBucketedLoaderLoss",
     "FastFlow3DSelfSupervisedLoss",
