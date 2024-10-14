@@ -1,43 +1,42 @@
 _base_ = ["../../pseudoimage.py"]
 
-has_labels = True
-is_trainable = True
-
 epochs = 50
-learning_rate = 1e-3
+learning_rate = 2e-6
 save_every = 500
 validate_every = 500
 
-# Direct mapping from the original config
+SEQUENCE_LENGTH = 2
+
 model = dict(
-    name="Flow4D",
+    name="FastFlow3D",
     args=dict(
-        VOXEL_SIZE=[0.2, 0.2, 0.2],
-        POINT_CLOUD_RANGE=[-51.2, -51.2, -2.2, 51.2, 51.2, 4.2], 
-        feature_channels=128,
-        num_frames=5,
-        variation=1,
-        ),
+        VOXEL_SIZE={{_base_.VOXEL_SIZE}},
+        PSEUDO_IMAGE_DIMS={{_base_.PSEUDO_IMAGE_DIMS}},
+        POINT_CLOUD_RANGE={{_base_.POINT_CLOUD_RANGE}},
+        FEATURE_CHANNELS=32,
+        SEQUENCE_LENGTH=SEQUENCE_LENGTH,
+    ),
 )
 
 ######## TEST DATASET ########
 
 test_dataset_root = "/efs/argoverse2/val/"
-save_output_folder = "/efs/argoverse2/val_deflow_flow/"
 
 test_dataset = dict(
-    name="BucketedSceneFlowDataset",
+    name="Flow4DSceneFlowDataset",
     args=dict(
         dataset_name="Argoverse2CausalSceneFlow",
         root_dir=test_dataset_root,
         with_ground=False,
         with_rgb=False,
         eval_type="bucketed_epe",
-        eval_args=dict(),
+        expected_camera_shape=(194, 256, 3),
+        # point_cloud_range=None,
+        eval_args=dict(output_path="eval_results/bucketed_epe/nsfp_distillation_1x/"),
     ),
 )
 
-test_dataloader = dict(args=dict(batch_size=1, num_workers=8, shuffle=False, pin_memory=True))
+test_dataloader = dict(args=dict(batch_size=8, num_workers=8, shuffle=False, pin_memory=True))
 
 ######## TRAIN DATASET ########
 
@@ -49,9 +48,11 @@ train_dataset = dict(
         dataset_name="Argoverse2CausalSceneFlow",
         root_dir=train_sequence_dir,
         with_ground=False,
-        use_gt_flow=True,
+        use_gt_flow=False,
         with_rgb=False,
         eval_type="bucketed_epe",
+        expected_camera_shape=(194, 256, 3),
+        # point_cloud_range=None,
         eval_args=dict(),
     ),
 )

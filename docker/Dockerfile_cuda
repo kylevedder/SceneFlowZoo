@@ -18,7 +18,7 @@ RUN conda update -y conda
 
 ENV TORCH_CUDA_ARCH_LIST="Ampere;Turing;Pascal"
 ENV FORCE_CUDA="1"
-RUN conda install -y numpy python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
+RUN conda install -y numpy=1.23.5 python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
 
 # Install PyTorch3d from source
 RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
@@ -52,7 +52,6 @@ RUN pip install h5py
 RUN pip install av2==0.2.1
 RUN pip install dztimer
 RUN pip install spconv-cu117
-RUN pip install wandb
 RUN pip install lightning==2.0.1
 
 ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:${PYTHONPATH}

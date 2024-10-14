@@ -1,4 +1,10 @@
+"""
+Copied with modification from: https://github.com/dgist-cvlab/Flow4D
+"""
+
+
 import torch
+import dztimer
 from models import BaseModel, ForwardMode
 from typing import Any, List
 from dataloaders import (
@@ -8,11 +14,30 @@ from dataloaders import (
 from pytorch_lightning.loggers import Logger
 
 class Flow4D(BaseModel):
-    def __init__(self, cfg: Any, evaluator: Any = None):
+    def __init__(self, voxel_size = [0.2, 0.2, 0.2],
+                 point_cloud_range = [-51.2, -51.2, -2.2, 51.2, 51.2, 4.2],
+                 grid_feature_size = [512, 512, 32],
+                 num_frames = 5):
         super().__init__()
-        self.cfg = cfg
 
-        self.loss_fn = self.initialize_loss_fn(cfg)
+        point_output_ch = 16
+        voxel_output_ch = 16
+
+        self.num_frames = num_frames
+        print('voxel_size = {}, pseudo_dims = {}, input_num_frames = {}'.format(voxel_size, grid_feature_size, self.num_frames))
+
+        # TODO: Port 4D embedder, backbone network etc.
+        # self.embedder_4D = DynamicEmbedder_4D(voxel_size=voxel_size,
+        #                                 pseudo_image_dims=[grid_feature_size[0], grid_feature_size[1], grid_feature_size[2], num_frames], 
+        #                                 point_cloud_range=point_cloud_range,
+        #                                 feat_channels=point_output_ch)
+        
+        # self.network_4D = Network_4D(in_channel=point_output_ch, out_channel=voxel_output_ch)
+        # self.seperate_feat = Seperate_to_3D(num_frames)
+        # self.pointhead_3D = Point_head(voxel_feat_dim=voxel_output_ch, point_feat_dim=point_output_ch)
+
+        self.timer = dztimer.Timing()
+        self.timer.start("Total")
 
     def forward(
         self,
@@ -27,12 +52,7 @@ class Flow4D(BaseModel):
         Returns:
             A list (len=batch size) of BucketedSceneFlowOutputItem.
         """
-        if forward_mode == ForwardMode.TRAIN:
-            return self.train_forward(batched_sequence, logger)
-        elif forward_mode == ForwardMode.VAL:
-            return self.val_forward(batched_sequence, logger)
-        else:
-            raise ValueError(f"Unsupported forward mode: {forward_mode}")
+        raise NotImplementedError
 
     def loss_fn(
         self, 
@@ -40,42 +60,33 @@ class Flow4D(BaseModel):
         model_res: List[BucketedSceneFlowOutputSequence],
     ) -> dict[str, torch.Tensor]:
 
-        return self.loss_fn(input_batch, model_res)
+        raise NotImplementedError
 
     def _model_forward(
-        self, batch, batch_idx
-    ):
-        res_dict = self.model(batch)
+        self, batched_sequence: List[BucketedSceneFlowInputSequence]
+    ) -> list[BucketedSceneFlowOutputSequence]:
+        """
+        input: using the batch from dataloader, which is a dict
+               Detail: [pc0, pc1, pose0, pose1]
+        output: the predicted flow, pose_flow, and the valid point index of pc0
+        """
 
-        # compute loss
-        total_loss = 0.0
-        total_flow_loss = 0.0
+        batch_sizes = len(batched_sequence)
 
-        batch_sizes = len(batch["pose0"])
-        gt_flow = batch['flow'] #gt_flow = ego+motion
+        pose_flows = []
+        transform_pc0s = []
+        transform_pc_m_frames = []
 
-        pose_flows = res_dict['pose_flow'] #pose_flow = ego-motion's flow
-        pc0_valid_idx = res_dict['pc0_valid_point_idxes'] # since padding
-        est_flow = res_dict['flow'] #network's output, motion flow 
+        # TODO: Transform pcs to pc[-1] frame, get pose_flows=transform_pc0 - origin_pc0
+        transform_pc0s = [(e.get_full_target_pc(-2), e.get_full_pc_mask(-2)) for e in batched_sequence]
+        if self.num_frames > 2: 
+            for i in range(self.num_frames-2):
+                transform_pc_mi = [(e.get_full_target_pc(i), e.get_full_pc_mask(i)) for e in batched_sequence]
+                transform_pc_m_frames.append(transform_pc_mi)
+        pc1s = [e.get_full_ego_pc(-1) for e in batched_sequence]
 
-        
-        for batch_id in range(batch_sizes):
-            pc0_valid_from_pc2res = pc0_valid_idx[batch_id]
-            pose_flow_ = pose_flows[batch_id][pc0_valid_from_pc2res]
-            est_flow_ = est_flow[batch_id]
-            gt_flow_ = gt_flow[batch_id][pc0_valid_from_pc2res]
-            gt_flow_ = gt_flow_ - pose_flow_ 
+        # TODO: embedder_4D, network_4D, Seperate_to_3D, pointhead_3D
 
-            res_dict = {'est_flow': est_flow_, 
-                        'gt_flow': gt_flow_, 
-                        'gt_classes': None if 'flow_category_indices' not in batch else batch['flow_category_indices'][batch_id][pc0_valid_from_pc2res], #CLASS 0~30
-                        }
-                    
-            loss = self.loss_fn(res_dict)
-            total_flow_loss += loss.item()
+        # TODO: the return type should be List[BucketedSceneFlowOutputSequence]
 
-            total_loss += loss
-        
-        self.log("trainer/loss", total_loss/batch_sizes, sync_dist=True, batch_size=self.batch_size)
-
-        return total_loss
+        raise NotImplementedError

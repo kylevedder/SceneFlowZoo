@@ -128,6 +128,22 @@ class BucketedSceneFlowInputSequence:
         ego_pc = torch.cat([ego_pc, torch.ones(ego_pc.shape[0], 1, device=ego_pc.device)], dim=1)
         return torch.matmul(sensor_to_global, ego_pc.T).T[:, :3]
 
+    def get_full_target_pc(self, idx: int) -> torch.Tensor:
+        # Transform pointcloud at the specified index into pc1's frame
+        ego_pc = self.get_full_ego_pc(idx)
+        
+        sensor_to_ego_pc0, ego_to_global_pc0 = self.get_pc_transform_matrices(idx)
+        sensor_to_ego_pc1, ego_to_global_pc1 = self.get_pc_transform_matrices(-1)
+
+        sensor_to_global_pc0 = torch.matmul(ego_to_global_pc0, sensor_to_ego_pc0)
+        sensor_to_global_pc1 = torch.matmul(ego_to_global_pc1, sensor_to_ego_pc1)
+
+        global_to_pc1 = torch.inverse(sensor_to_global_pc1)
+        sensor_to_pc1 = torch.matmul(global_to_pc1, sensor_to_global_pc0)
+
+        ego_pc = torch.cat([ego_pc, torch.ones(ego_pc.shape[0], 1, device=ego_pc.device)], dim=1)
+        return torch.matmul(sensor_to_pc1, ego_pc.T).T[:, :3]
+
     def get_full_global_pc_gt_flowed(self, idx: int) -> torch.Tensor:
         ego_pc = self.get_full_ego_pc_gt_flowed(idx)
         sensor_to_ego, ego_to_global = self.get_pc_transform_matrices(idx)
@@ -321,7 +337,6 @@ class BucketedSceneFlowInputSequence:
                 for frame in frame_list
             ]
         )
-
         return BucketedSceneFlowInputSequence(
             dataset_idx=idx,
             sequence_log_id=dataset_log_id,

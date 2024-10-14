@@ -7,10 +7,11 @@ import os
 import torch
 from pathlib import Path
 import argparse
+from core_utils import setup_tb_logger, get_checkpoint_path, make_dataloader, setup_model
 import pytorch_lightning as pl
 from pytorch_lightning.strategies import DDPStrategy
-from core_utils import setup_tb_logger, get_checkpoint_path, make_dataloader, setup_model
 from pytorch_lightning.callbacks import ModelCheckpoint
+
 
 from pathlib import Path
 from mmengine import Config
