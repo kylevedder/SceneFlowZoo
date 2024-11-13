@@ -1,7 +1,7 @@
 from pytorch_lightning.loggers.logger import Logger
 from .mini_batch_optim_loop import MiniBatchOptimizationLoop, MinibatchedSceneFlowInputSequence
 from models.components.neural_reps import (
-    EulerFlowFlowMLP,
+    EulerFlowMLP,
     QueryDirection,
     ModelFlowResult,
     ActivationFn,
@@ -33,20 +33,20 @@ from visualization.flow_to_rgb import flow_to_rgb
 import numpy as np
 
 
-class PointCloudLossType(enum.Enum):
+class PointCloudLoss(enum.Enum):
     TRUNCATED_CHAMFER_FORWARD = "truncated_chamfer"
     TRUNCATED_CHAMFER_FORWARD_BACKWARD = "truncated_chamfer_forward_backward"
     TRUNCATED_KD_TREE_FORWARD = "truncated_kd_tree_forward"
     TRUNCATED_KD_TREE_FORWARD_BACKWARD = "truncated_kd_tree_forward_backward"
 
 
-class PointCloudTargetType(enum.Enum):
+class PointCloudTarget(enum.Enum):
     LIDAR = "lidar"
     LIDAR_CAMERA = "lidar_camera"
 
 
 @dataclass
-class EulerFlowPreprocessedInput:
+class EulerFlowTorchedInput:
     full_global_pcs: list[torch.Tensor]
     full_global_pcs_mask: list[torch.Tensor]
     full_global_auxillary_pcs: list[torch.Tensor | None]
@@ -109,17 +109,17 @@ class EulerFlowModel(BaseOptimizationModel):
         self,
         full_input_sequence: TorchFullFrameInputSequence,
         speed_threshold: float,
-        pc_target_type: PointCloudTargetType | str,
-        pc_loss_type: PointCloudLossType | str,
+        pc_target_type: PointCloudTarget | str,
+        pc_loss_type: PointCloudLoss | str,
         enable_k_step_loss: bool = True,
         enable_cycle_consistency: bool = True,
-        model: torch.nn.Module = EulerFlowFlowMLP(),
+        model: torch.nn.Module = EulerFlowMLP(),
     ) -> None:
         super().__init__(full_input_sequence)
         self.model = model
         self.speed_threshold = speed_threshold
-        self.pc_target_type = PointCloudTargetType(pc_target_type)
-        self.pc_loss_type = PointCloudLossType(pc_loss_type)
+        self.pc_target_type = PointCloudTarget(pc_target_type)
+        self.pc_loss_type = PointCloudLoss(pc_loss_type)
 
         self._prep_neural_prior(self.model)
         self.enable_k_step_loss = enable_k_step_loss
@@ -132,9 +132,9 @@ class EulerFlowModel(BaseOptimizationModel):
         kd_trees = []
         for idx in tqdm.tqdm(range(len(full_rep)), desc="Building KD Trees"):
             match self.pc_target_type:
-                case PointCloudTargetType.LIDAR:
+                case PointCloudTarget.LIDAR:
                     target_pc = full_rep.get_global_lidar_pc(idx, with_grad=False)
-                case PointCloudTargetType.LIDAR_CAMERA:
+                case PointCloudTarget.LIDAR_CAMERA:
                     target_pc = full_rep.get_global_lidar_auxillary_pc(idx, with_grad=False)
                 case _:
                     raise ValueError(f"Unknown point cloud target type: {self.pc_target_type}")
@@ -159,7 +159,7 @@ class EulerFlowModel(BaseOptimizationModel):
 
     def _preprocess(
         self, input_sequence: TorchFullFrameInputSequence
-    ) -> EulerFlowPreprocessedInput:
+    ) -> EulerFlowTorchedInput:
 
         full_global_pcs: list[torch.Tensor] = []
         full_global_pcs_mask: list[torch.Tensor] = []
@@ -191,7 +191,7 @@ class EulerFlowModel(BaseOptimizationModel):
             sequence_idxes = list(range(len(input_sequence)))
             sequence_total_length = len(input_sequence)
 
-        return EulerFlowPreprocessedInput(
+        return EulerFlowTorchedInput(
             full_global_pcs=full_global_pcs,
             full_global_pcs_mask=full_global_pcs_mask,
             full_global_auxillary_pcs=full_global_camera_pcs,
@@ -203,7 +203,7 @@ class EulerFlowModel(BaseOptimizationModel):
     def _is_occupied_cost(self, model_res: ModelFlowResult) -> list[BaseCostProblem]:
         return []
 
-    def _cycle_consistency(self, rep: EulerFlowPreprocessedInput) -> BaseCostProblem:
+    def _cycle_consistency(self, rep: EulerFlowTorchedInput) -> BaseCostProblem:
         cost_problems: list[BaseCostProblem] = []
         for idx in range(len(rep) - 1):
             pc = rep.get_global_lidar_pc(idx)
@@ -230,7 +230,7 @@ class EulerFlowModel(BaseOptimizationModel):
             cost_problems.extend(self._is_occupied_cost(model_res_reverse))
         return AdditiveCosts(cost_problems)
 
-    def _get_kd_tree(self, rep: EulerFlowPreprocessedInput, rep_idx: int) -> KDTreeWrapper:
+    def _get_kd_tree(self, rep: EulerFlowTorchedInput, rep_idx: int) -> KDTreeWrapper:
         global_idx = rep.sequence_idxes[rep_idx]
         if self.kd_trees is None:
             self.kd_trees = self._prep_kdtrees()
@@ -238,12 +238,12 @@ class EulerFlowModel(BaseOptimizationModel):
 
     def _process_k_step_subk(
         self,
-        rep: EulerFlowPreprocessedInput,
+        rep: EulerFlowTorchedInput,
         anchor_pc: torch.Tensor,
         anchor_idx: int,
         subk: int,
         query_direction: QueryDirection,
-        loss_type: PointCloudLossType,
+        loss_type: PointCloudLoss,
         speed_limit: float | None,
     ) -> tuple[BaseCostProblem, torch.Tensor]:
         sequence_idx = rep.sequence_idxes[anchor_idx]
@@ -259,30 +259,30 @@ class EulerFlowModel(BaseOptimizationModel):
 
         def _get_target_pc() -> torch.Tensor:
             match self.pc_target_type:
-                case PointCloudTargetType.LIDAR:
+                case PointCloudTarget.LIDAR:
                     target_pc = rep.get_global_lidar_pc(anchor_idx + index_offset)
-                case PointCloudTargetType.LIDAR_CAMERA:
+                case PointCloudTarget.LIDAR_CAMERA:
                     target_pc = rep.get_global_lidar_auxillary_pc(anchor_idx + index_offset)
             return target_pc
 
         match loss_type:
-            case PointCloudLossType.TRUNCATED_CHAMFER_FORWARD:
+            case PointCloudLoss.TRUNCATED_CHAMFER_FORWARD:
                 problem: BaseCostProblem = TruncatedChamferLossProblem(
                     warped_pc=anchor_pc,
                     target_pc=_get_target_pc(),
                     distance_type=ChamferDistanceType.FORWARD_ONLY,
                 )
-            case PointCloudLossType.TRUNCATED_CHAMFER_FORWARD_BACKWARD:
+            case PointCloudLoss.TRUNCATED_CHAMFER_FORWARD_BACKWARD:
                 problem = TruncatedChamferLossProblem(
                     warped_pc=anchor_pc,
                     target_pc=_get_target_pc(),
                     distance_type=ChamferDistanceType.BOTH_DIRECTION,
                 )
-            case PointCloudLossType.TRUNCATED_KD_TREE_FORWARD:
+            case PointCloudLoss.TRUNCATED_KD_TREE_FORWARD:
                 problem = TruncatedForwardKDTreeLossProblem(
                     warped_pc=anchor_pc, kdtree=self._get_kd_tree(rep, anchor_idx + index_offset)
                 )
-            case PointCloudLossType.TRUNCATED_KD_TREE_FORWARD_BACKWARD:
+            case PointCloudLoss.TRUNCATED_KD_TREE_FORWARD_BACKWARD:
                 problem = TruncatedForwardBackwardKDTreeLossProblem(
                     warped_pc=anchor_pc,
                     target_pc=_get_target_pc(),
@@ -307,10 +307,10 @@ class EulerFlowModel(BaseOptimizationModel):
 
     def _k_step_cost(
         self,
-        rep: EulerFlowPreprocessedInput,
+        rep: EulerFlowTorchedInput,
         k: int,
         query_direction: QueryDirection,
-        loss_type: PointCloudLossType,
+        loss_type: PointCloudLoss,
         speed_limit: float | None = None,
     ) -> BaseCostProblem:
         assert k >= 1, f"Expected k >= 1, but got {k}"
@@ -365,7 +365,7 @@ class EulerFlowModel(BaseOptimizationModel):
 
     def _compute_ego_flow(
         self,
-        rep: EulerFlowPreprocessedInput,
+        rep: EulerFlowTorchedInput,
         query_idx: int,
         direction: QueryDirection = QueryDirection.FORWARD,
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -525,17 +525,17 @@ class EulerFlowOptimizationLoop(MiniBatchOptimizationLoop):
     def __init__(
         self,
         speed_threshold: float,
-        pc_target_type: PointCloudTargetType | str,
+        pc_target_type: PointCloudTarget | str,
         pc_loss_type: (
-            PointCloudLossType | str
-        ) = PointCloudLossType.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
+            PointCloudLoss | str
+        ) = PointCloudLoss.TRUNCATED_KD_TREE_FORWARD_BACKWARD,
         *args,
         **kwargs,
     ):
         super().__init__(model_class=self._model_class(), *args, **kwargs)
         self.speed_threshold = speed_threshold
-        self.pc_target_type = PointCloudTargetType(pc_target_type)
-        self.pc_loss_type = PointCloudLossType(pc_loss_type)
+        self.pc_target_type = PointCloudTarget(pc_target_type)
+        self.pc_loss_type = PointCloudLoss(pc_loss_type)
 
     def _model_class(self) -> type[BaseOptimizationModel]:
         return EulerFlowModel
@@ -574,7 +574,7 @@ class EulerFlowSincOptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(act_fn=ActivationFn.SINC)
+            model=EulerFlowMLP(act_fn=ActivationFn.SINC)
         )
 
 
@@ -584,7 +584,7 @@ class EulerFlowGaussianOptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(act_fn=ActivationFn.GAUSSIAN)
+            model=EulerFlowMLP(act_fn=ActivationFn.GAUSSIAN)
         )
 
 
@@ -594,7 +594,7 @@ class EulerFlowFourtierOptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(encoder=FourierTemporalEmbedding())
+            model=EulerFlowMLP(encoder=FourierTemporalEmbedding())
         )
 
 
@@ -604,7 +604,7 @@ class EulerFlowDepth22OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=22)
+            model=EulerFlowMLP(num_layers=22)
         )
 
 
@@ -614,7 +614,7 @@ class EulerFlowDepth20OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=20)
+            model=EulerFlowMLP(num_layers=20)
         )
 
 
@@ -624,7 +624,7 @@ class EulerFlowDepth18OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=18)
+            model=EulerFlowMLP(num_layers=18)
         )
 
 
@@ -634,7 +634,7 @@ class EulerFlowDepth16OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=16)
+            model=EulerFlowMLP(num_layers=16)
         )
 
 
@@ -644,7 +644,7 @@ class EulerFlowDepth14OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=14)
+            model=EulerFlowMLP(num_layers=14)
         )
 
 
@@ -654,7 +654,7 @@ class EulerFlowDepth12OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=12)
+            model=EulerFlowMLP(num_layers=12)
         )
 
 
@@ -664,7 +664,7 @@ class EulerFlowDepth10OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=10)
+            model=EulerFlowMLP(num_layers=10)
         )
 
 
@@ -674,7 +674,7 @@ class EulerFlowDepth6OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=6)
+            model=EulerFlowMLP(num_layers=6)
         )
 
 
@@ -684,7 +684,7 @@ class EulerFlowDepth4OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=4)
+            model=EulerFlowMLP(num_layers=4)
         )
 
 
@@ -694,5 +694,5 @@ class EulerFlowDepth2OptimizationLoop(EulerFlowOptimizationLoop):
         self, full_input_sequence: TorchFullFrameInputSequence
     ) -> dict[str, any]:
         return super()._model_constructor_args(full_input_sequence) | dict(
-            model=EulerFlowFlowMLP(num_layers=2)
+            model=EulerFlowMLP(num_layers=2)
         )

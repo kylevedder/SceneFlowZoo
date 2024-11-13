@@ -1,6 +1,6 @@
 from .nsfp_raw_mlp import NSFPRawMLP, ActivationFn
 from .eulerflow_raw_mlp import (
-    EulerFlowFlowMLP,
+    EulerFlowMLP,
     EulerFlowOccFlowMLP,
     QueryDirection,
     ModelFlowResult,
@@ -14,7 +14,7 @@ from .ntp_from_scratch_raw import fNT, DecodedTrajectories, TrajectoryBasis, fNT
 __all__ = [
     "NSFPRawMLP",
     "ActivationFn",
-    "EulerFlowFlowMLP",
+    "EulerFlowMLP",
     "EulerFlowOccFlowMLP",
     "Liu2024FusionRawMLP",
     "fNT",

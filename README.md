@@ -17,6 +17,7 @@ The Zoo supports the following methods:
    - [Neural Scene Flow Prior (NSFP)](https://arxiv.org/abs/2111.01253)
    - [Fast NSF](https://arxiv.org/abs/2304.09121)
    - [Liu et al. 2024](https://arxiv.org/abs/2403.16116)
+   - [EulerFlow][https://vedder.io/eulerflow]
  
 
 If you use this codebase, please cite the following paper:

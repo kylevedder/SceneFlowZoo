@@ -113,7 +113,7 @@ class FourierTemporalEmbedding(SimpleEncoder):
         return super().__len__() + self.n_freq
 
 
-class EulerFlowFlowMLP(NSFPRawMLP):
+class EulerFlowMLP(NSFPRawMLP):
 
     def __init__(
         self,
