@@ -16,7 +16,7 @@ import numpy as np
 import open3d as o3d
 import torch
 from models import BaseOptimizationModel
-from models.mini_batch_optimization import GigachadNSFModel, GigachadOccFlowModel
+from models.mini_batch_optimization import EulerFlowModel, EulerFlowOccFlowModel
 from models.components.neural_reps import ModelFlowResult, ModelOccFlowResult, QueryDirection
 import tqdm
 
@@ -42,7 +42,7 @@ class FlowLoader:
 @dataclass(kw_only=True)
 class ModelWeightsFlowLoader(FlowLoader):
     model_checkpoints: list[Path]
-    model_type: type[GigachadNSFModel] = GigachadNSFModel
+    model_type: type[EulerFlowModel] = EulerFlowModel
 
     def __post_init__(self):
         assert len(self.model_checkpoints) > 0, "No model checkpoints found"
@@ -52,7 +52,7 @@ class ModelWeightsFlowLoader(FlowLoader):
 
     def _setup_model(
         self, dataset_frame_list: list[TimeSyncedSceneFlowFrame], flow_idx: int
-    ) -> tuple[GigachadNSFModel, TorchFullFrameInputSequence]:
+    ) -> tuple[EulerFlowModel, TorchFullFrameInputSequence]:
         torch_input_sequence = TorchFullFrameInputSequence.from_frame_list(
             0, dataset_frame_list, 120000, LoaderType.NON_CAUSAL
         )
@@ -91,7 +91,7 @@ class ModelWeightsFlowLoader(FlowLoader):
 
 @dataclass
 class ModelWeightsOccFlowLoader(ModelWeightsFlowLoader):
-    model_type: type[GigachadOccFlowModel] = GigachadOccFlowModel
+    model_type: type[EulerFlowOccFlowModel] = EulerFlowOccFlowModel
 
     def load_ego_flow(
         self, dataset_frame_list: list[TimeSyncedSceneFlowFrame], flow_idx: int
@@ -107,7 +107,7 @@ class ModelWeightsOccFlowLoader(ModelWeightsFlowLoader):
 
     def _load_occupancy_grid(
         self,
-        model: GigachadOccFlowModel,
+        model: EulerFlowOccFlowModel,
         dataset_frame_list: list[TimeSyncedSceneFlowFrame],
         z: float = 0.5,  # meters
     ):

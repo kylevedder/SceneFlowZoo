@@ -16,7 +16,7 @@ from bucketed_scene_flow_eval.interfaces import AbstractDataset
 from visualization.vis_lib import BaseCallbackVisualizer
 from bucketed_scene_flow_eval.utils import load_json, save_json
 from dataclasses import dataclass
-from models.mini_batch_optimization import GigachadNSFModel
+from models.mini_batch_optimization import EulerFlowModel
 from models.components.neural_reps import ModelFlowResult, ModelOccFlowResult, QueryDirection
 import open3d as o3d
 import json
@@ -116,7 +116,7 @@ def save_result(result: SceneFlowData, parent_folder: Path, idx: int):
 
 
 def render_flows(
-    model: GigachadNSFModel,
+    model: EulerFlowModel,
     full_sequence: TorchFullFrameInputSequence,
     base_dataset: AbstractDataset,
     trajectory_problem: TrajectoryProblem,
@@ -159,7 +159,7 @@ def render_flows(
 
 
 def render_trajectory_euler(
-    model: GigachadNSFModel,
+    model: EulerFlowModel,
     full_sequence: TorchFullFrameInputSequence,
     trajectory_problem: TrajectoryProblem,
     output_folder: Path,
@@ -196,7 +196,7 @@ def render_trajectory_euler(
 
 
 def render_trajectory_midpoint(
-    model: GigachadNSFModel,
+    model: EulerFlowModel,
     full_sequence: TorchFullFrameInputSequence,
     trajectory_problem: TrajectoryProblem,
     output_folder: Path,
@@ -252,7 +252,7 @@ def main():
     trajector_problem = TrajectoryProblem.from_json_file(args.trajectory_problem)
     model_loader = OptimCheckpointModelLoader.from_checkpoint(args.config, args.checkpoint_file)
     model, full_sequence, base_dataset = model_loader.load_model()
-    model: GigachadNSFModel
+    model: EulerFlowModel
     output_folder = args.output_folder
     output_folder.mkdir(parents=True, exist_ok=True)
 

@@ -16,7 +16,7 @@ from bucketed_scene_flow_eval.interfaces import AbstractDataset
 from visualization.vis_lib import BaseCallbackVisualizer
 from bucketed_scene_flow_eval.utils import load_json, save_json
 from dataclasses import dataclass
-from models.mini_batch_optimization import GigachadNSFModel
+from models.mini_batch_optimization import EulerFlowModel
 from models.components.neural_reps import ModelFlowResult, ModelOccFlowResult, QueryDirection
 import open3d as o3d
 
@@ -55,7 +55,7 @@ class TrajectoryProblem:
 
 
 def visualize(
-    model: GigachadNSFModel,
+    model: EulerFlowModel,
     full_sequence: TorchFullFrameInputSequence,
     base_dataset: AbstractDataset,
     trajectory_problem: TrajectoryProblem,
@@ -127,7 +127,7 @@ def main():
     trajector_problem = TrajectoryProblem.from_json_file(args.trajectory_problem)
     model_loader = OptimCheckpointModelLoader.from_checkpoint(args.config, args.checkpoint_file)
     model, full_sequence, base_dataset = model_loader.load_model()
-    model: GigachadNSFModel
+    model: EulerFlowModel
 
     visualize(model, full_sequence, base_dataset, trajector_problem, args.camera_pose)
 

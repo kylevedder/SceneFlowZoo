@@ -9,7 +9,7 @@ from bucketed_scene_flow_eval.datastructures import O3DVisualizer, PointCloud
 from visualization.vis_lib import BaseCallbackVisualizer
 from bucketed_scene_flow_eval.utils import load_json, save_json
 from dataclasses import dataclass
-from models.mini_batch_optimization import GigachadNSFModel
+from models.mini_batch_optimization import EulerFlowModel
 from models.components.neural_reps import ModelFlowResult, ModelOccFlowResult, QueryDirection
 import open3d as o3d
 
@@ -49,7 +49,7 @@ class TrajectoryProblem:
 
 def visualize(
     sequence_id: str,
-    model: GigachadNSFModel,
+    model: EulerFlowModel,
     full_sequence: TorchFullFrameInputSequence,
     trajectory_problem: TrajectoryProblem,
     camera_pose: Path,
@@ -107,7 +107,7 @@ def main():
         args.config, args.checkpoint_root, sequence_id, args.sequence_id_to_length
     )
     model, full_sequence = model_loader.load_model()
-    model: GigachadNSFModel
+    model: EulerFlowModel
 
     visualize(sequence_id, model, full_sequence, trajector_problem, args.camera_pose)
 

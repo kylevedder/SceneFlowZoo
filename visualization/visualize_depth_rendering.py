@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 from models.whole_batch_optimization.checkpointing.model_loader import OptimCheckpointModelLoader
-from models.mini_batch_optimization import GigachadOccFlowModel
+from models.mini_batch_optimization import EulerFlowOccFlowModel
 from models import ForwardMode
 from bucketed_scene_flow_eval.datastructures import EgoLidarDistance
 from bucketed_scene_flow_eval.utils import save_pickle, load_pickle
@@ -86,10 +86,10 @@ def main():
         args.config, args.checkpoint_root, args.sequence_id, args.sequence_id_to_length
     )
     model, full_sequence = model_loader.load_model()
-    model: GigachadOccFlowModel
+    model: EulerFlowOccFlowModel
     assert isinstance(
-        model, GigachadOccFlowModel
-    ), f"Expected GigachadOccFlowModel, got {type(model)}"
+        model, EulerFlowOccFlowModel
+    ), f"Expected EulerFlowOccFlowModel, got {type(model)}"
 
     output_cache_path = (
         Path("/tmp/occ_flow_cache/")

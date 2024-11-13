@@ -15,12 +15,12 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from models.components.neural_reps import (
-    GigaChadOccFlowMLP,
+    EulerFlowOccFlowMLP,
     SimpleEncoder,
     FourierTemporalEmbedding,
     ActivationFn,
 )
-from models.mini_batch_optimization import GigachadOccFlowModel
+from models.mini_batch_optimization import EulerFlowOccFlowModel
 from models.components.neural_reps import ModelOccFlowResult, QueryDirection
 import tqdm
 import matplotlib.pyplot as plt
@@ -85,7 +85,7 @@ class OccFlowModel:
     def __init__(
         self,
         torch_input_sequence: TorchFullFrameInputSequence,
-        optimization_model: GigachadOccFlowModel,
+        optimization_model: EulerFlowOccFlowModel,
     ):
         self.torch_input_sequence = torch_input_sequence
         self.optimization_model = optimization_model
