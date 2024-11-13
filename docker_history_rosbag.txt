@@ -354,3 +354,11 @@ rostopic echo /camera/color/camera_info
 python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process_wrong.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
 #1725062877
 python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/pointclouds-spinning.bag /efs/orbbec_pointclouds/pointclouds-spinning-colored/
+#1726167522
+python3 paper_figures/figs_gigachad/rosbag_processing/rosbag_process.py /efs/orbbec_pointclouds/new_data/2024-09-11-13-35-14.bag /efs/orbbec_pointclouds/new_data/2024-09-11-13-35-14
+#1726167559
+ls /efs/orbbec_pointclouds/new_data/ -1
+#1726167713
+nano process.bash
+#1726167725
+bash process.bash 

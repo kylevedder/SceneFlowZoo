@@ -14,7 +14,7 @@ from bucketed_scene_flow_eval.datastructures import (
 )
 from bucketed_scene_flow_eval.interfaces import AbstractDataset
 from visualization.vis_lib import BaseCallbackVisualizer
-from bucketed_scene_flow_eval.utils import load_json
+from bucketed_scene_flow_eval.utils import load_json, save_json
 from dataclasses import dataclass
 from models.mini_batch_optimization import GigachadNSFModel
 from models.components.neural_reps import ModelFlowResult, ModelOccFlowResult, QueryDirection
@@ -28,14 +28,14 @@ class TrajectoryVisualizer(BaseCallbackVisualizer):
         super().__init__(point_size=point_size, line_width=line_width)
 
     def _get_screenshot_path(self) -> Path:
-        return self.screenshot_path / self.sequence_id / "trajectory_screenshot.png"
+        return self.screenshot_path / self.sequence_id / "trajectory.png"
 
 
 @dataclass
 class TrajectoryProblem:
     start_idx: int
     end_idx: int
-    position: tuple[float, float, float]
+    positions: list[tuple[float, float, float]]
 
     @staticmethod
     def from_json_file(json_file: Path) -> "TrajectoryProblem":
@@ -43,13 +43,15 @@ class TrajectoryProblem:
         return TrajectoryProblem(
             start_idx=json_data["start_idx"],
             end_idx=json_data["end_idx"],
-            position=tuple(json_data["position"]),
+            positions=[tuple(e) for e in json_data["positions"]],
         )
 
     def __post_init__(self):
         assert self.start_idx < self.end_idx
-        assert isinstance(self.position, tuple)
-        assert len(self.position) == 3
+        assert len(self.positions) > 0
+        for position in self.positions:
+            assert isinstance(position, tuple)
+            assert len(position) == 3
 
 
 def visualize(
@@ -73,18 +75,20 @@ def visualize(
         assert isinstance(
             pc_frame, ColoredSupervisedPointCloudFrame
         ), f"Expected ColoredSupervisedPointCloudFrame, got {type(pc_frame)}"
-        pc = pc_frame.full_global_pc
-        colors = pc_frame.colors
-        pc = full_sequence.get_full_global_pc(idx)
+        colors = pc_frame.colors[pc_frame.mask]
+        pc = full_sequence.get_global_pc(idx)
         vis.add_pointcloud(PointCloud(pc.cpu().numpy()), color=colors)
 
-    query_positions = [np.array(trajectory_problem.position)]
+    trajectory_position_list = [[np.array(p)] for p in trajectory_problem.positions]
 
-    print(f"Querying {trajectory_problem.end_idx - trajectory_problem.start_idx} positions")
+    print(
+        f"Querying {trajectory_problem.end_idx - trajectory_problem.start_idx} positions from {trajectory_problem.start_idx} to {trajectory_problem.end_idx}"
+    )
     for idx in range(trajectory_problem.start_idx, trajectory_problem.end_idx):
-        last_position = query_positions[-1]
+
+        last_position_batch = np.array([e[-1] for e in trajectory_position_list])
         last_position_torch = (
-            torch.from_numpy(np.array([last_position])).float().to(full_sequence.device)
+            torch.from_numpy(np.array(last_position_batch)).float().to(full_sequence.device)
         )
         query_result: ModelFlowResult = model.model(
             last_position_torch,
@@ -92,12 +96,22 @@ def visualize(
             len(full_sequence),
             QueryDirection.FORWARD,
         )
-        next_position = last_position + query_result.flow[0].detach().cpu().numpy()
-        query_positions.append(next_position)
+        flow_batch = query_result.flow.detach().cpu().numpy()
 
-    print(f"Plotting {len(query_positions)} positions")
-    vis.add_sphere(query_positions[0], radius=0.1, color=(1, 0, 0))
-    vis.add_trajectory(query_positions, color=(0, 0, 1))
+        for idx, flow in enumerate(flow_batch):
+            next_position = trajectory_position_list[idx][-1] + flow
+            trajectory_position_list[idx].append(next_position)
+
+    for trajectory in trajectory_position_list:
+        assert len(trajectory) == trajectory_problem.end_idx - trajectory_problem.start_idx + 1
+        print(f"Plotting {len(trajectory)} positions")
+        vis.add_sphere(trajectory[0], radius=0.1, color=(1, 0, 0))
+        vis.add_trajectory(trajectory, color=(0, 0, 1), radius=0.3)
+
+    save_json(
+        vis._get_screenshot_path().with_suffix(".json"),
+        [[tuple(e) for e in trajectory] for trajectory in trajectory_position_list],
+    )
 
     vis.run(camera_pose_path=camera_pose)
 

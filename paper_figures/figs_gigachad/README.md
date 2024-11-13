@@ -24,3 +24,8 @@ python visualization/visualize_flow_feathers.py --sequence_id 5f016e44-0f38-3837
 
 Press up and down arrows to cycle through the different flow folders.
 
+To generate the jack with flow:
+
+```bash
+python visualization/orbbec_data/visualize_orbbec_rendered.py /efs2/orbbec_pointclouds/pointclouds-spinning-colored-trimmed-rendered/ --camera_pose_file paper_figures/figs_gigachad/3d_vis_camera_configs/jack.json
+```

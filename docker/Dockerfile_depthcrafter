@@ -20,63 +20,13 @@ RUN conda config --remove channels defaults && conda config --add channels conda
 ENV FORCE_CUDA="1"
 ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0"
 
-RUN conda install -y numpy=1.26 python=3.11 pytorch==2.3 torchvision torchaudio pytorch-cuda=11.8 fvcore iopath matplotlib=3.8 -c pytorch -c nvidia -c fvcore -c iopath -c conda-forge
+RUN git clone https://github.com/Tencent/DepthCrafter.git /depth_crafter
+WORKDIR /depth_crafter
+RUN pip install torch==2.4.1 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+RUN pip install matplotlib==3.8.4 opencv-python==4.8.1.78
+RUN pip install diffusers["torch"] transformers
+RUN pip install xformers --index-url https://download.pytorch.org/whl/cu118
 
-# Install PyTorch3d from source
-RUN git clone https://github.com/facebookresearch/pytorch3d.git /pytorch3d
-WORKDIR /pytorch3d
-# Checkout 0.7.6
-RUN git checkout f34104cf6ebefacd7b7e07955ee7aaa823e616ac
-RUN conda install -y ninja -c defaults -c conda-forge
-ENV MAX_JOBS=48
-RUN pip install -v .
-
-# YAPF versions newer than this break the MMCV config system
-RUN pip install yapf==0.40.1
-RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.5 imageio black isort nntime
-RUN pip install mmcv==2.2.0
-
-# Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
-RUN git clone https://github.com/kylevedder/nuscenes-devkit.git /nuscenes-devkit
-WORKDIR /nuscenes-devkit
-RUN pip install -e setup
-RUN pip install FastGeodis==1.0.5 --no-build-isolation
-
-
-RUN git clone https://github.com/facebookresearch/co-tracker /cotracker
-WORKDIR /cotracker
-RUN git checkout e29e93831181413ff2691a3d910277c09fd87559
-RUN pip install -e .
-RUN pip install imageio[ffmpeg]
-
-RUN apt install -y libxcb-xinerama0 libxcb-xinput0
-RUN pip uninstall PyQt5 -y
-RUN pip uninstall opencv-python -y
-RUN pip install opencv-python
-
-# Important debug tools
-RUN apt install nvtop htop -y
-RUN pip install py-spy
-
-RUN git clone https://github.com/thomgrand/torch_kdtree.git /torch_kdtree
-# Setup pybind11 manually so that it has 3.11 support
-RUN git clone https://github.com/pybind/pybind11.git /torch_kdtree/pybind11
-WORKDIR /torch_kdtree/pybind11
-# Peg pybind11 to known good commit
-RUN git checkout a406a62e5b3ca74a76b6db9a1cd7cf3578c50772
-WORKDIR /torch_kdtree
-RUN pip install .
-
-RUN apt update --fix-missing
-RUN apt install -y ffmpeg
-RUN conda install -c conda-forge openh264
-RUN pip install pytorch_memlab
-RUN apt install -y nano
-
-RUN pip install bucketed-scene-flow-eval==2.0.25
-
-
-ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:${PYTHONPATH}
 
 # Setup environment to support running as non-root user
 ENV HOME=/home/user
@@ -90,7 +40,7 @@ COPY bashrc /payload_files/bashrc
 # RUN wget https://github.com/facebookresearch/co-tracker/zipball/main -O /payload_files/cache/torch/hub/main.zip
 # RUN wget https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth -O /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
 
-WORKDIR /project
+WORKDIR /depth_crafter
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 777 /entrypoint.sh
 RUN chmod 777 /home

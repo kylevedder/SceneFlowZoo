@@ -117,7 +117,7 @@ def plot_per_metacatagory_bar_waymo(eval_stats: List[BucketedEvalStats], save_fo
     category_names = _get_dynamic_keys(eval_stats)
 
     for category_idx, category_name in enumerate(category_names):
-        plt.gcf().set_size_inches(fig_size / 3, fig_size / 1.6 / 2)
+        plt.gcf().set_size_inches(fig_size / 3, fig_size / 1.6 / 2.8)
 
         bar_width = 1  # Define the width of each bar
         bar_gap = 0.3  # Define the gap between each bar
@@ -149,8 +149,8 @@ def plot_per_metacatagory_bar_waymo(eval_stats: List[BucketedEvalStats], save_fo
             y_position = centered_barchart_offset(idx, len(eval_stats), bar_width, bar_gap)
             value = _get_value(eval_stat, category_name)
             rotation = 90
-            y_offset = 0.0
-            if "VEHICLE" in category_name and eval_stat.name == "GIGACHAD":
+            y_offset = -0.0
+            if "VEHICLE" in category_name and eval_stat.name == "EulerFlow (Ours)":
                 rotation = 0
                 y_offset = 0.06
             plt.text(

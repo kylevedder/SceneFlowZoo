@@ -35,56 +35,56 @@ waymo_class_val_data_root_dir = Path("./paper_figures/perf_data/waymo_val/bucket
 
 # fmt: off
 gigachad_test_depth_ablations = [
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 4", "gigachad_4"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 6", "gigachad_6"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 8", "gigachad_8"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 8 + Fourtier", "gigachad_fourtier"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 10", "gigachad_10"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 12", "gigachad_12"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 14", "gigachad_14"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 16", "gigachad_16"),
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD Depth 18", "gigachad_18"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 4", "gigachad_4"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 6", "gigachad_6"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 8", "gigachad_8"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 8 + Fourtier", "gigachad_fourtier"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 10", "gigachad_10"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 12", "gigachad_12"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 14", "gigachad_14"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 16", "gigachad_16"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow Depth 18", "gigachad_18"),
 ]
 
 gigachad_val_depth_ablations = [
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 6", "gigachad_depth6"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 8", "gigachad_depth8"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 10", "gigachad_depth10"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 12", "gigachad_depth12"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 14", "gigachad_depth14"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 16", "gigachad_depth16"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 18", "gigachad_depth18"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 20", "gigachad_depth20"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Depth 22", "gigachad_depth22"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 6", "gigachad_depth6"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 8", "gigachad_depth8"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 10", "gigachad_depth10"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 12", "gigachad_depth12"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 14", "gigachad_depth14"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 16", "gigachad_depth16"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 18", "gigachad_depth18"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 20", "gigachad_depth20"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Depth 22", "gigachad_depth22"),
 ]
 
 gigachad_encoding_ablations = [
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD", "gigachad_depth8"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Fouriter Time", "gigachad_fourtier"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD SinC", "gigachad_sinc"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Gaussian", "gigachad_gaussian"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow", "gigachad_depth8"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Fouriter Time", "gigachad_fourtier"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow SinC", "gigachad_sinc"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Gaussian", "gigachad_gaussian"),
 ]
 
 gigachad_length_ablations = [
     BucketedEvalStats(av2_class_val_data_root_dir, "NSFP (Len 2)", "nsfp_seq_len_2"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Len 5", "gigachad_seq_len_5"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Len 5", "gigachad_seq_len_5"),
     BucketedEvalStats(av2_class_val_data_root_dir, "NTP (Len 20)", "ntp_seq_len_20"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Len 20", "gigachad_seq_len_20"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Len 50", "gigachad_seq_len_50"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Full", "gigachad_depth8"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Len 20", "gigachad_seq_len_20"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Len 50", "gigachad_seq_len_50"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Full", "gigachad_depth8"),
 ]
 
 gigachad_loss_ablations = [
     BucketedEvalStats(av2_class_val_data_root_dir, "NSFP (Len 2)", "nsfp_seq_len_2"),
     BucketedEvalStats(av2_class_val_data_root_dir, "NTP (Len 20)", "ntp_seq_len_20"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD No $k>1$", "gigachad_no_k_step"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD No Cycle", "gigachad_no_cycle"),
-    BucketedEvalStats(av2_class_val_data_root_dir, "GIGACHAD Full", "gigachad_depth8"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow No $k>1$", "gigachad_no_k_step"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow No Cycle", "gigachad_no_cycle"),
+    BucketedEvalStats(av2_class_val_data_root_dir, "EulerFlow Full", "gigachad_depth8"),
     
 ]
 
 av2_class_bucketed_eval_stats = [
-    BucketedEvalStats(av2_class_test_data_root_dir, "GIGACHAD (Ours)", "gigachad_18"),
+    BucketedEvalStats(av2_class_test_data_root_dir, "EulerFlow (Ours)", "gigachad_18"),
     BucketedEvalStats(av2_class_test_data_root_dir, "Flow4D", "flow4d"),
     BucketedEvalStats(av2_class_test_data_root_dir, "TrackFlow", "trackflow"),
     BucketedEvalStats(av2_class_test_data_root_dir, "DeFlow++", "deflowpp"),
@@ -107,7 +107,7 @@ waymo_class_bucketed_eval_stats = [
     BucketedEvalStats(waymo_class_val_data_root_dir, "FastFlow3D", "fastflow3d"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "NSFP", "nsfp"),
     BucketedEvalStats(waymo_class_val_data_root_dir, "FastNSF", "fast_nsf"),
-    BucketedEvalStats(waymo_class_val_data_root_dir, "GIGACHAD (Ours, Depth 8)", "gigachad"),
+    BucketedEvalStats(waymo_class_val_data_root_dir, "EulerFlow (Ours)", "gigachad"),
 ]
 
 # fmt: on

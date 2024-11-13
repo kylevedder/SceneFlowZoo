@@ -14,7 +14,7 @@ import copy
 def plot_ablation_barchart(eval_stats: List[BucketedEvalStats], save_folder: Path):
 
     fig_size = 5.5
-    bar_width = 0.12
+    bar_width = 0.1
     bar_gap = 0.03
 
     max_normalized_epe = max([eval_stat.mean_dynamic() for eval_stat in eval_stats])
@@ -47,7 +47,7 @@ def plot_ablation_barchart(eval_stats: List[BucketedEvalStats], save_folder: Pat
         [eval_stat.name for eval_stat in eval_stats],
     )
 
-    plt.gcf().set_size_inches(fig_size, len(eval_stats) * (bar_width + bar_gap) + 0.5)
+    plt.gcf().set_size_inches(fig_size, len(eval_stats) * (bar_width + bar_gap) + 0.3)
     plt.xlabel("mean Dynamic Normalized EPE")
 
     ax = plt.gca()

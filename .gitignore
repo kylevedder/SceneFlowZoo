@@ -31,3 +31,4 @@ tests/*/config*/
 saved_videos/
 checkpoint_zips/
 docker_history_rosbag.txt
+demo_output/

@@ -112,6 +112,9 @@ class SequenceVisualizer(BaseCallbackVisualizer):
             / f"{self.vis_state.frame_idx:06d}_{self.get_current_method_name()}_subsequence_length_{self.get_current_subsequence_length()}.png"
         )
 
+    def _get_pose_path(self) -> Path:
+        return self.screenshot_path / self.sequence_id / "camera.json"
+
     def get_num_sequences(self) -> int:
         return len(self.sequence_lst)
 

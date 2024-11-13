@@ -42,7 +42,7 @@ def plot_dynamic_norm_epe_bar_black_fixed_width_bar(
 ):
 
     fig_size = 5.5
-    bar_width = 0.12
+    bar_width = 0.10
     bar_gap = 0.03
 
     for idx, eval_stat in enumerate(eval_stats):
@@ -74,7 +74,7 @@ def plot_dynamic_norm_epe_bar_black_fixed_width_bar(
         [eval_stat.name for eval_stat in eval_stats],
     )
 
-    plt.gcf().set_size_inches(fig_size, len(eval_stats) * (bar_width + bar_gap) + 0.5)
+    plt.gcf().set_size_inches(fig_size, len(eval_stats) * (bar_width + bar_gap) + 0.3)
     plt.xlabel("mean Dynamic Normalized EPE")
 
     # Remove top and right axes

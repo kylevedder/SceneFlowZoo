@@ -23,6 +23,9 @@ class BaseCallbackVisualizer(O3DVisualizer):
     def _get_screenshot_path(self) -> Path:
         return self.screenshot_path / f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.png"
 
+    def _get_pose_path(self) -> Path:
+        return self.screenshot_path / "camera.json"
+
     def save_screenshot(self, vis: o3d.visualization.VisualizerWithKeyCallback):
         save_name = self._get_screenshot_path()
         save_name.parent.mkdir(exist_ok=True, parents=True)
@@ -97,13 +100,13 @@ class BaseCallbackVisualizer(O3DVisualizer):
 
     def save_camera_pose(self, vis):
         camera = vis.get_view_control().convert_to_pinhole_camera_parameters()
-        save_path = self.screenshot_path / self.sequence_id / "camera.json"
+        save_path = self._get_pose_path()
         o3d.io.write_pinhole_camera_parameters(str(save_path), camera)
         print(f"Saved camera pose to {save_path}")
 
     def load_camera_pose(self, vis, camera_path: Path | None = None):
         if camera_path is None:
-            camera_path = self.screenshot_path / self.sequence_id / "camera.json"
+            camera_path = self._get_pose_path()
         assert camera_path.exists(), f"Camera path {camera_path} does not exist."
         camera = o3d.io.read_pinhole_camera_parameters(str(camera_path))
         vis.get_view_control().convert_from_pinhole_camera_parameters(camera, allow_arbitrary=True)
