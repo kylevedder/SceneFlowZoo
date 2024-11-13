@@ -1,6 +1,3 @@
-import torch
-import time
-from collections import defaultdict
 import enum
 import numpy as np
 
@@ -15,8 +12,8 @@ class EarlyStopping:
         self,
         burn_in_steps: int = 0,
         mode: EarlyStoppingMode = EarlyStoppingMode.MIN,
-        min_delta: float = 0,
-        patience: int = 10,
+        min_delta: float = 0.001,
+        patience: int = 150,
         percentage: bool = False,
     ):
         self.burn_in_steps = burn_in_steps
@@ -27,6 +24,10 @@ class EarlyStopping:
         self.num_bad_epochs = 0
         self.percentage = percentage
         self.total_steps = 0
+
+    @staticmethod
+    def no_stopping():
+        return EarlyStopping(patience=0)
 
     def _is_better(self, current_perf_metric: float) -> bool:
         if self.patience == 0:
@@ -66,6 +67,9 @@ class EarlyStopping:
             self.num_bad_epochs += 1
 
         if self.num_bad_epochs >= self.patience:
+            print(
+                f"Early stopping after {self.total_steps} steps with {self.num_bad_epochs} bad epochs (patience: {self.patience})."
+            )
             return True
 
         return False

@@ -23,7 +23,7 @@ model = dict(
 test_dataset_root = "/efs/argoverse2/val/"
 
 test_dataset = dict(
-    name="BucketedSceneFlowDataset",
+    name="TorchFullFrameDataset",
     args=dict(
         dataset_name="Argoverse2CausalSceneFlow",
         root_dir=test_dataset_root,
@@ -43,7 +43,7 @@ test_dataloader = dict(args=dict(batch_size=8, num_workers=8, shuffle=False, pin
 train_sequence_dir = "/efs/argoverse2/train/"
 
 train_dataset = dict(
-    name="BucketedSceneFlowDataset",
+    name="TorchFullFrameDataset",
     args=dict(
         dataset_name="Argoverse2CausalSceneFlow",
         root_dir=train_sequence_dir,

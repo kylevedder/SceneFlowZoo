@@ -1,14 +1,15 @@
 from typing import Any
 
 from .base_models import (
-    BaseModel,
+    BaseTorchModel,
+    BaseRawModel,
     ForwardMode,
     BaseOptimizationModel,
     AbstractBatcher,
 )
 
 
-def construct_model(name: str, args: dict[str, Any]) -> BaseModel:
+def construct_model(name: str, args: dict[str, Any]) -> BaseTorchModel:
     name = name.lower()
     if name not in name_to_class_lookup:
         raise ValueError(f"Unknown model name: {name}")
@@ -30,7 +31,25 @@ from .whole_batch_optimization import (
     FastNSFModelOptimizationLoop,
     Liu2024OptimizationLoop,
 )
-from .mini_batch_optimization import GigachadNSFOptimizationLoop
+from .mini_batch_optimization import (
+    EulerFlowOptimizationLoop,
+    NTPOptimizationLoop,
+    EulerFlowSincOptimizationLoop,
+    EulerFlowGaussianOptimizationLoop,
+    EulerFlowFourtierOptimizationLoop,
+    EulerFlowDepth22OptimizationLoop,
+    EulerFlowDepth20OptimizationLoop,
+    EulerFlowDepth18OptimizationLoop,
+    EulerFlowDepth16OptimizationLoop,
+    EulerFlowDepth14OptimizationLoop,
+    EulerFlowDepth12OptimizationLoop,
+    EulerFlowDepth10OptimizationLoop,
+    EulerFlowDepth6OptimizationLoop,
+    EulerFlowDepth4OptimizationLoop,
+    EulerFlowDepth2OptimizationLoop,
+    EulerFlowNoCycleConsistencyLossOptimizationLoop,
+    EulerFlowNoKStepLossOptimizationLoop,
+)
 
 
 importable_models = [
@@ -41,27 +60,29 @@ importable_models = [
     NSFPCycleConsistencyOptimizationLoop,
     FastNSFModelOptimizationLoop,
     Liu2024OptimizationLoop,
-    GigachadNSFOptimizationLoop,
+    EulerFlowOptimizationLoop,
+    EulerFlowSincOptimizationLoop,
+    NTPOptimizationLoop,
+    EulerFlowGaussianOptimizationLoop,
+    EulerFlowFourtierOptimizationLoop,
+    EulerFlowDepth22OptimizationLoop,
+    EulerFlowDepth20OptimizationLoop,
+    EulerFlowDepth18OptimizationLoop,
+    EulerFlowDepth16OptimizationLoop,
+    EulerFlowDepth14OptimizationLoop,
+    EulerFlowDepth12OptimizationLoop,
+    EulerFlowDepth10OptimizationLoop,
+    EulerFlowDepth6OptimizationLoop,
+    EulerFlowDepth4OptimizationLoop,
+    EulerFlowDepth2OptimizationLoop,
+    EulerFlowNoCycleConsistencyLossOptimizationLoop,
+    EulerFlowNoKStepLossOptimizationLoop,
 ]
 
 # Ensure all importable models are based on the BaseModel class.
 for cls in importable_models:
-    assert issubclass(cls, BaseModel), f"{cls} is not a valid model class."
+    assert issubclass(cls, BaseTorchModel) or issubclass(
+        cls, BaseRawModel
+    ), f"{cls} is not a valid model class."
 
 name_to_class_lookup = {cls.__name__.lower(): cls for cls in importable_models}
-
-
-__all__ = [
-    "DeFlow",
-    "FastFlow3D",
-    "FastFlow3DBucketedLoaderLoss",
-    "FastFlow3DSelfSupervisedLoss",
-    "NSFPModel",
-    "FastNSFModel",
-    "FastNSFPlusPlusModel",
-    "Liu2024Model",
-    "GigaChadNSFModel",
-    "ConstantVectorBaseline",
-    "BaseModel",
-    "ForwardMode",
-]

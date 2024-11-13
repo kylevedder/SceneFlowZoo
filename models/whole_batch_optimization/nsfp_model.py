@@ -1,8 +1,8 @@
 import torch
 from pytorch_lightning.loggers.logger import Logger
-from dataloaders import BucketedSceneFlowOutputSequence
-from dataloaders.dataclasses import BucketedSceneFlowInputSequence
-from models import BaseModel, BaseOptimizationModel, ForwardMode
+from dataloaders import TorchFullFrameOutputSequence
+from dataloaders.dataclasses import TorchFullFrameInputSequence
+from models import BaseTorchModel, BaseOptimizationModel, ForwardMode
 from models.components.optimization.cost_functions import (
     BaseCostProblem,
     AdditiveCosts,
@@ -29,12 +29,12 @@ class WholeBatchNSFPPreprocessedInput:
 
 class NSFPForwardOnlyModel(BaseOptimizationModel):
 
-    def __init__(self, full_input_sequence: BucketedSceneFlowInputSequence) -> None:
+    def __init__(self, full_input_sequence: TorchFullFrameInputSequence) -> None:
         super().__init__(full_input_sequence)
         self.forward_model = NSFPRawMLP()
 
     def _preprocess(
-        self, input_sequence: BucketedSceneFlowInputSequence
+        self, input_sequence: TorchFullFrameInputSequence
     ) -> WholeBatchNSFPPreprocessedInput:
         full_pc0, full_pc0_mask = input_sequence.get_full_global_pc(
             -2
@@ -63,7 +63,7 @@ class NSFPForwardOnlyModel(BaseOptimizationModel):
         )
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> BaseCostProblem:
 
         rep = self._preprocess(input_sequence)
@@ -85,8 +85,8 @@ class NSFPForwardOnlyModel(BaseOptimizationModel):
         )
 
     def inference_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
-    ) -> BucketedSceneFlowOutputSequence:
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
+    ) -> TorchFullFrameOutputSequence:
         rep = self._preprocess(input_sequence)
 
         global_flow_pc0: torch.Tensor = self.forward_model(rep.masked_pc0).squeeze(0)
@@ -98,7 +98,7 @@ class NSFPForwardOnlyModel(BaseOptimizationModel):
             rep.full_pc0, full_global_flow_pc0, rep.pc0_ego_to_global
         )
 
-        return BucketedSceneFlowOutputSequence(
+        return TorchFullFrameOutputSequence(
             ego_flows=torch.unsqueeze(ego_flow, 0),
             valid_flow_mask=torch.unsqueeze(rep.full_pc0_mask, 0),
         )
@@ -106,12 +106,12 @@ class NSFPForwardOnlyModel(BaseOptimizationModel):
 
 class NSFPCycleConsistencyModel(NSFPForwardOnlyModel):
 
-    def __init__(self, full_input_sequence: BucketedSceneFlowInputSequence) -> None:
+    def __init__(self, full_input_sequence: TorchFullFrameInputSequence) -> None:
         super().__init__(full_input_sequence)
         self.reverse_model = NSFPRawMLP()
 
     def optim_forward_single(
-        self, input_sequence: BucketedSceneFlowInputSequence, logger: Logger
+        self, input_sequence: TorchFullFrameInputSequence, logger: Logger
     ) -> BaseCostProblem:
 
         rep = self._preprocess(input_sequence)

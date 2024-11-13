@@ -1,18 +1,15 @@
-import time
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-import pandas as pd
 import pytorch_lightning as pl
 import torch
 import torch.optim as optim
 from bucketed_scene_flow_eval.datastructures import *
 import models
 from models import ForwardMode
-from dataloaders import BucketedSceneFlowInputSequence, BucketedSceneFlowOutputSequence, EvalWrapper
+from dataloaders import TorchFullFrameInputSequence, EvalWrapper
 
-from .model_saver import ModelOutSaver, FlowNoSave, FlowSave
+from .model_saver import ModelOutSaver, OutputNoSave, OutputSave
 
 
 def _get_cfg_or_default(cfg, key, default, key_transform=lambda e: e):
@@ -37,14 +34,14 @@ class ModelWrapper(pl.LightningModule):
         )
 
         self.model_out_saver: ModelOutSaver = _get_cfg_or_default(
-            cfg, "save_output_folder", FlowNoSave(), FlowSave
+            cfg, "save_output_folder", OutputNoSave(), OutputSave
         )
         self.cache_validation_outputs: bool = _get_cfg_or_default(
             cfg, "cache_validation_outputs", False
         )
         assert (not self.cache_validation_outputs) or (
-            not isinstance(self.model_out_saver, FlowNoSave)
-        ), f"Cannot cache outputs with FlowNoSave saver"
+            not isinstance(self.model_out_saver, OutputNoSave)
+        ), f"Cannot cache outputs with OutputNoSave saver"
 
     def on_load_checkpoint(self, checkpoint):
         checkpoint_lrs = set()
@@ -76,7 +73,7 @@ class ModelWrapper(pl.LightningModule):
         return self.optimizer
 
     def training_step(
-        self, input_batch: list[BucketedSceneFlowInputSequence], batch_idx: int
+        self, input_batch: list[TorchFullFrameInputSequence], batch_idx: int
     ) -> dict[str, float]:
         model_res = self.model(
             ForwardMode.TRAIN, input_batch, self.logger, **self.train_forward_args
@@ -89,7 +86,7 @@ class ModelWrapper(pl.LightningModule):
         return {"loss": loss}
 
     def validation_step(
-        self, input_batch: list[BucketedSceneFlowInputSequence], batch_idx: int
+        self, input_batch: list[TorchFullFrameInputSequence], batch_idx: int
     ) -> None:
         if self.cache_validation_outputs and all(
             [self.model_out_saver.is_saved(sequence) for sequence in input_batch]

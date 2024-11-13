@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from dataloaders import (
-    BucketedSceneFlowInputSequence,
-    BucketedSceneFlowOutputSequence,
+    TorchFullFrameInputSequence,
+    TorchFullFrameOutputSequence,
+    RawFullFrameInputSequence,
+    RawFullFrameOutputSequence,
 )
 from abc import ABC, abstractmethod
 from pointclouds import transform_pc
@@ -17,20 +19,57 @@ class ForwardMode(enum.Enum):
     VAL = "val"
 
 
-class BaseModel(ABC, nn.Module):
+class BaseRawModel(ABC, nn.Module):
+
     def forward(
         self,
         forward_mode: ForwardMode,
-        batched_sequence: list[BucketedSceneFlowInputSequence],
+        batched_sequence: list[RawFullFrameInputSequence],
         logger: Logger,
-    ) -> list[BucketedSceneFlowOutputSequence]:
+    ) -> list[RawFullFrameOutputSequence]:
         return self.inference_forward(batched_sequence, logger)
 
     def inference_forward(
         self,
-        batched_sequence: list[BucketedSceneFlowInputSequence],
+        batched_sequence: list[RawFullFrameInputSequence],
         logger: Logger,
-    ) -> list[BucketedSceneFlowOutputSequence]:
+    ) -> list[RawFullFrameOutputSequence]:
+        return [
+            self.inference_forward_single(input_sequence, logger)
+            for input_sequence in batched_sequence
+        ]
+
+    @abstractmethod
+    def inference_forward_single(
+        self,
+        input_sequence: RawFullFrameInputSequence,
+        logger: Logger,
+    ) -> RawFullFrameOutputSequence:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def loss_fn(
+        self,
+        input_batch: list[RawFullFrameInputSequence],
+        model_res: list[RawFullFrameOutputSequence],
+    ) -> dict[str, torch.Tensor]:
+        raise NotImplementedError()
+
+
+class BaseTorchModel(ABC, nn.Module):
+    def forward(
+        self,
+        forward_mode: ForwardMode,
+        batched_sequence: list[TorchFullFrameInputSequence],
+        logger: Logger,
+    ) -> list[TorchFullFrameOutputSequence]:
+        return self.inference_forward(batched_sequence, logger)
+
+    def inference_forward(
+        self,
+        batched_sequence: list[TorchFullFrameInputSequence],
+        logger: Logger,
+    ) -> list[TorchFullFrameOutputSequence]:
         return [
             self.inference_forward_single(input_sequence, logger)
             for input_sequence in batched_sequence
@@ -38,9 +77,9 @@ class BaseModel(ABC, nn.Module):
 
     def inference_forward_single(
         self,
-        input_sequence: BucketedSceneFlowInputSequence,
+        input_sequence: TorchFullFrameInputSequence,
         logger: Logger,
-    ) -> BucketedSceneFlowOutputSequence:
+    ) -> TorchFullFrameOutputSequence:
         raise NotImplementedError()
 
     def global_to_ego_flow(
@@ -71,24 +110,24 @@ class BaseModel(ABC, nn.Module):
     @abstractmethod
     def loss_fn(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
-        model_res: list[BucketedSceneFlowOutputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
+        model_res: list[TorchFullFrameOutputSequence],
     ) -> dict[str, torch.Tensor]:
         raise NotImplementedError()
 
 
-class BaseOptimizationModel(BaseModel):
+class BaseOptimizationModel(BaseTorchModel):
 
-    def __init__(self, full_input_sequence: BucketedSceneFlowInputSequence) -> None:
+    def __init__(self, full_input_sequence: TorchFullFrameInputSequence) -> None:
         super().__init__()
         self.full_input_sequence = full_input_sequence
 
     def forward(
         self,
         forward_mode: ForwardMode,
-        batched_sequence: list[BucketedSceneFlowInputSequence],
+        batched_sequence: list[TorchFullFrameInputSequence],
         logger: Logger,
-    ) -> list[BaseCostProblem] | list[BucketedSceneFlowOutputSequence]:
+    ) -> list[BaseCostProblem] | list[TorchFullFrameOutputSequence]:
         match forward_mode:
             case ForwardMode.TRAIN:
                 return self.optim_forward(batched_sequence, logger)
@@ -97,7 +136,7 @@ class BaseOptimizationModel(BaseModel):
 
     def optim_forward(
         self,
-        batched_sequence: list[BucketedSceneFlowInputSequence],
+        batched_sequence: list[TorchFullFrameInputSequence],
         logger: Logger,
     ) -> list[BaseCostProblem]:
         return [
@@ -107,14 +146,14 @@ class BaseOptimizationModel(BaseModel):
     @abstractmethod
     def optim_forward_single(
         self,
-        input_sequence: BucketedSceneFlowInputSequence,
+        input_sequence: TorchFullFrameInputSequence,
         logger: Logger,
     ) -> BaseCostProblem:
         raise NotImplementedError()
 
     def loss_fn(
         self,
-        input_batch: list[BucketedSceneFlowInputSequence],
+        input_batch: list[TorchFullFrameInputSequence],
         model_res: list[BaseCostProblem],
     ) -> dict[str, torch.Tensor]:
         assert len(input_batch) == len(
@@ -131,10 +170,13 @@ class BaseOptimizationModel(BaseModel):
             "loss": loss,
         }
 
+    def epoch_end_log(self, logger: Logger, prefix: str, epoch_idx: int) -> None:
+        pass
+
 
 class AbstractBatcher(ABC):
 
-    def __init__(self, full_sequence: BucketedSceneFlowInputSequence):
+    def __init__(self, full_sequence: TorchFullFrameInputSequence):
         self.full_sequence = full_sequence
 
     @abstractmethod
@@ -142,7 +184,7 @@ class AbstractBatcher(ABC):
         pass
 
     @abstractmethod
-    def __getitem__(self, idx: int) -> BucketedSceneFlowInputSequence:
+    def __getitem__(self, idx: int) -> TorchFullFrameInputSequence:
         raise NotImplementedError
 
     @abstractmethod

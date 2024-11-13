@@ -1,0 +1,50 @@
+FROM kylevedder/cudagl:11.8.0-devel-ubuntu22.04
+SHELL ["/bin/bash", "-c"]
+# Set the timezone info because otherwise tzinfo blocks install
+# flow and ignores the non-interactive frontend command 🤬🤬🤬
+RUN ln -snf /usr/share/zoneinfo/America/New_York /etc/localtime && echo "/usr/share/zoneinfo/America/New_York" > /etc/timezone
+
+# Core system packages
+RUN apt-get update --fix-missing
+RUN apt install -y software-properties-common wget curl gpg gcc git make g++ unzip apt-utils
+
+# Install miniconda to /miniconda
+RUN curl -LO http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+RUN bash Miniconda3-latest-Linux-x86_64.sh -p /miniconda -b
+ENV PATH=/miniconda/bin:${PATH}
+RUN conda update -y conda
+# Make sure conda-forge is the only channel. This is required because of a bug with libarchive and the mamba solver: https://github.com/conda/conda-libmamba-solver/issues/283#issuecomment-1949560105
+# Update all packages to make sure they're from conda-forge, not defaults
+RUN conda config --remove channels defaults && conda config --add channels conda-forge && conda update --all
+
+ENV FORCE_CUDA="1"
+ENV TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0"
+
+RUN git clone https://github.com/Tencent/DepthCrafter.git /depth_crafter
+WORKDIR /depth_crafter
+RUN pip install torch==2.4.1 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+RUN pip install matplotlib==3.8.4 opencv-python==4.8.1.78
+RUN pip install diffusers["torch"] transformers
+RUN pip install xformers --index-url https://download.pytorch.org/whl/cu118
+
+
+# Setup environment to support running as non-root user
+ENV HOME=/home/user
+RUN mkdir /payload_files
+RUN chmod 777 /payload_files
+COPY bashrc /payload_files/bashrc
+
+# Downloading: "https://github.com/facebookresearch/co-tracker/zipball/main" to /payload_files/cache/torch/hub/main.zip
+# Downloading: "https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth" to /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
+# RUN mkdir -p /payload_files/cache/torch/hub/checkpoints
+# RUN wget https://github.com/facebookresearch/co-tracker/zipball/main -O /payload_files/cache/torch/hub/main.zip
+# RUN wget https://huggingface.co/facebook/cotracker/resolve/main/cotracker2.pth -O /payload_files/cache/torch/hub/checkpoints/cotracker2.pth
+
+WORKDIR /depth_crafter
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 777 /entrypoint.sh
+RUN chmod 777 /home
+
+ENV PYTHONPATH=/project:/bucketed_scene_flow_eval:/:/ioctree:${PYTHONPATH}
+
+ENTRYPOINT ["/entrypoint.sh"]

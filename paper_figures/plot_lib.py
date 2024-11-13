@@ -5,6 +5,7 @@ from typing import List, Tuple, Dict, Any, Optional
 from pathlib import Path
 import json
 from bucketed_scene_flow_eval.datasets.argoverse2.av2_metacategories import BUCKETED_METACATAGORIES
+from matplotlib.colors import ListedColormap
 
 linewidth = 0.5
 minor_tick_color = (0.9, 0.9, 0.9)
@@ -124,30 +125,64 @@ def set_font(size):
     )
 
 
-def centered_barchart_offset(elem_idx: int, total_elems: int, bar_width: float) -> float:
+# def centered_barchart_offset(elem_idx: int, total_elems: int, bar_width: float) -> float:
+#     """
+#     Calculate the x offset for a bar in a barchart so that the bars are centered around zero.
+
+#     Handle both odd and even total_elems cases.
+#     """
+#     if total_elems % 2 == 1:  # Odd number of elements
+#         # Middle index
+#         middle_idx = total_elems // 2
+#         # Calculate offset
+#         offset = (elem_idx - middle_idx) * bar_width
+#     else:  # Even number of elements
+#         # Calculate half of the space occupied by all bars
+#         half_total_width = (total_elems * bar_width) / 2
+#         # Offset for the left side of the middle two bars
+#         middle_left_offset = half_total_width - (bar_width / 2)
+#         # Calculate offset
+#         offset = ((elem_idx + 0.5) * bar_width) - middle_left_offset
+
+#     return offset
+
+
+def centered_barchart_offset(
+    elem_idx: int, total_elems: int, bar_width: float, gap: float = 0.0
+) -> float:
     """
-    Calculate the x offset for a bar in a barchart so that the bars are centered around zero.
+    Calculate the x offset for a bar in a barchart so that the bars are centered around zero,
+    with an optional gap between the bars.
 
     Handle both odd and even total_elems cases.
+
+    Parameters:
+    - elem_idx: Index of the current element.
+    - total_elems: Total number of elements.
+    - bar_width: Width of each bar.
+    - gap: Optional gap between bars (default is 0.0).
     """
+    effective_width = bar_width + gap
+
     if total_elems % 2 == 1:  # Odd number of elements
         # Middle index
         middle_idx = total_elems // 2
         # Calculate offset
-        offset = (elem_idx - middle_idx) * bar_width
+        offset = (elem_idx - middle_idx) * effective_width
     else:  # Even number of elements
         # Calculate half of the space occupied by all bars
-        half_total_width = (total_elems * bar_width) / 2
+        half_total_width = (total_elems * effective_width) / 2
         # Offset for the left side of the middle two bars
-        middle_left_offset = half_total_width - (bar_width / 2)
+        middle_left_offset = half_total_width - (effective_width / 2)
         # Calculate offset
-        offset = ((elem_idx + 0.5) * bar_width) - middle_left_offset
+        offset = ((elem_idx + 0.5) * effective_width) - middle_left_offset
 
     return offset
 
 
 def color_map(rev: bool = False):
     # return 'gist_earth'
+    return ListedColormap(["white"])
     if rev:
         return "magma_r"
     return "magma"
@@ -193,7 +228,12 @@ def savefig(save_folder: Path, name: str, pad: float = 0):
     for ext in ["pdf", "png"]:
         outfile = save_folder / f"{name}.{ext}"
         print("Saving", outfile)
-        plt.savefig(outfile, bbox_inches="tight", pad_inches=pad)
+        additional_args: dict[str, str | int | float] = dict()
+        if ext == "pdf":
+            additional_args["bbox_inches"] = "tight"
+        elif ext == "png":
+            additional_args["dpi"] = 300
+        plt.savefig(outfile, pad_inches=pad, **additional_args)
     plt.clf()
 
 

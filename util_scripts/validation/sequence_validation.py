@@ -68,7 +68,7 @@ def _validate_sequence_length(
 
     assert (
         found_count == expected_count
-    ), f"COUNT MISMATCH: Found {found_count} files, expected {expected_count}"
+    ), f"COUNT MISMATCH: Found {found_count} files, expected {expected_count} for sequence {sequence_name}. Looking with pattern {sequence_folder}*{glob_pattern}"
 
 
 def validate_sequence(

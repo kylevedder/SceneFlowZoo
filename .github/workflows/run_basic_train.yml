@@ -152,6 +152,24 @@ jobs:
       run: |
         ./tests/liu_2024/run.sh
 
+  # run_ntp:
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: kylevedder/zeroflow_bucketed_cpu
+  #   needs: prepare_runner
+    
+  #   steps:
+  #   - name: Checkout Repository
+  #     uses: actions/checkout@v4
+
+  #   - name: Setup env
+  #     run: |
+  #       ./tests/setup.sh
+    
+  #   - name: Run NTP for several steps
+  #     run: |
+  #       ./tests/ntp/run.sh
+
   run_cache_test:
     runs-on: ubuntu-latest
     container:

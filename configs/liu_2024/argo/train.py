@@ -6,7 +6,7 @@ save_output_folder = "/efs/argoverse2/train_liu_20204_flow_feather/"
 
 SEQUENCE_LENGTH = 3
 
-model = dict(name="Liu2024Model", args=dict())
+model = dict(name="Liu2024OptimizationLoop", args=dict())
 
 epochs = 20
 learning_rate = 2e-6
@@ -14,7 +14,7 @@ save_every = 500
 validate_every = 500
 
 test_dataset = dict(
-    name="BucketedSceneFlowDataset",
+    name="TorchFullFrameDataset",
     args=dict(
         dataset_name="Argoverse2CausalSceneFlow",
         root_dir=test_dataset_root,

@@ -1,4 +1,4 @@
-from dataloaders import BucketedSceneFlowInputSequence
+from dataloaders import TorchFullFrameInputSequence
 from bucketed_scene_flow_eval.datasets import Argoverse2CausalSceneFlow
 from bucketed_scene_flow_eval.datastructures import TimeSyncedSceneFlowFrame
 import pytest
@@ -11,14 +11,14 @@ from bucketed_scene_flow_eval.datastructures import SE3
 
 
 @pytest.fixture
-def frame_list_tuple() -> tuple[list[TimeSyncedSceneFlowFrame], BucketedSceneFlowInputSequence]:
+def frame_list_tuple() -> tuple[list[TimeSyncedSceneFlowFrame], TorchFullFrameInputSequence]:
     sequence_length = 5
     dataset_idx = 0
     dataset = Argoverse2CausalSceneFlow(
         root_dir=Path("/tmp/argoverse2_small/val/"), subsequence_length=sequence_length
     )
     frame_list = dataset[dataset_idx]
-    torch_sequence = BucketedSceneFlowInputSequence.from_frame_list(
+    torch_sequence = TorchFullFrameInputSequence.from_frame_list(
         idx=dataset_idx, frame_list=frame_list, pc_max_len=120000, loader_type=dataset.loader_type()
     )
 
@@ -42,7 +42,7 @@ def test_transform_pc_simple():
 
 
 def test_transform_pc_full_pc(
-    frame_list_tuple: tuple[list[TimeSyncedSceneFlowFrame], BucketedSceneFlowInputSequence]
+    frame_list_tuple: tuple[list[TimeSyncedSceneFlowFrame], TorchFullFrameInputSequence]
 ):
     frame_list, torch_sequence = frame_list_tuple
     assert len(frame_list) == len(torch_sequence)

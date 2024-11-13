@@ -3,6 +3,7 @@
 .vscode/
 **/__pycache__/
 docker_history.txt
+docker_history_blender.txt
 work_dirs/
 model_checkpoints/
 model_checkpoints_old/
@@ -27,3 +28,7 @@ screenshots*/
 eval_results/
 launch_files/
 tests/*/config*/
+saved_videos/
+checkpoint_zips/
+docker_history_rosbag.txt
+demo_output/

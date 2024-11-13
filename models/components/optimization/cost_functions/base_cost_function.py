@@ -18,13 +18,30 @@ class BaseCostProblem(ABC):
         self.cost_scalar = other
         return self
 
+    def __truediv__(self, other: float) -> "BaseCostProblem":
+        self.cost_scalar = 1.0 / other
+        return self
+
+
+@dataclass
+class PassthroughCostProblem(BaseCostProblem):
+    cost: torch.Tensor
+
+    def base_cost(self) -> torch.Tensor:
+        return self.cost
+
+    def __repr__(self) -> str:
+        return f"PassthroughCost({self.cost} * {self.cost_scalar})"
+
 
 @dataclass
 class AdditiveCosts(BaseCostProblem):
     costs: list[BaseCostProblem]
 
-    def base_cost(self) -> torch.Tensor:
+    def __post_init__(self):
         assert len(self.costs) > 0, "No costs to add"
+
+    def base_cost(self) -> torch.Tensor:
         return sum([cost.base_cost() for cost in self.costs])
 
     def __repr__(self) -> str:
