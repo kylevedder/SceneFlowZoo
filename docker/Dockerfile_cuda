@@ -34,7 +34,7 @@ RUN pip install -v .
 # YAPF versions newer than this break the MMCV config system
 RUN pip install yapf==0.40.1
 RUN pip install pyarrow pyquaternion open3d tensorboard pytorch-lightning==1.9.5 imageio black isort nntime
-RUN pip install mmcv==2.2.0
+RUN pip install mmcv==2.2.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.3/index.html
 
 # Install nuscenes-devkit, forked to get rid of the matplotlib pegged dependency
 RUN git clone https://github.com/kylevedder/nuscenes-devkit.git /nuscenes-devkit
